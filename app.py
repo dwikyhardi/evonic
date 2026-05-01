@@ -266,6 +266,12 @@ def inject_plugin_nav():
 
 @app.before_request
 def enforce_auth():
+    """Enforce authentication on all API endpoints and page routes.
+
+    Always-accessible: health, connector pairing, WebSocket, static files,
+    auth routes (login/logout), and setup flow when no super agent exists.
+    """
+    # Always-accessible endpoints (no auth required)
     if request.path == '/api/health':
         return None
     if request.path == '/api/connector/pair':
@@ -276,6 +282,19 @@ def enforce_auth():
         return None
     if request.path in ('/login', '/logout'):
         return None
+
+    # --- Setup flow: when no super agent exists, allow setup endpoints ---
+    if not db.has_super_agent():
+        if request.path == '/setup':
+            return None
+        if request.path in ('/api/setup', '/api/setup/test-connection', '/api/setup/docker-status'):
+            return None
+        # All other requests redirect to setup
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'Super agent setup required', 'setup_required': True}), 503
+        return redirect('/setup')
+
+    # --- Normal auth enforcement (super agent exists) ---
     if session.get('authenticated'):
         return None
     # Allow public history access if enabled (read-only routes only)
@@ -290,26 +309,6 @@ def enforce_auth():
     if request.path.startswith('/api/'):
         return jsonify({'error': 'Authentication required'}), 401
     return redirect(url_for('auth.login_page', next=request.path))
-
-
-@app.before_request
-def enforce_super_agent_setup():
-    """Redirect to setup if no super agent exists yet."""
-    # Allow static files, auth routes, and setup routes through
-    if request.path == '/api/health':
-        return None
-    if request.path.startswith('/static/'):
-        return None
-    if request.path in ('/login', '/logout', '/setup'):
-        return None
-    if request.path in ('/api/setup', '/api/setup/test-connection'):
-        return None
-    if db.has_super_agent():
-        return None
-    # No super agent — redirect page requests and reject API calls
-    if request.path.startswith('/api/'):
-        return jsonify({'error': 'Super agent setup required', 'setup_required': True}), 503
-    return redirect('/setup')
 
 
 if __name__ == '__main__':
