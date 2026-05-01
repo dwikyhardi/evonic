@@ -7,7 +7,6 @@ import time
 import subprocess
 import shutil
 import tempfile
-import fcntl
 from datetime import datetime
 
 # Ensure the project root is on sys.path so we can import backend modules
@@ -239,14 +238,18 @@ def stop_server():
             _remove_pid()
             return
 
-    # Force kill if still running
-    print("Server didn't stop gracefully. Sending SIGKILL...")
+    # Force kill if still running. SIGKILL is POSIX-only, so on Windows we
+    # use `taskkill /F` (the same approach as supervisor/supervisor.py).
+    print("Server didn't stop gracefully. Force-killing...")
     try:
-        os.kill(pid, signal.SIGKILL)
+        if sys.platform == 'win32':
+            subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
+        else:
+            os.kill(pid, signal.SIGKILL)
         time.sleep(1)
         print(f"Server killed (PID: {pid})")
     except OSError as e:
-        print(f"Failed to SIGKILL: {e}")
+        print(f"Failed to force-kill: {e}")
 
     _remove_pid()
 

@@ -18,13 +18,13 @@ def execute(agent: dict, args: dict) -> dict:
     marker = "---log-reset---\n"
 
     try:
-        with open(log_path, 'w') as f:
+        with open(log_path, 'w', encoding='utf-8') as f:
             f.write(marker)
     except Exception as e:
         return {"error": f"Error clearing llm.log: {str(e)}"}
 
     try:
-        with open(recap_path, 'w') as f:
+        with open(recap_path, 'w', encoding='utf-8') as f:
             f.write(marker)
     except Exception as e:
         return {"error": f"Error clearing sessrecap.log: {str(e)}"}
