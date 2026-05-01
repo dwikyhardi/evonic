@@ -43,6 +43,9 @@ app = Flask(__name__)
 sock = Sock(app)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
+# Global upload size limit (defense-in-depth for all endpoints)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+
 # Trust proxy headers from Cloudflare / nginx / any reverse proxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
