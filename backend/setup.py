@@ -3,6 +3,8 @@ Shared setup orchestration for Evonic first-time onboarding.
 Used by both the CLI wizard (evonic setup) and the web API (/api/setup).
 """
 
+import glob
+import json
 import os
 import re
 import shutil
@@ -348,6 +350,28 @@ def run_setup(
         db.set_setting('super_agent_tone', tone)
         db.set_setting('agent_language', language)
         db.set_setting('sandbox_default_enabled', '1' if sandbox_enabled else '0')
+
+        # 7. Enable all installed plugins
+        for manifest_path in glob.glob(os.path.join(config.BASE_DIR, 'plugins', '*', 'plugin.json')):
+            try:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                plugin_id = manifest.get('id', '')
+                if plugin_id:
+                    db.set_setting(f'plugin_enabled:{plugin_id}', '1')
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        # 8. Enable all installed skills
+        for manifest_path in glob.glob(os.path.join(config.BASE_DIR, 'skills', '*', 'skill.json')):
+            try:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                skill_id = manifest.get('id', '')
+                if skill_id:
+                    db.set_setting(f'skill_enabled:{skill_id}', '1')
+            except (json.JSONDecodeError, IOError):
+                pass
 
         return {'success': True, 'agent_id': agent_id}
 

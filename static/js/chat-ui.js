@@ -990,6 +990,14 @@ function ChatUI(config) {
         return detail.querySelectorAll('.timeline-entry').length;
     }
 
+    // Finalize any orphaned active spinner (e.g. poll bubble left behind when a
+    // turn is interrupted before pollForResponse finds the final entry).
+    function clearActiveSpinner() {
+        if (_activeSpinnerId) {
+            finalizeThinkingBubble(_activeSpinnerId);
+        }
+    }
+
     function resolveThinkingIndicator(id, timeline, duration) {
         for (const ev of timeline) {
             appendTimelineEntry(id, ev);
@@ -1548,6 +1556,7 @@ function ChatUI(config) {
         markLastUserBubbleQueued,
         markQueuedAsDelivered,
         getTimelineEntryCount,
+        clearActiveSpinner,
         hasActiveStream: () => !!_activeEventSource,
         isNearBottom: _isNearBottom,
         setPerspective,

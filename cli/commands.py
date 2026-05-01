@@ -108,10 +108,10 @@ def _remove_pid():
 def start_server(port=None, host=None, debug=None, daemon=False):
     """Start the Flask server. Runs in foreground by default; use daemon=True to background."""
     # Check if setup is complete
-    if not _is_setup_done():
-        print("Evonic has not been set up yet.")
-        print("Please run 'evonic setup' first to configure your platform.")
-        sys.exit(1)
+    #if not _is_setup_done():
+    #    print("Evonic has not been set up yet.")
+    #    print("Please run 'evonic setup' first to configure your platform.")
+    #    sys.exit(1)
 
     # Check if already running
     existing_pid = _get_pid()
@@ -1250,6 +1250,7 @@ def setup_wizard():
     print()
     if provider_id == 'custom':
         try:
+            print("  eg: http://192.168.1.7:8080/v1")
             base_url = input("  Base URL: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
@@ -1446,8 +1447,7 @@ def setup_wizard():
     print()
     print("  Set Web Dashboard Password")
     print("  " + "─" * 30)
-    print("  Password ini digunakan untuk login ke web dashboard.")
-    print("  (Tekan Enter untuk skip — web tidak akan terproteksi)")
+    print("  This password is used to log in to the web dashboard.")
     print()
     env_path = os.path.join(ROOT, '.env')
     while True:
@@ -1923,8 +1923,7 @@ def doctor_command(quick=False):
         "skills": "Skills directory",
         "agents": "Agent data",
         "skillsets": "Skillset templates",
-        "templates": "Web templates",
-        "db": "Database directory",
+        "templates": "Web templates"
     }
 
     for dname, desc in important_dirs.items():

@@ -714,7 +714,7 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=18"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=19"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 function showToast(message, type = 'success') {
@@ -2122,6 +2122,13 @@ async function sendChat() {
         chatUI.removeThinkingIndicator(_chatThinkingId);
         _chatThinkingId = null;
     }
+    // clearActiveSpinner: finalize any orphaned poll-created spinner bubble
+    if (typeof chatUI.clearActiveSpinner === 'function') {
+        chatUI.clearActiveSpinner();
+    } else {
+        // inline fallback in case of stale chat-ui.js cache
+        chatUI.finalizeThinkingBubble && chatUI.finalizeThinkingBubble(undefined);
+    }
 
     _chatAbortController = new AbortController();
     const signal = _chatAbortController.signal;
@@ -2237,7 +2244,10 @@ function pollForResponse(existingThinkingId) {
                     chatUI.closeStream();
                     // SSE fallback: if SSE race-lost (agent finished before stream connected),
                     // the thinking bubble will be empty. Replay intermediates from JSONL history.
+                    // Prefer the SSE-created bubble (_chatThinkingId) over creating a new one,
+                    // to avoid duplicate bubbles when SSE did work.
                     if (collectedIntermediates.length > 0) {
+                        if (!thinkingId && _chatThinkingId) thinkingId = _chatThinkingId;
                         if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
                         if (chatUI.getTimelineEntryCount(thinkingId) === 0) {
                             for (const ie of collectedIntermediates) {
