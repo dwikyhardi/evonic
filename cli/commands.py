@@ -158,10 +158,10 @@ def start_server(port=None, host=None, debug=None, daemon=False):
             start_new_session=True,  # Detach from terminal
         )
 
-        _write_pid(proc.pid)
         time.sleep(1)
 
         if _is_running(proc.pid):
+            _write_pid(proc.pid)
             print(f"Server started in background (PID: {proc.pid})")
             print(f"Host: {host}")
             print(f"Port: {port}")
@@ -170,7 +170,6 @@ def start_server(port=None, host=None, debug=None, daemon=False):
                 print("Debug mode: ON")
         else:
             print("Failed to start server. Check run/server.log for details.")
-            _remove_pid()
             sys.exit(1)
         return
 
