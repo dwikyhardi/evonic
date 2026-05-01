@@ -1,0 +1,2642 @@
+{% extends "base.html" %}
+{% from 'partials/toggle.html' import toggle, toggle_widget %}
+
+{% block content %}
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-5 right-5 z-[100] flex flex-col gap-2"></div>
+<style>
+footer { display: none; }
+main { align-items: flex-start !important; }
+/* Dark mode: chat area */
+html.dark #agent-state-card { background: #1f2937; border-color: #374151; }
+html.dark #state-busy-dot { background: #451a03 !important; color: #fcd34d !important; }
+html.dark #mobile-state-busy-dot { background: #451a03 !important; color: #fcd34d !important; }
+html.dark #agent-state-card .bg-green-100 { background: #052e16 !important; color: #86efac !important; }
+html.dark #agent-state-card .bg-amber-100 { background: #451a03 !important; color: #fcd34d !important; }
+html.dark #agent-state-card .bg-blue-100 { background: #172554 !important; color: #93c5fd !important; }
+html.dark #agent-state-card .bg-purple-100 { background: #2e1065 !important; color: #c4b5fd !important; }
+html.dark #agent-state-card .bg-gray-100 { background: #374151 !important; color: #e5e7eb !important; }
+html.dark #agent-state-card .text-gray-500 { color: #9ca3af !important; }
+html.dark #agent-state-card .text-gray-700 { color: #e5e7eb !important; }
+html.dark #agent-state-card .text-gray-400 { color: #6b7280 !important; }
+html.dark #agent-state-card .text-gray-600 { color: #d1d5db !important; }
+html.dark #agent-state-card .border-gray-100 { border-color: #374151 !important; }
+html.dark #summary-card { background: #1f2937; border-color: #374151; }
+/* Dark mode: Channels tab (channel type badges) */
+html.dark #channels-list .bg-blue-100 { background: #172554 !important; color: #93c5fd !important; }
+html.dark #channels-list .bg-green-100 { background: #052e16 !important; color: #86efac !important; }
+html.dark #channels-list .bg-purple-100 { background: #2e1065 !important; color: #c4b5fd !important; }
+/* Dark mode: Channels tab (channel list cards) */
+html.dark #channels-list .bg-gray-50 { background: #1f2937 !important; }
+html.dark #channels-list .border-gray-100 { border-color: #374151 !important; }
+html.dark #channels-list .text-gray-800 { color: #f3f4f6 !important; }
+html.dark #channels-list .text-gray-400 { color: #9ca3af !important; }
+html.dark #channels-list .bg-red-50 { background: #451a1a !important; }
+html.dark #channels-list .text-red-600 { color: #fca5a5 !important; }
+html.dark #channels-list .hover\:bg-red-100:hover { background: #7f1d1d !important; }
+html.dark #channels-list .bg-green-50 { background: #14532d !important; }
+html.dark #channels-list .text-green-600 { color: #4ade80 !important; }
+html.dark #channels-list .hover\:bg-green-100:hover { background: #166534 !important; }
+html.dark #channels-list .bg-yellow-50 { background: #451a03 !important; }
+html.dark #channels-list .text-yellow-600 { color: #fcd34d !important; }
+html.dark #channels-list .hover\:bg-yellow-100:hover { background: #78350f !important; }
+html.dark #channels-list .bg-gray-100 { background: #374151 !important; }
+html.dark #channels-list .text-gray-600 { color: #d1d5db !important; }
+html.dark #channels-list .hover\:bg-gray-200:hover { background: #4b5563 !important; }
+html.dark #channels-list .text-red-500 { color: #f87171 !important; }
+html.dark #channels-list .hover\:text-red-700:hover { color: #fca5a5 !important; }
+/* Dark mode: Channels tab (header) */
+html.dark #tab-channels .text-gray-800 { color: #f3f4f6 !important; }
+/* Dark mode: Compiled Prompt Modal (LLM Request tab) */
+html.dark #compiled-prompt-modal > div { background: #1f2937 !important; }
+html.dark #compiled-prompt-modal .border-gray-200 { border-color: #374151 !important; }
+html.dark #compiled-prompt-modal .text-gray-700 { color: #f3f4f6 !important; }
+html.dark #compiled-prompt-modal .text-gray-800 { color: #f3f4f6 !important; }
+html.dark #compiled-prompt-modal .text-gray-400 { color: #9ca3af !important; }
+html.dark #compiled-prompt-modal .text-gray-500 { color: #9ca3af !important; }
+html.dark #compiled-prompt-modal .text-gray-600 { color: #d1d5db !important; }
+html.dark #compiled-prompt-modal .bg-gray-50 { background: #374151 !important; }
+html.dark #compiled-prompt-modal .bg-purple-50 { background: #2e1065 !important; }
+html.dark #compiled-prompt-modal .bg-blue-50 { background: #172554 !important; }
+html.dark #compiled-prompt-modal .bg-green-50 { background: #052e16 !important; }
+html.dark #compiled-prompt-modal .bg-amber-50 { background: #451a03 !important; }
+html.dark #compiled-prompt-modal .border-l-purple-400 { border-color: #a78bfa !important; }
+html.dark #compiled-prompt-modal .border-l-blue-400 { border-color: #60a5fa !important; }
+html.dark #compiled-prompt-modal .border-l-green-400 { border-color: #4ade80 !important; }
+html.dark #compiled-prompt-modal .border-l-amber-400 { border-color: #fbbf24 !important; }
+html.dark #compiled-prompt-modal .text-purple-600 { color: #c4b5fd !important; }
+html.dark #compiled-prompt-modal .text-blue-600 { color: #93c5fd !important; }
+html.dark #compiled-prompt-modal .text-green-600 { color: #86efac !important; }
+html.dark #compiled-prompt-modal .text-amber-600 { color: #fcd34d !important; }
+html.dark #compiled-prompt-modal pre { background: #1e293b !important; color: #e2e8f0 !important; }
+html.dark #compiled-prompt-modal .bg-amber-100 { background: #451a03 !important; }
+html.dark #compiled-prompt-modal .text-amber-700 { color: #fcd34d !important; }
+html.dark #compiled-prompt-modal .tab-btn { color: #9ca3af !important; }
+html.dark #compiled-prompt-modal .tab-btn:hover { color: #f3f4f6 !important; }
+/* Dark mode: Skills tab (selected skill badges) */
+html.dark #tab-skills .bg-white { background: #1f2937 !important; }
+html.dark #tab-skills .border-gray-200 { border-color: #374151 !important; }
+html.dark #tab-skills .text-gray-800 { color: #f3f4f6 !important; }
+html.dark #tab-skills .text-gray-400 { color: #9ca3af !important; }
+html.dark #tab-skills .text-gray-500 { color: #9ca3af !important; }
+html.dark #tab-skills .bg-gray-100 { background: #374151 !important; }
+html.dark #tab-skills .bg-indigo-50 { background: #1e1b4b !important; }
+html.dark #tab-skills .border-indigo-200 { border-color: #4338ca !important; }
+html.dark #tab-skills .text-indigo-500 { color: #a5b4fc !important; }
+html.dark #tab-skills .bg-green-50 { background: #052e16 !important; }
+html.dark #tab-skills .text-green-600 { color: #4ade80 !important; }
+html.dark #tab-skills .bg-amber-50 { background: #451a03 !important; }
+html.dark #tab-skills .border-amber-200 { border-color: #92400e !important; }
+html.dark #tab-skills .text-amber-800 { color: #fcd34d !important; }
+html.dark #tab-skills .text-amber-600 { color: #fbbf24 !important; }
+html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
+</style>
+<div class="px-2 py-1 md:py-4 flex-1 min-h-0 flex flex-col h-[calc(100vh-3rem)]">
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto flex-shrink-0" style="-webkit-overflow-scrolling: touch;">
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600" onclick="showTab('chat')" data-tab="chat">Chat</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('general')" data-tab="general">Settings</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('knowledge')" data-tab="knowledge">Knowledge</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('tools')" data-tab="tools">Tools</button>
+        {% if not agent.is_super %}
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('skills')" data-tab="skills">Skills</button>
+        {% endif %}
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('channels')" data-tab="channels">Channels</button>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tab-general" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Name</label>
+                <input type="text" id="agent-name" value="{{ agent.name }}" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Description</label>
+                <textarea id="agent-desc" rows="2" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">{{ agent.description or '' }}</textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Avatar</label>
+                <div class="flex items-center gap-3">
+                    <img id="avatar-preview" src="/api/agents/{{ agent.id }}/avatar" alt="Avatar preview" class="w-12 h-12 rounded-full object-cover bg-indigo-50 dark:bg-indigo-900/20" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22 fill=%22none%22><rect width=%2240%22 height=%2240%22 rx=%2220%22 fill=%22%23e0e7ff%22/><path d=%22M20 8a5 5 0 100 10 5 5 0 000-10zm-8 18.5a8 8 0 0116 0%22 fill=%22%234f46e5%22/></svg>'">
+                    <div class="flex flex-col gap-1">
+                        <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" class="text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100">
+                        <button onclick="removeAvatar()" class="text-xs text-red-500 hover:text-red-700 text-left">Remove avatar</button>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Upload a PNG, JPEG, GIF, WebP, or SVG image. Recommended: square aspect ratio.</p>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Model</label>
+                <select id="agent-model-select" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                    <option value="">-- Use global default --</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">Select a model configured in Settings &gt; Models. "Use global default" uses whichever model is marked as default.</p>
+            </div>
+            <!-- Workplace Selector -->
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Workplace</label>
+                <div class="flex items-center gap-2">
+                    <select id="agent-workplace-id" class="flex-1 p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                        <option value="">-- None (use workspace below) --</option>
+                    </select>
+                    <span id="workplace-status-indicator" class="flex-shrink-0 inline-block w-2.5 h-2.5 rounded-full bg-gray-300" title="Workplace status"></span>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Assign an execution environment. <a href="/workplaces" class="text-indigo-500 hover:underline">Manage Workplaces</a></p>
+            </div>
+
+            <div id="agent-workspace-row" class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Workspace Directory</label>
+                <input type="text" id="agent-workspace" value="{{ agent.workspace or '' }}" placeholder="Leave empty to use default workspace" class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                <p class="text-xs text-gray-400 mt-1">Absolute path on the host used as <code>/workspace</code> in the sandbox. Leave empty to use the default global workspace. Ignored when a Workplace is assigned.</p>
+            </div>
+            <div id="sandbox-section" class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none" id="sandbox-label">
+                    {{ toggle_widget(id='agent-sandbox', checked=(agent.sandbox_enabled is none or agent.sandbox_enabled)) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Docker Sandbox</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Run code tools (Python, Bash) inside a Docker container. Disable to run directly on the host.</p>
+                    </div>
+                </label>
+                <div id="sandbox-warning" class="hidden mt-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-2.5 py-1.5">⚠ Docker Sandbox hanya tersedia untuk local workplace mode.</div>
+            </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    {{ toggle_widget(id='agent-safety-checker', checked=(agent.safety_checker_enabled is none or agent.safety_checker_enabled)) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Safety Checker</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Heuristic safety check on Bash/Python scripts. Disable for full autopilot — agent runs all code without approval prompts.</p>
+                    </div>
+                </label>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">System Prompt</label>
+                <textarea id="agent-system-prompt" rows="10" placeholder="Define the agent's persona and behavior..." class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">{{ agent.system_prompt or '' }}</textarea>
+            </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    {{ toggle_widget(id='agent-vision', checked=agent.vision_enabled) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Vision (Image Recognition)</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Allow agent to receive and analyze images from Telegram</p>
+                    </div>
+                </label>
+            </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    {{ toggle_widget(id='agent-inject-id', checked=agent.inject_agent_id) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Inject Agent ID</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Prepend this agent's ID to its system prompt so the agent knows its own identity</p>
+                    </div>
+                </label>
+            </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    {{ toggle_widget(id='agent-inject-datetime', checked=agent.inject_datetime) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Inject Date/Time</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Append current date/time (WIB/UTC+7) to system prompt. Use <code>{{day}}</code>, <code>{{date}}</code>, <code>{{time}}</code> in SYSTEM.md for inline placement.</p>
+                    </div>
+                </label>
+            </div>
+            <button id="saveGeneralBtn" onclick="saveGeneral()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">Save Changes</button>
+            <span id="save-status" class="ml-3 text-sm text-green-600 hidden">Saved!</span>
+        </div>
+        <!-- Right column -->
+        <div class="space-y-6">
+            <!-- Advanced Settings -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+                <button type="button" onclick="toggleAdvanced()" class="w-full flex justify-between items-center px-6 py-4 text-sm font-semibold dark:text-gray-200 text-gray-700 hover:text-gray-900 transition-colors">
+                    <span>Advanced Settings</span>
+                    <span id="adv-arrow" class="text-xs transition-transform">&#9654;</span>
+                </button>
+                <div id="advanced-section" class="hidden px-6 pb-6 space-y-4 border-t border-gray-100">
+                    <div class="pt-4">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Summarize Threshold</label>
+                        <input type="number" id="agent-summarize-threshold" min="0" value="{{ agent.summarize_threshold if agent.summarize_threshold is not none else 3 }}" class="w-32 p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                        <p class="text-xs text-gray-400 mt-1">Minimum messages before conversation history is summarized. Set to 0 to disable.</p>
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Raw Tail Size</label>
+                        <input type="number" id="agent-summarize-tail" min="1" value="{{ agent.summarize_tail if agent.summarize_tail is not none else 1 }}" class="w-32 p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                        <p class="text-xs text-gray-400 mt-1">Number of recent messages kept in raw form (not summarized).</p>
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Message Buffer (seconds)</label>
+                        <input type="number" id="agent-buffer-seconds" min="0" step="0.5" value="{{ agent.message_buffer_seconds if agent.message_buffer_seconds is not none else 2 }}" class="w-32 p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                        <p class="text-xs text-gray-400 mt-1">Wait time to accumulate rapid messages before calling LLM. Set to 0 to disable.</p>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer select-none">
+                            {{ toggle_widget(id='agent-send-intermediate', checked=agent.send_intermediate_responses) }}
+                            <div>
+                                <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Send Intermediate Responses</span>
+                                <p class="text-xs text-gray-400 mt-0.5">Forward intermediate tool-call text to channels (e.g. Telegram) during processing. Default: off.</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer select-none">
+                            {{ toggle_widget(id='agent-state-enabled', checked=agent.enable_agent_state) }}
+                            <div>
+                                <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Agent State</span>
+                                <p class="text-xs text-gray-400 mt-0.5">Enable plan/execute mode tracking. Write tools are blocked until the agent presents a plan and user approves.</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer select-none">
+                            {{ toggle_widget(id='agent-parallel-exec', checked=(agent.disable_parallel_tool_execution if agent.disable_parallel_tool_execution is not none else False)) }}
+                            <div>
+                                <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Disable Parallel Tool Execution</span>
+                                <p class="text-xs text-gray-400 mt-0.5">Prevent read-only tools from running concurrently. Enable this only if you experience issues with tool ordering or race conditions.</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer select-none">
+                            {{ toggle_widget(id='agent-prefetch', checked=(agent.disable_turn_prefetch if agent.disable_turn_prefetch is not none else False)) }}
+                            <div>
+                                <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Disable Turn Prefetch</span>
+                                <p class="text-xs text-gray-400 mt-0.5">Stop background pre-loading of conversation context between turns. Enable this to reduce DB I/O or if you suspect stale-context issues.</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-3 cursor-pointer select-none">
+                            {{ toggle_widget(id='agent-messaging-enabled', checked=agent.agent_messaging_enabled) }}
+                            <div>
+                                <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Agent Messaging</span>
+                                <p class="text-xs text-gray-400 mt-0.5">Allow this agent to send messages to other agents. Enables <code>send_agent_message</code>, <code>escalate_to_user</code>, and <code>resolve_agent_approval</code> tools automatically.</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Summarize Prompt</label>
+                        <textarea id="agent-summarize-prompt" rows="10" class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">{{ agent.summarize_prompt or DEFAULT_SUMMARIZE_PROMPT }}</textarea>
+                        <p class="text-xs text-gray-400 mt-1">Custom prompt for summarization. Use <code>{existing_summary_section}</code> and <code>{messages_text}</code> as placeholders.</p>
+                    </div>
+                    <div class="pt-2">
+                        <button id="saveAdvancedBtn" onclick="saveAdvanced()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">Save Advanced</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Variables Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">Variables</h3>
+                <p class="text-xs text-gray-400 mb-4">Key-value config for tools &amp; skills (e.g. <code>SSH_HOST</code>, <code>SSH_USERNAME</code>). Mark as secret to mask values.</p>
+                <div id="agent-variables-list" class="space-y-2 mb-3"></div>
+                <button type="button" onclick="addVariableRow()" class="text-sm text-indigo-500 hover:text-indigo-700 transition-colors">+ Add Variable</button>
+            </div>
+        </div>
+        </div><!-- /grid -->
+    </div>
+
+    <!-- Knowledge Tab -->
+    <div id="tab-knowledge" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-3xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Knowledge Base Files</h3>
+                <div class="flex gap-2">
+                    <button onclick="showNewFileModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors">+ New File</button>
+                    <label class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm cursor-pointer transition-colors">
+                        Upload
+                        <input type="file" accept=".md,.txt" class="hidden" onchange="uploadFile(this)">
+                    </label>
+                </div>
+            </div>
+            <p class="text-xs text-gray-400 mb-4">Files stored in <code>agents/{{ agent.id }}/kb/</code> — the agent can read these using the <code>read("filename.md")</code> tool.</p>
+            <div id="kb-list" class="space-y-2">
+                <!-- Files loaded dynamically -->
+            </div>
+            <div id="kb-empty" class="hidden text-center py-8 text-gray-400 text-sm">No knowledge files yet.</div>
+        </div>
+
+    </div>
+
+    <!-- Tools Tab -->
+    <div id="tab-tools" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-3xl">
+            <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Tools</h3>
+                <span id="tools-badge" class="hidden px-2 py-0.5 text-xs font-medium rounded-full bg-gray-200 text-gray-600"></span>
+            </div>
+            <p class="text-xs text-gray-400 mb-4">Toggle tools on/off to assign them to this agent. Built-in tools are always available. Click a tool name to view details.</p>
+            <!-- Filter bar -->
+            <div class="flex flex-wrap items-center gap-2 mb-4">
+                <input type="text" id="tool-filter" placeholder="Filter tools..." autocomplete="off"
+                       class="flex-1 min-w-0 w-full sm:w-auto p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-400"
+                       oninput="filterToolsList()">
+                <div class="flex rounded-md border border-gray-200 overflow-hidden text-xs font-medium flex-shrink-0 w-full sm:w-auto dark:border-gray-600">
+                    <button id="filter-btn-assigned" onclick="setFilterMode('assigned')"
+                            class="flex-1 min-h-[44px] px-3 py-2 bg-indigo-500 text-white transition-colors dark:bg-indigo-600">Assigned</button>
+                    <button id="filter-btn-available" onclick="setFilterMode('available')"
+                            class="flex-1 min-h-[44px] px-3 py-2 bg-white text-gray-600 hover:bg-gray-50 transition-colors border-l border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border-gray-600">Available</button>
+                    <button id="filter-btn-all" onclick="setFilterMode('all')"
+                            class="flex-1 min-h-[44px] px-3 py-2 bg-white text-gray-600 hover:bg-gray-50 transition-colors border-l border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border-gray-600">All</button>
+                </div>
+            </div>
+            <!-- Tools List -->
+            <div id="tools-list" class="space-y-2">
+                <!-- Dynamically populated -->
+            </div>
+            <div id="tools-empty" class="hidden text-center py-8 text-gray-400 text-sm">No tools found.</div>
+            <span id="tools-save-status" class="mt-2 inline-block text-sm text-green-600 hidden">Saved!</span>
+        </div>
+    </div>
+
+    <!-- Skills Tab -->
+    {% if not agent.is_super %}
+    <div id="tab-skills" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-3xl">
+            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-1">Skills</h3>
+            <p class="text-xs text-gray-400 mb-4">Allow this agent to lazy-load skills via <code class="bg-gray-100 px-1 rounded">use_skill</code>. This only controls skill access — directly assigned tools are unaffected.</p>
+            <div id="skills-list" class="space-y-2">
+                <!-- Dynamically populated -->
+            </div>
+            <div id="skills-empty" class="hidden text-center py-8 text-gray-400 text-sm">No enabled skills found.</div>
+            <span id="skills-save-status" class="mt-2 inline-block text-sm text-green-600 hidden">Saved!</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Channels Tab -->
+    <div id="tab-channels" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-3xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Channels</h3>
+                <button onclick="showAddChannelModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors">+ Add Channel</button>
+            </div>
+            <div id="channels-list" class="space-y-3">
+                <!-- Channels loaded dynamically -->
+            </div>
+            <div id="channels-empty" class="hidden text-center py-8 text-gray-400 text-sm">No channels configured.</div>
+        </div>
+    </div>
+
+    <!-- Chat Tab -->
+    <div id="tab-chat" class="tab-content flex-1 min-h-0">
+        <div class="flex flex-col lg:flex-row gap-4 h-full" style="min-height:0;">
+            <!-- Chat Panel -->
+            <div id="chat-panel" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex-[3] flex flex-col min-w-0" style="min-height:0; overflow:hidden;">
+                <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <h3 id="chatPanelTitle" class="text-base font-semibold text-gray-800 dark:text-gray-100 truncate max-w-[200px] sm:max-w-[320px] flex items-center gap-1.5">
+                        <img id="agent-avatar-header" src="/api/agents/{{ agent.id }}/avatar" alt="" class="w-6 h-6 rounded-full object-cover bg-indigo-50 dark:bg-indigo-900/20 flex-shrink-0" onerror="this.style.display='none'">
+                        <span class="truncate">{{ agent.name }}</span>
+                        <span id="homePulseIcon" class="hidden inline-block w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0"></span>
+                    </h3>
+                    <div class="flex gap-3 items-center">
+                        <button onclick="showCompiledPrompt()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="System Prompt">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M4.5 2A1.5 1.5 0 0 0 3 3.5v13A1.5 1.5 0 0 0 4.5 18h11a1.5 1.5 0 0 0 1.5-1.5V7.621a1.5 1.5 0 0 0-.44-1.06l-4.12-4.122A1.5 1.5 0 0 0 11.378 2H4.5Zm2.25 8.5a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Zm0 3a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Z" clip-rule="evenodd"/></svg>
+                            <span class="hidden sm:inline">System Prompt</span>
+                        </button>
+                        <button onclick="confirmClearHistory()" class="text-xs text-gray-400 hover:text-red-600 flex items-center gap-1" title="Clear chat history">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M8.5 1a1 1 0 0 0-1 1v1h-2V2a1 1 0 0 0-2 0v1h-.32a2.5 2.5 0 0 0-2.34 1.655L.455 8.616A2.5 2.5 0 0 0 2.82 12h.32v5.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V12h.32a2.5 2.5 0 0 0 2.365-3.384L14.84 3.655A2.5 2.5 0 0 0 12.5.5H10V2a1 1 0 0 0-1-1H8.5ZM6 3h8v1H6V3Zm-3.5 4h10l.77 2.313a.5.5 0 0 1-.47.66H3.2a.5.5 0 0 1-.47-.66L3.5 7ZM4 12h8v5.5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V12Z" clip-rule="evenodd"/></svg>
+                            <span class="hidden sm:inline">Clear History</span>
+                        </button>
+                        <button onclick="toggleChatSummary()" class="lg:hidden text-indigo-500 hover:text-indigo-700" title="View summary">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </button>
+                        <span class="w-px h-4 bg-gray-200 self-center"></span>
+                        <button onclick="toggleChatFullscreenMode()" id="chat-fullscreen-btn" title="Fullscreen" class="ml-auto text-gray-400 hover:text-gray-600 flex items-center">
+                            <!-- Expand icon (shown when not fullscreen) -->
+                            <svg id="chat-fs-expand-icon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                            <!-- Collapse icon (shown when fullscreen) -->
+                            <svg id="chat-fs-collapse-icon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="relative flex-1 flex flex-col min-h-0">
+                    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" style="min-height: 300px;">
+                        <!-- Messages rendered here -->
+                    </div>
+                    <!-- Scroll-to-bottom button -->
+                    <button id="scroll-to-bottom-btn" class="scroll-to-bottom-btn hidden" onclick="scrollChatToBottom()" title="Scroll to bottom">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+                            <path fill-rule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v10.638l3.96-4.158a.75.75 0 1 1 1.08 1.04l-5.25 5.5a.75.75 0 0 1-1.08 0l-5.25-5.5a.75.75 0 1 1 1.08-1.04l3.96 4.158V3.75A.75.75 0 0 1 10 3Z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
+                </div>
+                <!-- Workplace Connection Overlay (shown when agent workplace is not connected) -->
+                <div id="workplace-connection-overlay" class="hidden border-t border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 flex items-center gap-3">
+                    <div class="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                    <p id="workplace-overlay-msg" class="text-sm text-yellow-700 dark:text-yellow-400">Connecting to workplace...</p>
+                    <button onclick="retryWorkplaceConnect()" class="ml-auto text-xs text-yellow-700 dark:text-yellow-400 hover:underline flex-shrink-0">Retry</button>
+                </div>
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <div class="flex gap-2">
+                        <textarea id="chat-input" placeholder="Type a message..." rows="1"
+                            class="flex-1 p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+                            style="max-height: 150px;"
+                            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"
+                            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,150)+'px';this.style.overflowY=this.scrollHeight>150?'auto':'hidden'"></textarea>
+                        <button onclick="handleChatBtn()" id="chat-send-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2 rounded-md text-sm transition-colors">Send</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Summary Panel — hidden on mobile, sidebar on desktop -->
+            <div class="hidden lg:flex flex-col gap-3 flex-[1] flex-shrink-0 min-h-0 w-1/3">
+                <!-- Agent State Card -->
+                {% if agent.enable_agent_state %}
+                <div id="agent-state-card" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 flex-col flex-shrink-0" style="min-height:0;">
+                    <div class="flex justify-between items-center px-4 pt-4 pb-2 flex-shrink-0">
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-semibold text-gray-800 dark:text-gray-100">Agent State</h3>
+                            <span id="state-busy-dot" class="hidden inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>Busy</span>
+                        </div>
+                        <button onclick="refreshAgentState()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="Refresh">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l-.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div id="agent-state-content" class="overflow-y-auto px-4 pb-3 flex-shrink-0" style="max-height:260px;">
+                        <p class="text-sm text-gray-400 italic">No state yet.</p>
+                    </div>
+                </div>
+                {% endif %}
+                <!-- Session Recap Card -->
+                <div id="summary-card" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div class="flex justify-between items-center px-4 pt-4 pb-2 flex-shrink-0">
+                        <h3 class="font-semibold text-gray-800 dark:text-gray-100">Session Recap</h3>
+                        <button onclick="refreshSummary()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="Refresh">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l-.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div id="summary-content" class="flex-1 overflow-y-auto p-4 min-h-0">
+                        <p class="text-sm text-gray-400 italic">No summary yet. Start chatting to generate one.</p>
+                    </div>
+                    <div id="summary-meta" class="hidden px-4 py-2 border-t border-gray-100 text-xs text-gray-400 flex-shrink-0"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mobile Chat Summary Overlay -->
+<div id="mobile-chat-summary-overlay" class="lg:hidden fixed inset-0 z-[70] hidden">
+    <div class="absolute inset-0 bg-black/40" onclick="closeMobileChatSummary()"></div>
+    <div class="absolute right-0 top-0 bottom-0 w-[85%] max-w-[340px] bg-white dark:bg-gray-800 flex flex-col shadow-xl">
+        <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+            <h4 class="font-semibold text-gray-800 dark:text-gray-100">Session Recap</h4>
+            <div class="flex items-center gap-3">
+                <button onclick="refreshSummary()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l-.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                </button>
+                <button onclick="closeMobileChatSummary()" class="text-gray-400 hover:text-gray-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto min-h-0 flex flex-col p-4 space-y-4">
+            {% if agent.enable_agent_state %}
+            <!-- Mobile Agent State Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="flex justify-between items-center px-4 py-2 border-b border-gray-100">
+                    <div class="flex items-center gap-2">
+                        <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Agent State</h5>
+                        <span id="mobile-state-busy-dot" class="hidden inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>Busy</span>
+                    </div>
+                    <button onclick="refreshAgentState()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l-.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                    </button>
+                </div>
+                <div id="mobile-agent-state-content" class="p-4">
+                    <p class="text-sm text-gray-400 italic">No state yet.</p>
+                </div>
+            </div>
+            {% endif %}
+            <!-- Mobile Session Recap Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                <div class="flex justify-between items-center px-4 py-2 border-b border-gray-100">
+                    <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Session Recap</h5>
+                </div>
+                <div id="mobile-summary-content" class="p-4">
+                    <p class="text-sm text-gray-400 italic">No summary yet. Start chatting to generate one.</p>
+                </div>
+            </div>
+        </div>
+        <div id="mobile-summary-meta" class="hidden px-4 py-2 border-t border-gray-100 text-xs text-gray-400"></div>
+    </div>
+</div>
+
+<!-- New File Modal -->
+<div id="new-file-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[400px] shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 class="text-gray-800 font-semibold dark:text-gray-100">New Knowledge File</h3>
+            <button onclick="closeNewFileModal()" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Filename</label>
+                <input type="text" id="new-file-name" placeholder="e.g., facilities.md" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeNewFileModal()" class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onclick="createNewFile()" class="px-4 py-2 bg-indigo-500 text-white rounded-md text-sm hover:bg-indigo-600">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tool Detail Modal -->
+<div id="tool-detail-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[700px] shadow-xl flex flex-col" style="max-height: 85vh;">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-gray-800 font-semibold dark:text-gray-100" id="tool-detail-title"></h3>
+                <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-mono" id="tool-detail-id"></span>
+                <span id="tool-detail-skill" class="hidden text-xs bg-indigo-50 text-indigo-500 px-2 py-0.5 rounded"></span>
+            </div>
+            <button onclick="document.getElementById('tool-detail-modal').classList.add('hidden')" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5 flex-1 overflow-y-auto space-y-4">
+            <!-- Description -->
+            <div>
+                <label class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Description</label>
+                <p id="tool-detail-desc" class="text-sm text-gray-700 mt-1"></p>
+            </div>
+            <!-- Parameters (always visible) -->
+            <div id="tool-detail-definition" class="space-y-3"></div>
+            <!-- CODE section -->
+            <div>
+                <label class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Code</label>
+                <!-- Tab bar -->
+                <div class="flex border-b border-gray-200 mt-2">
+                    <button id="tool-tab-btn-prod" onclick="switchToolTab('prod')" class="px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600">Prod</button>
+                    <button id="tool-tab-btn-mock" onclick="switchToolTab('mock')" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">Mock</button>
+                </div>
+                <!-- Prod tab -->
+                <div id="tool-tab-prod" class="pt-3">
+                    <textarea id="tool-backend-code" class="w-full font-mono text-xs bg-gray-900 text-gray-100 border border-gray-700 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" rows="14" spellcheck="false" style="resize: vertical; tab-size: 4;"
+                        onkeydown="if(event.key==='Tab'){event.preventDefault();const s=this.selectionStart,e=this.selectionEnd;this.value=this.value.substring(0,s)+'    '+this.value.substring(e);this.selectionStart=this.selectionEnd=s+4;}"></textarea>
+                    <div class="flex items-center gap-3 mt-2">
+                        <button id="saveBackendCodeBtn" onclick="saveBackendCode()" class="px-4 py-2 bg-indigo-500 text-white rounded-md text-sm hover:bg-indigo-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">Save</button>
+                        <span id="tool-backend-save-status" class="text-sm text-green-600 hidden">Saved!</span>
+                    </div>
+                    <!-- Test section (Prod) -->
+                    <div class="mt-4 border-t border-gray-200 pt-4">
+                        <label class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Test</label>
+                        <textarea id="tool-test-args-real" class="w-full font-mono text-xs bg-gray-50 border border-gray-200 rounded-md p-2 mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" rows="3" spellcheck="false" placeholder='{"key": "value"}'></textarea>
+                        <div class="flex items-center gap-3 mt-2">
+                            <button onclick="testToolExec('real')" class="px-4 py-2 bg-emerald-500 text-white rounded-md text-sm hover:bg-emerald-600 transition-colors">Run</button>
+                            <span id="tool-test-status-real" class="text-xs text-gray-400 hidden"></span>
+                        </div>
+                        <pre id="tool-test-result-real" class="hidden mt-2 bg-gray-50 border border-gray-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto" style="max-height: 200px;"></pre>
+                    </div>
+                </div>
+                <!-- Mock tab -->
+                <div id="tool-tab-mock" class="hidden pt-3">
+                    <pre id="tool-detail-mock" class="bg-gray-50 border border-gray-200 rounded-md p-3 text-xs text-gray-700 font-mono whitespace-pre-wrap overflow-x-auto" style="max-height: 300px;"></pre>
+                    <p id="tool-detail-no-mock" class="hidden text-sm text-gray-400 italic">No mock response defined.</p>
+                    <!-- Test section (Mock) -->
+                    <div class="mt-4 border-t border-gray-200 pt-4">
+                        <label class="text-xs uppercase tracking-wide text-gray-400 font-semibold">Test</label>
+                        <textarea id="tool-test-args-mock" class="w-full font-mono text-xs bg-gray-50 border border-gray-200 rounded-md p-2 mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" rows="3" spellcheck="false" placeholder='{"key": "value"}'></textarea>
+                        <div class="flex items-center gap-3 mt-2">
+                            <button onclick="testToolExec('mock')" class="px-4 py-2 bg-emerald-500 text-white rounded-md text-sm hover:bg-emerald-600 transition-colors">Run</button>
+                            <span id="tool-test-status-mock" class="text-xs text-gray-400 hidden"></span>
+                        </div>
+                        <pre id="tool-test-result-mock" class="hidden mt-2 bg-gray-50 border border-gray-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto" style="max-height: 200px;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-end p-5 border-t border-gray-200">
+            <a id="tool-detail-edit-link" href="#" class="px-4 py-2 text-sm text-gray-500 hover:text-indigo-600 transition-colors">Edit in Settings</a>
+        </div>
+    </div>
+</div>
+
+<!-- Compiled System Prompt Modal -->
+<div id="compiled-prompt-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[800px] shadow-xl flex flex-col relative" style="max-height: 85vh;">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 class="text-gray-800 font-semibold dark:text-gray-100">Compiled Context</h3>
+            <button onclick="document.getElementById('compiled-prompt-modal').classList.add('hidden')" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <!-- Loading Spinner Overlay -->
+        <div id="compiled-prompt-loading" class="hidden absolute inset-0 bg-white/80 flex items-center justify-center z-10 rounded-xl">
+            <div class="flex flex-col items-center gap-3">
+                <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="text-sm text-gray-500">Loading...</span>
+            </div>
+        </div>
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 px-5">
+            <button onclick="switchPromptTab('prompt')" id="prompt-tab-btn-prompt" class="px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600">System Prompt</button>
+            <button onclick="switchPromptTab('llm')" id="prompt-tab-btn-llm" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">LLM Request</button>
+        </div>
+        <!-- System Prompt Tab -->
+        <div id="prompt-tab-prompt" class="p-5 flex-1 overflow-y-auto space-y-4">
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-2">System Prompt</h4>
+                <pre id="compiled-prompt-text" class="bg-gray-50 border border-gray-200 rounded-md p-4 text-xs text-gray-700 font-mono whitespace-pre-wrap overflow-x-auto"></pre>
+            </div>
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-2 cursor-pointer flex items-center gap-1" onclick="document.getElementById('compiled-tools-json').classList.toggle('hidden'); this.querySelector('.chevron').classList.toggle('rotated')">
+                    Tool Definitions
+                    <span class="chevron text-gray-400 text-[10px] transition-transform">&#9656;</span>
+                    <span id="compiled-tools-count" class="text-xs font-normal text-gray-400 ml-1"></span>
+                </h4>
+                <pre id="compiled-tools-json" class="hidden bg-gray-50 border border-gray-200 rounded-md p-4 text-xs text-gray-700 font-mono whitespace-pre-wrap overflow-x-auto" style="max-height: 400px;"></pre>
+            </div>
+        </div>
+        <!-- LLM Request Tab -->
+        <div id="prompt-tab-llm" class="hidden p-5 flex-1 overflow-y-auto">
+            <div class="flex items-center gap-2 mb-3">
+                <h4 class="text-sm font-semibold text-gray-700">Messages Array</h4>
+                <span id="llm-preview-badge" class="hidden text-[10px] px-2 py-0.5 rounded font-medium bg-amber-100 text-amber-700">Summary Active</span>
+            </div>
+            <div id="llm-preview-messages" class="space-y-2">
+                <p class="text-xs text-gray-400 italic">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- KB Editor Modal -->
+<div id="kb-editor-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[700px] shadow-xl flex flex-col" style="max-height: 85vh;">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 class="text-gray-800 font-semibold dark:text-gray-100">Editing: <span id="kb-editor-filename" class="font-mono text-indigo-600"></span></h3>
+            <button onclick="closeEditor()" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5 flex-1 overflow-hidden flex flex-col">
+            <textarea id="kb-editor-content" class="flex-1 w-full p-3 border border-gray-300 rounded-md text-sm font-mono resize-none focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10" style="min-height: 300px;"></textarea>
+        </div>
+        <div class="flex gap-3 justify-end p-5 border-t border-gray-200">
+            <button onclick="closeEditor()" class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button id="saveFileBtn" onclick="saveFile()" class="px-4 py-2 bg-indigo-500 text-white rounded-md text-sm hover:bg-indigo-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Channel Modal -->
+<div id="channel-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[450px] shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 class="text-gray-800 font-semibold dark:text-gray-100">Add Channel</h3>
+            <button onclick="closeChannelModal()" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Type</label>
+                <select id="channel-type" class="w-full p-2.5 border border-gray-300 rounded-md text-sm" onchange="updateChannelConfigFields()">
+                    <option value="telegram">Telegram</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="discord">Discord</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Name</label>
+                <input type="text" id="channel-name" placeholder="e.g., Main Telegram Bot" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+            </div>
+            <div id="channel-config-fields" class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Bot Token</label>
+                <input type="text" id="channel-bot-token" placeholder="Telegram bot token" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeChannelModal()" class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onclick="addChannel()" class="px-4 py-2 bg-indigo-500 text-white rounded-md text-sm hover:bg-indigo-600">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=18"></script>
+<script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
+<script>
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-3 rounded-lg shadow-lg text-white font-medium transition-opacity duration-500 ${
+        type === 'success' ? 'bg-green-600' : 'bg-red-600'
+    }`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
+}
+</script>
+<script>
+const AGENT_ID = '{{ agent.id }}';
+const ENABLE_AGENT_STATE = {{ 'true' if agent.enable_agent_state else 'false' }};
+let currentEditFile = null;
+let agentTools = [];
+let chatLoaded = false;
+
+// Avatar upload handler
+document.addEventListener('DOMContentLoaded', function() {
+    const avatarInput = document.getElementById('avatar-input');
+    if (avatarInput) {
+        avatarInput.addEventListener('change', async function() {
+            const file = this.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await fetch(`/api/agents/${AGENT_ID}/avatar`, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.error) { showToast(data.error, 'error'); return; }
+            showToast('Avatar updated!', 'success');
+            // Refresh avatar preview
+            const preview = document.getElementById('avatar-preview');
+            if (preview) preview.src = `/api/agents/${AGENT_ID}/avatar?t=${Date.now()}`;
+            const headerAvatar = document.getElementById('agent-avatar-header');
+            if (headerAvatar) { headerAvatar.src = `/api/agents/${AGENT_ID}/avatar?t=${Date.now()}`; headerAvatar.style.display = ''; headerAvatar.onerror = function() { this.style.display = 'none'; }; }
+        });
+    }
+});
+
+async function removeAvatar() {
+    const confirmed = await showConfirm({ title: 'Remove avatar?', message: 'This will delete the agent avatar image.', confirmText: 'Remove', danger: true });
+    if (!confirmed) return;
+    const res = await fetch(`/api/agents/${AGENT_ID}/avatar`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast('Avatar removed!', 'success');
+    // Reset previews to default
+    const defaultSrc = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22 fill=%22none%22><rect width=%2240%22 height=%2240%22 rx=%2220%22 fill=%22%23e0e7ff%22/><path d=%22M20 8a5 5 0 100 10 5 5 0 000-10zm-8 18.5a8 8 0 0116 0%22 fill=%22%234f46e5%22/></svg>`;
+    const preview = document.getElementById('avatar-preview');
+    if (preview) preview.src = defaultSrc;
+    const headerAvatar = document.getElementById('agent-avatar-header');
+    if (headerAvatar) { headerAvatar.src = defaultSrc; headerAvatar.style.display = ''; }
+}
+
+const chatUI = ChatUI({
+    containerId: 'chat-messages',
+    userAlign: 'right',
+    assistantAlign: 'left',
+    showTimestamps: false,
+    userBubbleClass: 'bg-indigo-500 text-white dark:bg-indigo-800',
+    assistantBubbleClass: 'bg-gray-200 text-gray-800 dark:bg-[#152A3A] border dark:border-[#1B394F] dark:text-gray-100',
+    agentAvatarUrl: '/api/agents/{{ agent.id }}/avatar',
+});
+
+// Scroll-to-bottom button logic
+(function() {
+    const msgs = document.getElementById('chat-messages');
+    const btn = document.getElementById('scroll-to-bottom-btn');
+    if (!msgs || !btn) return;
+    msgs.addEventListener('scroll', function() {
+        const nearBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
+        btn.classList.toggle('hidden', nearBottom);
+    });
+})();
+
+function scrollChatToBottom() {
+    chatUI.scrollToBottom();
+    document.getElementById('scroll-to-bottom-btn').classList.add('hidden');
+}
+
+// ==================== Tab Management ====================
+function enterChatFullscreen() {
+    const isMobile = window.innerWidth < 1024;
+    if (isMobile) {
+        // On mobile let CSS handle layout — JS calc is unreliable before scroll settles
+        $('#tab-chat').css('height', '');
+        $('html, body').css('overflow', '');
+        return;
+    }
+    window.scrollTo(0, 0);
+    // Use requestAnimationFrame so getBoundingClientRect is measured after scroll+layout
+    requestAnimationFrame(function () {
+        const $tab = $('#tab-chat');
+        const rect = $tab[0].getBoundingClientRect();
+        $tab.css('height', Math.max(window.innerHeight - rect.top, 400) + 'px');
+        $('html, body').css('overflow', 'hidden');
+        if (typeof chatUI !== 'undefined') chatUI.scrollToBottom();
+    });
+}
+
+function exitChatFullscreen() {
+    $('#tab-chat').css('height', '');
+    $('html, body').css('overflow', '');
+}
+
+let _chatFullscreenActive = false;
+
+function toggleChatFullscreenMode() {
+    const $tab = $('#tab-chat');
+    // The page header and tab bar are the two flex-shrink-0 siblings above #tab-chat
+    const $header = $tab.closest('.flex-col').children('.flex-shrink-0');
+
+    _chatFullscreenActive = !_chatFullscreenActive;
+
+    if (_chatFullscreenActive) {
+        $tab.addClass('chat-fullscreen');
+        $('#chat-panel').removeClass('rounded-lg');
+        $header.hide();
+        $('body').css('overflow', 'hidden');
+        $('#chat-fs-expand-icon').addClass('hidden');
+        $('#chat-fs-collapse-icon').removeClass('hidden');
+    } else {
+        $tab.removeClass('chat-fullscreen');
+        $('#chat-panel').addClass('rounded-lg');
+        $header.show();
+        $('body').css('overflow', '');
+        $('#chat-fs-expand-icon').removeClass('hidden');
+        $('#chat-fs-collapse-icon').addClass('hidden');
+        // Re-apply height sizing for the non-fullscreen state
+        enterChatFullscreen();
+    }
+
+    requestAnimationFrame(function () {
+        if (typeof chatUI !== 'undefined') chatUI.scrollToBottom();
+    });
+}
+
+// Escape key exits fullscreen
+$(document).on('keydown', function (e) {
+    if (e.key === 'Escape' && _chatFullscreenActive) toggleChatFullscreenMode();
+});
+
+function showTab(name) {
+    $('.tab-content').addClass('hidden');
+    $('.tab-btn').removeClass('border-indigo-500 text-indigo-600')
+                 .addClass('border-transparent text-gray-500');
+    $('#tab-' + name).removeClass('hidden');
+    $(`[data-tab="${name}"]`).addClass('border-indigo-500 text-indigo-600')
+                              .removeClass('border-transparent text-gray-500');
+
+    if (name === 'knowledge') loadKBFiles();
+    if (name === 'tools') loadTools();
+    if (name === 'skills') loadSkills();
+    if (name === 'channels') loadChannels();
+    if (name === 'chat' && !chatLoaded) { loadChatHistory(); refreshSummary(); refreshAgentState(); }
+
+    if (name === 'chat') {
+        enterChatFullscreen();
+        $('#chat-input').focus();
+    } else {
+        exitChatFullscreen();
+    }
+
+    location.hash = name;
+}
+
+$(window).on('resize', function () {
+    if (!$('#tab-chat').hasClass('hidden')) enterChatFullscreen();
+});
+
+// ==================== Settings Tab ====================
+function toggleAdvanced() {
+    const section = document.getElementById('advanced-section');
+    const arrow = document.getElementById('adv-arrow');
+    section.classList.toggle('hidden');
+    arrow.style.transform = section.classList.contains('hidden') ? '' : 'rotate(90deg)';
+}
+
+// ==================== Agent Variables ====================
+let _agentVariables = [];
+
+function addVariableRow(key = '', value = '', isSecret = false) {
+    const list = document.getElementById('agent-variables-list');
+    const row = document.createElement('div');
+    row.className = 'flex gap-2 items-center';
+    row.innerHTML = `
+        <input type="text" placeholder="KEY_NAME" value="${key.replace(/"/g, '&quot;')}"
+            class="var-key w-40 p-2 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+            style="text-transform: uppercase;">
+        <input type="${isSecret ? 'password' : 'text'}" placeholder="value" value="${value.replace(/"/g, '&quot;')}"
+            class="var-value flex-1 p-2 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+        <label class="flex items-center gap-1 cursor-pointer select-none text-xs text-gray-500 whitespace-nowrap" title="Mark as secret (masked in UI)">
+            <input type="checkbox" class="var-secret" ${isSecret ? 'checked' : ''}
+                onchange="this.closest('.flex').querySelector('.var-value').type = this.checked ? 'password' : 'text'; scheduleVarSave()">
+            Secret
+        </label>
+        <button type="button" onclick="removeVariableRow(this)" class="text-red-400 hover:text-red-600 text-lg leading-none" title="Remove">&times;</button>
+    `;
+    list.appendChild(row);
+    row.querySelector('.var-key').addEventListener('input', scheduleVarSave);
+    row.querySelector('.var-value').addEventListener('input', scheduleVarSave);
+}
+
+function collectVariables() {
+    const rows = document.querySelectorAll('#agent-variables-list > div');
+    const vars = [];
+    rows.forEach(row => {
+        const key = row.querySelector('.var-key').value.trim().toUpperCase();
+        const value = row.querySelector('.var-value').value;
+        const isSecret = row.querySelector('.var-secret').checked;
+        if (key) vars.push({ key, value, is_secret: isSecret });
+    });
+    return vars;
+}
+
+async function loadVariables() {
+    const res = await fetch(`/api/agents/${AGENT_ID}/variables`);
+    const data = await res.json();
+    _agentVariables = data.variables || [];
+    const list = document.getElementById('agent-variables-list');
+    list.innerHTML = '';
+    _agentVariables.forEach(v => addVariableRow(v.key, v.value, v.is_secret));
+}
+
+let _varSaveTimer = null;
+function scheduleVarSave() {
+    clearTimeout(_varSaveTimer);
+    _varSaveTimer = setTimeout(() => saveVariables(true), 800);
+}
+
+function removeVariableRow(btn) {
+    btn.closest('.flex').remove();
+    saveVariables(true);
+}
+
+async function saveVariables(silent = false) {
+    const vars = collectVariables();
+    await fetch(`/api/agents/${AGENT_ID}/variables`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ variables: vars })
+    });
+    if (!silent) showToast("Variables saved successfully!", "success");
+}
+
+const SPINNER_SVG = '<svg class="animate-spin h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+function setSaveLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (loading) {
+        btn.disabled = true;
+        btn.dataset.originalText = btn.textContent;
+        btn.innerHTML = '<span class="inline-flex items-center">' + SPINNER_SVG + 'Saving...</span>';
+    } else {
+        btn.disabled = false;
+        btn.textContent = btn.dataset.originalText || btn.textContent;
+    }
+}
+
+async function saveGeneral() {
+    const btnId = 'saveGeneralBtn';
+    setSaveLoading(btnId, true);
+    try {
+    const homeSel = document.getElementById('agent-workplace-id');
+    const selectedOpt = homeSel ? homeSel.options[homeSel.selectedIndex] : null;
+    const homeType = selectedOpt ? selectedOpt.dataset.type : '';
+    const isRemoteOrCloud = (homeType === 'remote' || homeType === 'cloud');
+    const res = await fetch(`/api/agents/${AGENT_ID}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            name: document.getElementById('agent-name').value,
+            description: document.getElementById('agent-desc').value,
+            workspace: document.getElementById('agent-workspace').value || null,
+            workplace_id: homeSel ? homeSel.value || null : null,
+            system_prompt: document.getElementById('agent-system-prompt').value,
+            vision_enabled: document.getElementById('agent-vision').checked ? 1 : 0,
+            sandbox_enabled: isRemoteOrCloud ? 0 : (document.getElementById('agent-sandbox').checked ? 1 : 0),
+            safety_checker_enabled: document.getElementById('agent-safety-checker').checked ? 1 : 0,
+            inject_agent_id: document.getElementById('agent-inject-id').checked ? 1 : 0,
+            inject_datetime: document.getElementById('agent-inject-datetime').checked ? 1 : 0,
+        })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast("Failed to save settings.", "error"); return; }
+
+    const selectedModelId = document.getElementById('agent-model-select').value || null;
+    await fetch(`/api/agents/${AGENT_ID}/model`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ model_id: selectedModelId })
+    });
+
+    showToast("Settings saved successfully!", "success");
+    } finally {
+        setSaveLoading(btnId, false);
+    }
+}
+
+async function saveAdvanced() {
+    const btnId = 'saveAdvancedBtn';
+    setSaveLoading(btnId, true);
+    try {
+    const res = await fetch(`/api/agents/${AGENT_ID}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            summarize_threshold: parseInt(document.getElementById('agent-summarize-threshold').value) || 0,
+            summarize_tail: parseInt(document.getElementById('agent-summarize-tail').value) || 1,
+            summarize_prompt: document.getElementById('agent-summarize-prompt').value || null,
+            message_buffer_seconds: parseFloat(document.getElementById('agent-buffer-seconds').value) || 0,
+            send_intermediate_responses: document.getElementById('agent-send-intermediate').checked ? 1 : 0,
+            enable_agent_state: document.getElementById('agent-state-enabled').checked ? 1 : 0,
+            disable_parallel_tool_execution: document.getElementById('agent-parallel-exec').checked ? 1 : 0,
+            disable_turn_prefetch: document.getElementById('agent-prefetch').checked ? 1 : 0,
+            agent_messaging_enabled: document.getElementById('agent-messaging-enabled').checked ? 1 : 0,
+        })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast("Failed to save advanced settings.", "error"); return; }
+    showToast("Advanced settings saved!", "success");
+    } finally {
+        setSaveLoading(btnId, false);
+    }
+}
+
+// ==================== Knowledge Tab ====================
+async function loadKBFiles() {
+    const res = await fetch(`/api/agents/${AGENT_ID}/kb`);
+    const data = await res.json();
+    const files = data.files || [];
+    const list = document.getElementById('kb-list');
+    const empty = document.getElementById('kb-empty');
+    if (files.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    list.innerHTML = files.map(f => `
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors" onclick="editFile('${f.filename}')">
+            <div class="flex flex-col min-w-0">
+                <span class="text-sm font-mono text-gray-800 truncate" title="${f.filename}">${f.filename}</span>
+                <span class="text-xs text-gray-400">${(f.size / 1024).toFixed(1)} KB</span>
+            </div>
+            <div class="flex gap-1">
+                <button onclick="event.stopPropagation(); editFile('${f.filename}')" title="Edit" class="p-1.5 rounded text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="m5.433 13.917 1.262-3.155A4 4 0 0 1 7.58 9.42l6.92-6.918a2.121 2.121 0 0 1 3 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 0 1-.65-.65Z"/><path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0 0 10 3H4.75A2.75 2.75 0 0 0 2 5.75v9.5A2.75 2.75 0 0 0 4.75 18h9.5A2.75 2.75 0 0 0 17 15.25V10a.75.75 0 0 0-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5Z"/></svg>
+                </button>
+                <button onclick="event.stopPropagation(); deleteFile('${f.filename}')" title="Delete" class="p-1.5 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd"/></svg></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function editFile(filename) {
+    const res = await fetch(`/api/agents/${AGENT_ID}/kb/${encodeURIComponent(filename)}`);
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    currentEditFile = filename;
+    document.getElementById('kb-editor-filename').textContent = filename;
+    document.getElementById('kb-editor-content').value = data.content;
+    document.getElementById('kb-editor-modal').classList.remove('hidden');
+}
+
+function closeEditor() {
+    document.getElementById('kb-editor-modal').classList.add('hidden');
+    currentEditFile = null;
+}
+
+async function saveFile() {
+    if (!currentEditFile) return;
+    const btnId = 'saveFileBtn';
+    setSaveLoading(btnId, true);
+    try {
+    const content = document.getElementById('kb-editor-content').value;
+    await fetch(`/api/agents/${AGENT_ID}/kb/${encodeURIComponent(currentEditFile)}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content})
+    });
+    closeEditor();
+    loadKBFiles();
+    } finally {
+        setSaveLoading(btnId, false);
+    }
+}
+
+async function deleteFile(filename) {
+    if (!await showConfirm({title: 'Delete File', message: `Delete "${filename}"? This cannot be undone.`, confirmText: 'Delete'})) return;
+    await fetch(`/api/agents/${AGENT_ID}/kb/${encodeURIComponent(filename)}`, {method: 'DELETE'});
+    if (currentEditFile === filename) closeEditor();
+    loadKBFiles();
+}
+
+async function uploadFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    await fetch(`/api/agents/${AGENT_ID}/kb`, {method: 'POST', body: form});
+    input.value = '';
+    loadKBFiles();
+}
+
+function showNewFileModal() {
+    document.getElementById('new-file-modal').classList.remove('hidden');
+    document.getElementById('new-file-name').value = '';
+    document.getElementById('new-file-name').focus();
+}
+function closeNewFileModal() {
+    document.getElementById('new-file-modal').classList.add('hidden');
+}
+async function createNewFile() {
+    const fname = document.getElementById('new-file-name').value.trim();
+    if (!fname) return alert('Filename is required.');
+    await fetch(`/api/agents/${AGENT_ID}/kb`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: fname, content: ''})
+    });
+    closeNewFileModal();
+    loadKBFiles();
+    editFile(fname);
+}
+
+// ==================== Tools Tab ====================
+let allToolsDefs = [];
+let assignedToolIds = [];
+let currentFilterMode = 'assigned';
+
+async function loadTools() {
+    const [toolsRes, agentToolsRes] = await Promise.all([
+        fetch('/api/settings/tools'),
+        fetch(`/api/agents/${AGENT_ID}/tools`)
+    ]);
+    allToolsDefs = (await toolsRes.json()).tools || [];
+    assignedToolIds = (await agentToolsRes.json()).tools || [];
+    renderToolsList();
+}
+
+function isToolAssigned(toolId) {
+    if (assignedToolIds.includes(toolId)) return true;
+    // backward compat: bare function name stored in DB
+    const tool = allToolsDefs.find(t => t.id === toolId);
+    if (!tool) return false;
+    const fnName = (tool.function || {}).name || tool.name || tool.id;
+    return assignedToolIds.includes(fnName);
+}
+
+function renderToolsList() {
+    const list = document.getElementById('tools-list');
+    const knownIds = new Set(allToolsDefs.map(t => t.id));
+    const fnNameToTool = {};
+    for (const t of allToolsDefs) {
+        const fn = (t.function || {}).name || t.name || t.id;
+        if (!fnNameToTool[fn]) fnNameToTool[fn] = t;
+    }
+    const orphaned = assignedToolIds.filter(id => !knownIds.has(id) && !fnNameToTool[id]);
+
+    const sortByName = (a, b) => (a.name || a.id).localeCompare(b.name || b.id);
+    const builtins  = allToolsDefs.filter(t => t._builtin).sort(sortByName);
+    const assigned  = allToolsDefs.filter(t => !t._builtin && isToolAssigned(t.id)).sort(sortByName);
+    const available = allToolsDefs.filter(t => !t._builtin && !isToolAssigned(t.id)).sort(sortByName);
+
+    let html = '';
+
+    // Warning banner + rows for orphaned tools
+    if (orphaned.length > 0) {
+        html += `<div class="tool-row flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-md" data-assigned="true" data-builtin="false" data-tool-id="">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5">
+                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 6a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 6Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/>
+            </svg>
+            <div>
+                <p class="text-sm font-medium text-amber-800">${orphaned.length} tool(s) missing</p>
+                <p class="text-xs text-amber-600 mt-0.5">The skill providing these tools may have been uninstalled. Remove them or reinstall the skill.</p>
+            </div>
+        </div>`;
+        html += orphaned.map(id => `
+        <div class="tool-row flex items-center justify-between p-3 bg-amber-50/60 dark:bg-amber-700 rounded-md border border-amber-200"
+             data-assigned="true" data-builtin="false" data-tool-id="${escapeHtml(id)}">
+            <div class="min-w-0 flex-1 flex items-center gap-2.5">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-amber-500 flex-shrink-0">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/>
+                </svg>
+                <div>
+                    <span class="text-sm font-medium text-amber-700 font-mono">${escapeHtml(id)}</span>
+                    <p class="text-xs text-amber-500">Missing — skill uninstalled</p>
+                </div>
+            </div>
+            <button onclick="event.stopPropagation(); removeOrphan('${escapeHtml(id)}')" title="Remove"
+                    class="ml-2 p-1.5 rounded text-amber-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"/></svg>
+            </button>
+        </div>`).join('');
+    }
+
+    const renderRow = (t) => {
+        const isBuiltin = !!t._builtin;
+        const isAsgn = isBuiltin || isToolAssigned(t.id);
+        const safeId = escapeHtml(t.id);
+        return `
+        <div class="tool-row flex items-center justify-between p-3 dark:bg-gray-800 dark:border-gray-600 rounded-md border transition-colors cursor-pointer
+                    ${isAsgn ? 'bg-gray-50 border-gray-200 hover:bg-gray-100' : 'bg-white border-gray-100 hover:bg-gray-50'}"
+             data-assigned="${isAsgn && !isBuiltin}"
+             data-builtin="${isBuiltin}"
+             data-tool-id="${safeId}"
+             onclick="showToolDetail('${safeId}')">
+            <div class="min-w-0 flex-1 overflow-hidden">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-sm font-medium text-gray-800 dark:text-gray-200">${escapeHtml(t.name || t.id)}</span>
+                    ${isBuiltin ? '<span class="text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded">builtin</span>' : ''}
+                    ${t._skill_id ? `<span class="text-xs bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded">${escapeHtml(t._skill_id)}</span>` : ''}
+                </div>
+                <p class="text-xs text-gray-400 font-mono mt-0.5">${safeId}</p>
+                <p class="text-xs text-gray-500 mt-0.5">${escapeHtml(t.description || '')}</p>
+            </div>
+            <label class="relative flex-shrink-0 ml-3 ${isBuiltin ? 'cursor-not-allowed' : 'cursor-pointer'}"
+                   onclick="event.stopPropagation()"
+                   title="${isBuiltin ? 'Always available' : (isAsgn ? 'Remove from agent' : 'Add to agent')}">
+                <input type="checkbox" ${isAsgn ? 'checked' : ''} ${isBuiltin ? 'disabled' : ''}
+                       onchange="toggleTool('${safeId}')" class="sr-only peer">
+                <span class="dyn-toggle"></span>
+            </label>
+        </div>`;
+    };
+
+    html += [...builtins, ...assigned, ...available].map(renderRow).join('');
+    list.innerHTML = html;
+    filterToolsList();
+    updateToolsBadge(assigned.length);
+}
+
+function updateToolsBadge(count) {
+    const badge = document.getElementById('tools-badge');
+    if (count > 0) {
+        badge.textContent = count;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+}
+
+function filterToolsList() {
+    const query = (document.getElementById('tool-filter').value || '').toLowerCase().trim();
+    const mode = currentFilterMode;
+    const rows = document.querySelectorAll('#tools-list .tool-row');
+    let visibleCount = 0;
+    rows.forEach(row => {
+        const isBuiltin = row.dataset.builtin === 'true';
+        const isAssignedRow = row.dataset.assigned === 'true';
+        const toolId = row.dataset.toolId;
+
+        let show = true;
+        if (mode === 'assigned') {
+            show = isBuiltin || isAssignedRow || toolId === ''; // '' = orphan banner
+        } else if (mode === 'available') {
+            show = !isBuiltin && !isAssignedRow && toolId !== '';
+        }
+
+        if (show && query && toolId !== '') {
+            const tool = allToolsDefs.find(t => t.id === toolId);
+            const searchable = [
+                tool ? (tool.name || tool.id) : toolId,
+                tool ? (tool.description || '') : '',
+                tool ? (tool._skill_id || '') : '',
+                toolId
+            ].join(' ').toLowerCase();
+            show = searchable.includes(query);
+        }
+
+        row.classList.toggle('hidden', !show);
+        if (show) visibleCount++;
+    });
+    document.getElementById('tools-empty').classList.toggle('hidden', visibleCount > 0);
+}
+
+function setFilterMode(mode) {
+    currentFilterMode = mode;
+    ['assigned', 'available', 'all'].forEach(m => {
+        const btn = document.getElementById(`filter-btn-${m}`);
+        const active = m === mode;
+        btn.classList.toggle('bg-indigo-500', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('dark:bg-indigo-600', active);
+        btn.classList.toggle('bg-white', !active);
+        btn.classList.toggle('text-gray-600', !active);
+        btn.classList.toggle('dark:bg-gray-700', !active);
+        btn.classList.toggle('dark:text-gray-300', !active);
+    });
+    filterToolsList();
+}
+
+async function toggleTool(toolId) {
+    const tool = allToolsDefs.find(t => t.id === toolId);
+    const fnName = tool ? ((tool.function || {}).name || tool.name || tool.id) : toolId;
+    if (isToolAssigned(toolId)) {
+        // Remove by exact ID and bare function name (backward compat)
+        assignedToolIds = assignedToolIds.filter(id => id !== toolId && id !== fnName);
+    } else {
+        // Remove any existing assignment with the same function name (swap)
+        assignedToolIds = assignedToolIds.filter(aid => {
+            if (aid === fnName) return false;
+            const aDef = allToolsDefs.find(t => t.id === aid);
+            if (aDef && ((aDef.function || {}).name || aDef.name || aDef.id) === fnName) return false;
+            return true;
+        });
+        assignedToolIds.push(toolId);
+    }
+    renderToolsList();
+    await saveToolsQuiet();
+}
+
+async function removeOrphan(toolId) {
+    assignedToolIds = assignedToolIds.filter(id => id !== toolId);
+    renderToolsList();
+    await saveToolsQuiet();
+}
+
+async function saveToolsQuiet() {
+    await fetch(`/api/agents/${AGENT_ID}/tools`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tools: assignedToolIds})
+    });
+    const st = document.getElementById('tools-save-status');
+    st.classList.remove('hidden');
+    setTimeout(() => st.classList.add('hidden'), 1500);
+}
+
+// ==================== Skills Tab ====================
+let allSkillsDefs = [];
+let allowedSkillIds = [];
+
+async function loadSkills() {
+    const [skillsRes, agentSkillsRes] = await Promise.all([
+        fetch('/api/skills'),
+        fetch(`/api/agents/${AGENT_ID}/skills`)
+    ]);
+    const skillsData = await skillsRes.json();
+    allSkillsDefs = (skillsData.skills || []).filter(s => s.enabled);
+    allowedSkillIds = (await agentSkillsRes.json()).skills || [];
+    renderSkillsList();
+}
+
+function renderSkillsList() {
+    const list = document.getElementById('skills-list');
+    const empty = document.getElementById('skills-empty');
+    if (!list) return;
+    if (!allSkillsDefs.length) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    list.innerHTML = allSkillsDefs.map(skill => {
+        const allowed = allowedSkillIds.includes(skill.id);
+        return `<div class="flex items-start gap-3 p-3 rounded-lg border ${allowed ? 'border-indigo-200 bg-indigo-50' : 'border-gray-100 bg-white'} hover:border-indigo-200 transition-colors">
+            <input type="checkbox" id="skill-${escapeHtml(skill.id)}" ${allowed ? 'checked' : ''}
+                onchange="toggleSkill('${escapeHtml(skill.id)}')"
+                class="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 cursor-pointer flex-shrink-0">
+            <label for="skill-${escapeHtml(skill.id)}" class="flex-1 cursor-pointer min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-medium text-gray-800">${escapeHtml(skill.name || skill.id)}</span>
+                    <span class="text-xs font-mono text-gray-400">${escapeHtml(skill.id)}</span>
+                    ${skill.tool_count ? `<span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">${skill.tool_count} tool${skill.tool_count !== 1 ? 's' : ''}</span>` : ''}
+                </div>
+                ${skill.description ? `<p class="text-xs text-gray-500 mt-0.5">${escapeHtml(skill.description)}</p>` : ''}
+            </label>
+        </div>`;
+    }).join('');
+}
+
+async function toggleSkill(skillId) {
+    if (allowedSkillIds.includes(skillId)) {
+        allowedSkillIds = allowedSkillIds.filter(id => id !== skillId);
+    } else {
+        allowedSkillIds.push(skillId);
+    }
+    renderSkillsList();
+    await saveSkillsQuiet();
+}
+
+async function saveSkillsQuiet() {
+    await fetch(`/api/agents/${AGENT_ID}/skills`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({skills: allowedSkillIds})
+    });
+    const st = document.getElementById('skills-save-status');
+    st.classList.remove('hidden');
+    setTimeout(() => st.classList.add('hidden'), 1500);
+}
+
+let currentToolDetailId = null;
+
+function renderToolDefinition(container, tool) {
+    const fn = tool.function || {};
+    const params = fn.parameters || {};
+    const properties = params.properties || {};
+    const required = new Set(params.required || []);
+
+    const TYPE_COLORS = {
+        string:  'bg-blue-50 text-blue-600',
+        integer: 'bg-amber-50 text-amber-600',
+        number:  'bg-amber-50 text-amber-600',
+        boolean: 'bg-purple-50 text-purple-600',
+        array:   'bg-teal-50 text-teal-600',
+        object:  'bg-rose-50 text-rose-600',
+    };
+
+    const typeTag = (type) => {
+        const cls = TYPE_COLORS[type] || 'bg-gray-100 text-gray-500';
+        return `<span class="text-xs font-mono px-1.5 py-0.5 rounded ${cls}">${escapeHtml(type || 'any')}</span>`;
+    };
+
+    const entries = Object.entries(properties);
+    if (entries.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const paramsHtml = entries.map(([name, schema]) => {
+        const isReq = required.has(name);
+        const itemType = schema.items ? schema.items.type : null;
+        return `
+        <div class="flex items-start gap-3 py-2.5 border-b border-gray-100 last:border-0">
+            <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-sm font-mono font-medium text-gray-800">${escapeHtml(name)}</span>
+                    ${typeTag(schema.type)}
+                    ${itemType ? `<span class="text-xs text-gray-400">of ${typeTag(itemType)}</span>` : ''}
+                    ${isReq
+                        ? `<span class="text-xs font-medium text-red-500 bg-red-50 px-1.5 py-0.5 rounded">required</span>`
+                        : `<span class="text-xs text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">optional</span>`}
+                </div>
+                ${schema.description ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(schema.description)}</p>` : ''}
+                ${schema.enum ? `<p class="text-xs text-gray-400 mt-1">One of: ${schema.enum.map(v => `<code class="bg-gray-100 px-1 rounded">${escapeHtml(String(v))}</code>`).join(', ')}</p>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+        <div>
+            <p class="text-xs uppercase tracking-wide text-gray-400 font-semibold mb-1">Parameters
+                <span class="normal-case font-normal text-gray-400 ml-1">(${entries.length} total, ${required.size} required)</span>
+            </p>
+            <div class="border border-gray-200 rounded-md px-3 divide-y divide-gray-100">${paramsHtml}</div>
+        </div>`;
+}
+
+function switchToolTab(tab) {
+    const tabs = ['prod', 'mock'];
+    tabs.forEach(t => {
+        document.getElementById(`tool-tab-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tool-tab-btn-${t}`);
+        btn.classList.toggle('border-indigo-500', t === tab);
+        btn.classList.toggle('text-indigo-600', t === tab);
+        btn.classList.toggle('border-transparent', t !== tab);
+        btn.classList.toggle('text-gray-500', t !== tab);
+    });
+}
+
+async function showToolDetail(toolId) {
+    currentToolDetailId = toolId;
+    try {
+        // Look up from already-loaded allToolsDefs — avoids API/URL issues with skill IDs
+        const tool = allToolsDefs.find(t => t.id === toolId);
+        if (!tool) { console.warn('showToolDetail: tool not found', toolId); return; }
+
+        document.getElementById('tool-detail-title').textContent = tool.name || tool.id;
+        document.getElementById('tool-detail-id').textContent = tool.id;
+        document.getElementById('tool-detail-desc').textContent = tool.description || 'No description';
+
+        // Skill / builtin badge
+        const skillBadge = document.getElementById('tool-detail-skill');
+        if (tool._skill_id) {
+            skillBadge.textContent = tool._skill_id;
+            skillBadge.classList.remove('hidden');
+        } else if (tool._builtin) {
+            skillBadge.textContent = 'builtin';
+            skillBadge.classList.remove('hidden');
+        } else {
+            skillBadge.classList.add('hidden');
+        }
+
+        // Parameters section (always visible, above CODE)
+        renderToolDefinition(document.getElementById('tool-detail-definition'), tool);
+
+        // Mock tab
+        const mockPre = document.getElementById('tool-detail-mock');
+        const noMock = document.getElementById('tool-detail-no-mock');
+        if (tool.mock_response) {
+            mockPre.classList.remove('hidden');
+            noMock.classList.add('hidden');
+            mockPre.textContent = typeof tool.mock_response === 'string'
+                ? tool.mock_response
+                : JSON.stringify(tool.mock_response, null, 2);
+        } else {
+            mockPre.classList.add('hidden');
+            noMock.classList.remove('hidden');
+        }
+
+        // Prod tab — fetch backend code by bare function name (safe for API)
+        const fnName = (tool.function && tool.function.name) || toolId;
+        const backendRes = await fetch(`/api/settings/tools/${encodeURIComponent(fnName)}/backend`).catch(() => null);
+        const backend = backendRes ? await backendRes.json().catch(() => ({})) : {};
+        const codeEl = document.getElementById('tool-backend-code');
+        if (backend.exists) {
+            codeEl.value = backend.code;
+        } else {
+            codeEl.value = `"""Backend implementation for the ${fnName} tool."""\n\n\ndef execute(agent, args: dict) -> dict:\n    # agent: dict with agent_id, agent_name, user_id, channel_id, session_id\n    # args: dict of arguments passed by the LLM\n    return {"result": "not implemented"}\n`;
+        }
+
+        // Pre-fill test args from parameter schema
+        let sampleArgs = '{}';
+        const params = tool.function?.parameters?.properties;
+        if (params) {
+            const sample = {};
+            for (const [k, v] of Object.entries(params)) {
+                sample[k] = v.type === 'number' ? 0 : v.type === 'boolean' ? false : '';
+            }
+            sampleArgs = JSON.stringify(sample, null, 2);
+        }
+        document.getElementById('tool-test-args-real').value = sampleArgs;
+        document.getElementById('tool-test-args-mock').value = sampleArgs;
+        document.getElementById('tool-test-result-real').classList.add('hidden');
+        document.getElementById('tool-test-result-mock').classList.add('hidden');
+        document.getElementById('tool-test-status-real').classList.add('hidden');
+        document.getElementById('tool-test-status-mock').classList.add('hidden');
+
+        document.getElementById('tool-detail-edit-link').href = `/settings#tools-${toolId}`;
+        document.getElementById('tool-backend-save-status').classList.add('hidden');
+        switchToolTab('prod');
+        document.getElementById('tool-detail-modal').classList.remove('hidden');
+    } catch(e) { console.error('showToolDetail error:', e); }
+}
+
+async function saveBackendCode() {
+    if (!currentToolDetailId) return;
+    const btnId = 'saveBackendCodeBtn';
+    setSaveLoading(btnId, true);
+    const code = document.getElementById('tool-backend-code').value;
+    try {
+        const res = await fetch(`/api/settings/tools/${currentToolDetailId}/backend`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({code})
+        });
+        const data = await res.json();
+        const st = document.getElementById('tool-backend-save-status');
+        if (data.success) {
+            st.textContent = 'Saved!';
+            st.classList.remove('hidden', 'text-red-600');
+            st.classList.add('text-green-600');
+        } else {
+            st.textContent = data.error || 'Save failed';
+            st.classList.remove('hidden', 'text-green-600');
+            st.classList.add('text-red-600');
+        }
+        setTimeout(() => st.classList.add('hidden'), 2000);
+    } catch(e) {
+        const st = document.getElementById('tool-backend-save-status');
+        st.textContent = 'Network error';
+        st.classList.remove('hidden', 'text-green-600');
+        st.classList.add('text-red-600');
+        setTimeout(() => st.classList.add('hidden'), 2000);
+    } finally {
+        setSaveLoading(btnId, false);
+    }
+}
+
+async function testToolExec(mode) {
+    if (!currentToolDetailId) return;
+    const argsEl = document.getElementById(`tool-test-args-${mode}`);
+    const resultEl = document.getElementById(`tool-test-result-${mode}`);
+    const statusEl = document.getElementById(`tool-test-status-${mode}`);
+
+    let args = {};
+    const raw = argsEl.value.trim();
+    if (raw) {
+        try { args = JSON.parse(raw); }
+        catch(e) {
+            resultEl.textContent = 'Invalid JSON: ' + e.message;
+            resultEl.classList.remove('hidden', 'text-gray-700', 'border-gray-200');
+            resultEl.classList.add('text-red-600', 'border-red-200');
+            return;
+        }
+    }
+
+    statusEl.textContent = 'Running...';
+    statusEl.classList.remove('hidden');
+    resultEl.classList.add('hidden');
+
+    // Mock mode: run entirely client-side
+    if (mode === 'mock') {
+        const tool = allToolsDefs.find(t => t.id === currentToolDetailId);
+        statusEl.classList.add('hidden');
+        if (!tool || tool.mock_response == null) {
+            resultEl.textContent = 'Error: No mock response defined for this tool';
+            resultEl.className = 'mt-2 bg-red-50 border border-red-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto text-red-700';
+            resultEl.classList.remove('hidden');
+            resultEl.style.maxHeight = '200px';
+            return;
+        }
+        try {
+            let result;
+            if (tool.mock_response_type === 'javascript') {
+                // Capture console.log output and return value
+                const lines = [];
+                const mockFn = new Function('ARGS', 'console', tool.mock_response);
+                const fakeConsole = { log: (...a) => lines.push(a.map(String).join(' ')) };
+                const retVal = mockFn(args, fakeConsole);
+                if (lines.length > 0) {
+                    result = lines.join('\n');
+                } else if (retVal !== undefined) {
+                    result = retVal;
+                } else {
+                    result = '(no output)';
+                }
+            } else {
+                result = tool.mock_response;
+            }
+            resultEl.textContent = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+            resultEl.className = 'mt-2 bg-gray-50 border border-gray-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto text-gray-700';
+        } catch(e) {
+            resultEl.textContent = 'Error: ' + e.message;
+            resultEl.className = 'mt-2 bg-red-50 border border-red-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto text-red-700';
+        }
+        resultEl.classList.remove('hidden');
+        resultEl.style.maxHeight = '200px';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/settings/tools/${currentToolDetailId}/test`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({args, mode})
+        });
+        const data = await res.json();
+        statusEl.classList.add('hidden');
+
+        if (data.error) {
+            resultEl.textContent = 'Error: ' + data.error;
+            resultEl.className = 'mt-2 bg-red-50 border border-red-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto text-red-700';
+        } else {
+            resultEl.textContent = JSON.stringify(data.result, null, 2);
+            resultEl.className = 'mt-2 bg-gray-50 border border-gray-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto text-gray-700';
+        }
+        resultEl.style.maxHeight = '200px';
+    } catch(e) {
+        statusEl.classList.add('hidden');
+        resultEl.textContent = 'Network error: ' + e.message;
+        resultEl.className = 'mt-2 bg-red-50 border border-red-200 rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto text-red-700';
+        resultEl.style.maxHeight = '200px';
+    }
+}
+
+// ==================== Channels Tab ====================
+async function loadChannels() {
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels`);
+    const data = await res.json();
+    const channels = data.channels || [];
+    const list = document.getElementById('channels-list');
+    const empty = document.getElementById('channels-empty');
+    if (channels.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    list.innerHTML = channels.map(ch => {
+        const typeBadge = ch.type === 'telegram' ? 'bg-blue-100 text-blue-700' :
+                          ch.type === 'whatsapp' ? 'bg-green-100 text-green-700' :
+                          'bg-purple-100 text-purple-700';
+        const running = ch.running;
+        const statusDot = running ? 'bg-green-500' : 'bg-gray-300';
+        const statusText = running ? 'Running' : 'Stopped';
+        const isPrimary = ch.is_primary;
+        const primaryIcon = isPrimary ? '<span class="text-yellow-500" title="Primary channel">&#9733;</span>' : '';
+        const toggleBtn = running
+            ? `<button onclick="toggleChannel('${ch.id}', false)" class="text-xs px-3 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100">Stop</button>`
+            : `<button onclick="toggleChannel('${ch.id}', true)" class="text-xs px-3 py-1 rounded bg-green-50 text-green-600 hover:bg-green-100">Start</button>`;
+        const primaryBtn = isPrimary
+            ? `<button onclick="unsetPrimaryChannel('${ch.id}')" class="text-xs px-3 py-1 rounded bg-yellow-50 text-yellow-600 hover:bg-yellow-100" title="Remove as primary">&#9733;</button>`
+            : `<button onclick="setPrimaryChannel('${ch.id}')" class="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200" title="Set as primary channel for message routing">&#9734;</button>`;
+        return `
+        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-md border border-gray-100">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-sm font-medium text-gray-800">${ch.name || 'Unnamed'}</span>
+                    ${primaryIcon}
+                </div>
+                <div class="mb-1"><span class="text-xs px-2 py-0.5 rounded font-medium ${typeBadge}">${ch.type}</span></div>
+                <div class="flex items-center gap-1.5">
+                    <span class="inline-block w-2 h-2 rounded-full ${statusDot}"></span>
+                    <span class="text-xs text-gray-400">${statusText}</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                ${primaryBtn}
+                ${toggleBtn}
+                <button onclick="deleteChannel('${ch.id}')" class="text-xs text-red-500 hover:text-red-700">Delete</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function showAddChannelModal() {
+    document.getElementById('channel-modal').classList.remove('hidden');
+    updateChannelConfigFields();
+}
+function closeChannelModal() {
+    document.getElementById('channel-modal').classList.add('hidden');
+}
+function updateChannelConfigFields() {
+    const type = document.getElementById('channel-type').value;
+    const container = document.getElementById('channel-config-fields');
+    if (type === 'telegram') {
+        container.innerHTML = `
+            <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Bot Token</label>
+            <input type="text" id="channel-bot-token" placeholder="123456:ABC-DEF..." class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">`;
+    } else if (type === 'whatsapp') {
+        container.innerHTML = `
+            <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Phone Number ID</label>
+            <input type="text" id="channel-phone-id" placeholder="Phone number ID" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+            <label class="block mb-1 mt-3 text-gray-600 dark:text-gray-300 text-sm font-medium">Access Token</label>
+            <input type="text" id="channel-access-token" placeholder="WhatsApp API token" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">`;
+    } else {
+        container.innerHTML = `
+            <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Bot Token</label>
+            <input type="text" id="channel-bot-token" placeholder="Discord bot token" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">`;
+    }
+}
+
+async function addChannel() {
+    const type = document.getElementById('channel-type').value;
+    const name = document.getElementById('channel-name').value.trim();
+    let config = {};
+    if (type === 'telegram' || type === 'discord') {
+        config.bot_token = (document.getElementById('channel-bot-token')?.value || '').trim();
+    } else if (type === 'whatsapp') {
+        config.phone_number_id = (document.getElementById('channel-phone-id')?.value || '').trim();
+        config.access_token = (document.getElementById('channel-access-token')?.value || '').trim();
+    }
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type, name, config})
+    });
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    closeChannelModal();
+    loadChannels();
+}
+
+async function toggleChannel(channelId, start) {
+    const action = start ? 'start' : 'stop';
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${channelId}/${action}`, {method: 'POST'});
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    loadChannels();
+}
+
+async function deleteChannel(channelId) {
+    if (!await showConfirm({title: 'Delete Channel', message: 'Delete this channel? This cannot be undone.', confirmText: 'Delete'})) return;
+    await fetch(`/api/agents/${AGENT_ID}/channels/${channelId}`, {method: 'DELETE'});
+    loadChannels();
+}
+
+async function setPrimaryChannel(channelId) {
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${channelId}/set-primary`, {method: 'POST'});
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    loadChannels();
+}
+
+async function unsetPrimaryChannel(channelId) {
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${channelId}/unset-primary`, {method: 'POST'});
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    loadChannels();
+}
+
+// ==================== Chat ====================
+let lastChatTs = 0;  // epoch-ms cursor for JSONL-based polling
+let _chatSessionId = null;  // cached session_id for this user
+
+async function _getChatSessionId() {
+    if (_chatSessionId) return _chatSessionId;
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/chat/session?user_id=web_test`);
+        const data = await res.json();
+        _chatSessionId = data.session_id || null;
+    } catch(e) { /* ignore */ }
+    return _chatSessionId;
+}
+
+// Pass { persistent: true } when called from incremental idle polling so the thinking
+// bubble persists across multiple poll calls within a single turn.
+function renderEntries(entries, { persistent = false } = {}) {
+    // Render JSONL entries into the chat UI, grouping thinking/tool events into bubbles.
+    let thinkingId = persistent ? _pollThinkingId : null;
+    for (const entry of entries) {
+        if (entry.ts > lastChatTs) lastChatTs = entry.ts;
+        const type = entry.type;
+        if (type === 'user') {
+            if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId); thinkingId = null; }
+            chatUI.appendMessage('user', entry.content, {metadata: entry.metadata});
+        } else if (type === 'thinking') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            chatUI.appendTimelineEntry(thinkingId, {type: 'thinking', content: entry.content});
+        } else if (type === 'tool_call') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            chatUI.appendTimelineEntry(thinkingId, {
+                type: 'tool_call', tool: entry.function, args: entry.params || {}, param_types: {}
+            });
+        } else if (type === 'tool_output') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            let result;
+            try { result = JSON.parse(entry.content); } catch(e) { result = {data: entry.content}; }
+            chatUI.appendTimelineEntry(thinkingId, {type: 'tool_result', tool: entry.function, result, error: !!entry.error});
+        } else if (type === 'intermediate') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            chatUI.appendTimelineEntry(thinkingId, {type: 'response', content: entry.content});
+        } else if (type === 'final') {
+            const meta = entry.metadata || {};
+            if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, meta.thinking_duration); thinkingId = null; }
+            chatUI.appendMessage(meta.error ? 'error' : 'assistant', entry.content, {metadata: meta});
+        } else if (type === 'error') {
+            const meta = entry.metadata || {};
+            if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, meta.thinking_duration); thinkingId = null; }
+            chatUI.appendMessage('error', entry.content, {metadata: meta});
+        } else if (type === 'system') {
+            chatUI.appendMessage('system', entry.content, {metadata: entry.metadata});
+        } else if (type === 'turn_end') {
+            if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, entry.thinking_duration); thinkingId = null; }
+        }
+        // turn_begin, pending: no rendering needed for history
+    }
+    if (persistent) {
+        _pollThinkingId = thinkingId;  // save for next incremental poll call
+    } else if (thinkingId) {
+        // In-progress turn detected: remove the incomplete bubble so restoreActiveReasoning
+        // can create a fresh one from the event buffer without duplicating entries.
+        chatUI.removeThinkingIndicator(thinkingId);
+    }
+}
+
+function _showChatLoadingSkeleton() {
+    const c = document.getElementById('chat-messages');
+    if (!c) return;
+    const skeletonRow = (wide) => `
+        <div class="flex items-end gap-2 ${wide ? '' : 'flex-row-reverse'}">
+            <div class="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse flex-shrink-0"></div>
+            <div class="space-y-1.5 ${wide ? 'max-w-xs' : 'max-w-sm'} w-full">
+                <div class="h-3 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse ${wide ? 'w-3/4' : 'w-full'}"></div>
+                <div class="h-3 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse ${wide ? 'w-1/2' : 'w-5/6'}"></div>
+            </div>
+        </div>`;
+    c.innerHTML = `
+        <div id="chat-loading-skeleton" class="space-y-4 py-2">
+            ${skeletonRow(false)}
+            ${skeletonRow(true)}
+            ${skeletonRow(false)}
+            ${skeletonRow(true)}
+            ${skeletonRow(false)}
+        </div>`;
+}
+
+async function loadChatHistory() {
+    _pollThinkingId = null;
+    lastChatTs = 0;
+    _showChatLoadingSkeleton();
+    try {
+        // Fetch session_id and history in parallel — don't block history on session lookup
+        const sidPromise = _getChatSessionId();
+        const res = await fetch(`/api/agents/${AGENT_ID}/chat?user_id=web_test&limit=50`);
+        await sidPromise; // ensure cache is primed before restoreActiveReasoning runs
+        const data = await res.json();
+        chatUI.clearContainer();
+        chatUI.batchRender(() => renderEntries(data.entries || []));
+    } catch(e) { /* ignore load errors */ }
+    chatLoaded = true;
+    setTimeout(() => chatUI.scrollToBottom(), 50);
+    if (!_chatBusy) startIdlePoll();
+    restoreActiveReasoning(); // fire-and-forget — history already rendered
+}
+
+async function restoreActiveReasoning() {
+    try {
+        // Use cached session_id — already fetched in loadChatHistory()
+        const sessionId = await _getChatSessionId();
+        if (!sessionId) return;
+
+        // Fetch all buffered events for this session
+        const eRes = await fetch(`/api/agents/${encodeURIComponent(AGENT_ID)}/chat/events?session_id=${encodeURIComponent(sessionId)}&after=0`);
+        if (!eRes.ok) return;
+        const eData = await eRes.json();
+        const events = eData.events || [];
+        if (!events.length) return;
+
+        // Only replay events from the current in-progress turn.
+        // Discard everything up to and including the last 'done' so a completed
+        // turn is never replayed when the user sends a new message.
+        const lastDoneIdx = events.reduce((idx, ev, i) => ev.event === 'done' ? i : idx, -1);
+        const replayEvents = lastDoneIdx >= 0 ? events.slice(lastDoneIdx + 1) : events;
+        if (!replayEvents.length) return;
+
+        // Replay trace into a new thinking bubble.
+        // Note: any incomplete bubble rendered from JSONL history was already removed
+        // by renderEntries, so this always starts with a clean slate.
+        let resumeSeq = 0;
+        const turnBeginEvt = replayEvents.find(ev => ev.event === 'turn_begin');
+        let thinkingId = chatUI.showThinkingIndicator(turnBeginEvt ? turnBeginEvt.data.ts : null);
+        for (const ev of replayEvents) {
+            if (ev.seq > resumeSeq) resumeSeq = ev.seq;
+            if (ev.event === 'thinking') {
+                chatUI.appendTimelineEntry(thinkingId, {type: 'thinking', content: ev.data.content});
+            } else if (ev.event === 'tool_call_started') {
+                chatUI.appendTimelineEntry(thinkingId, {type: 'tool_call', tool: ev.data.tool, args: ev.data.args, param_types: ev.data.param_types || {}});
+            } else if (ev.event === 'tool_executed') {
+                chatUI.appendTimelineEntry(thinkingId, {type: 'tool_result', tool: ev.data.tool, result: ev.data.result, error: ev.data.error});
+            } else if (ev.event === 'response_chunk' && ev.data.is_final && ev.data.content) {
+                chatUI.appendTimelineEntry(thinkingId, {type: 'response', content: ev.data.content});
+            } else if (ev.event === 'turn_split') {
+                chatUI.finalizeThinkingBubble(thinkingId);
+                thinkingId = chatUI.showThinkingIndicator();
+            }
+        }
+        _chatThinkingId = thinkingId;
+
+        chatUI.scrollToBottom();
+
+        // Connect SSE from resumeSeq so the backend only sends the gap
+        // (events that arrived between our fetch above and this subscription)
+        chatUI.connectThinkingStream(
+            `/api/agents/${encodeURIComponent(AGENT_ID)}/chat/stream?session_id=${encodeURIComponent(sessionId)}&after=${resumeSeq}`,
+            thinkingId,
+            { onSplit: (newId) => { _chatThinkingId = newId; } }
+        );
+
+        // Poll until the final response lands
+        pollForResponse(thinkingId);
+    } catch(e) { /* silently ignore */ }
+}
+
+let chatPollTimer = null;
+let chatIdleTimer = null;
+let chatPolling = false;
+let _chatBusy = false;
+let _chatAbortController = null;
+let _chatThinkingId = null;
+let _pollThinkingId = null;  // active thinking bubble from idle poll (persists across calls)
+
+function updateBusyBadge(busy) {
+    const dot = document.getElementById('state-busy-dot');
+    const mobileDot = document.getElementById('mobile-state-busy-dot');
+    [dot, mobileDot].forEach(el => {
+        if (!el) return;
+        busy ? el.classList.remove('hidden') : el.classList.add('hidden');
+    });
+}
+
+function setChatBusy(busy) {
+    _chatBusy = busy;
+    updateBusyBadge(busy);
+    const input = document.getElementById('chat-input');
+    if (!busy) {
+        input.focus();
+        _chatAbortController = null;
+        // Keep _chatThinkingId alive while SSE stream is active (injection case)
+        if (!chatUI.hasActiveStream()) _chatThinkingId = null;
+        startIdlePoll();
+    } else {
+        stopIdlePoll();
+    }
+}
+
+// Background poll for busy state set by external sessions (notifier, other channels)
+setInterval(async () => {
+    if (_chatBusy) return; // already tracking via SSE when we initiated the turn
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/busy`);
+        const data = await res.json();
+        updateBusyBadge(data.busy);
+    } catch (e) { /* ignore */ }
+}, 5000);
+
+function startIdlePoll() {
+    if (chatIdleTimer) return; // already running
+    chatIdleTimer = setInterval(async () => {
+        if (_chatBusy || chatUI.hasActiveStream()) return; // skip during active turn or SSE stream
+        try {
+            const sid = await _getChatSessionId();
+            const qs = sid
+                ? `session_id=${encodeURIComponent(sid)}&after_ts=${lastChatTs}&limit=20`
+                : `user_id=web_test&after_ts=${lastChatTs}&limit=20`;
+            const res = await fetch(`/api/agents/${AGENT_ID}/chat?${qs}`);
+            const data = await res.json();
+            const entries = data.entries || [];
+            if (!entries.length) return;
+            const wasAtBottom = chatUI.isNearBottom(80);
+            // Advance cursor over ALL entries (including user echoes) so we don't re-fetch them
+            for (const e of entries) { if (e.ts > lastChatTs) lastChatTs = e.ts; }
+            // Skip user echoes (already shown locally); render assistant/system events
+            const newEntries = entries.filter(e => e.type !== 'user');
+            renderEntries(newEntries, { persistent: true });
+            if (newEntries.length && wasAtBottom) chatUI.scrollToBottom();
+        } catch(e) { /* ignore network errors during idle poll */ }
+    }, 3000);
+}
+
+function stopIdlePoll() {
+    if (chatIdleTimer) {
+        clearInterval(chatIdleTimer);
+        chatIdleTimer = null;
+    }
+    if (_pollThinkingId) {
+        chatUI.removeThinkingIndicator(_pollThinkingId);
+        _pollThinkingId = null;
+    }
+}
+
+function handleChatBtn() {
+    sendChat();
+}
+
+function stopChat() {
+    if (_chatAbortController) {
+        _chatAbortController.abort();
+    }
+    chatUI.closeStream();
+    if (_chatThinkingId) {
+        chatUI.removeThinkingIndicator(_chatThinkingId);
+    }
+    if (chatPollTimer) {
+        clearInterval(chatPollTimer);
+        chatPollTimer = null;
+    }
+    chatPolling = false;
+    setChatBusy(false); // will call startIdlePoll()
+}
+
+async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+    input.style.height = 'auto';
+    chatUI.appendMessage('user', msg);
+    chatUI.scrollToBottom();
+    setChatBusy(true);
+
+    // If an SSE stream is already active, the agent is mid-turn — inject the message
+    // without tearing down the existing thinking bubble or stream.
+    if (chatUI.hasActiveStream()) {
+        try {
+            const res = await fetch(`/api/agents/${AGENT_ID}/chat`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: msg, user_id: 'web_test'}),
+            });
+            const data = await res.json();
+            if (data.injected) {
+                // Message queued for injection — mark it, re-enable input, stream stays open
+                chatUI.markLastUserBubbleQueued();
+                setChatBusy(false);
+                return;
+            }
+            // Race: agent finished between hasActiveStream check and POST — fall through
+            // to render the synchronous response below
+            if (!data.success) {
+                chatUI.appendMessage('error', 'Error: ' + (data.error || 'Unknown error'));
+            } else {
+                chatUI.appendMessage('assistant', data.response);
+                await syncLastChatTs();
+            }
+        } catch(e) {
+            chatUI.appendMessage('error', 'Network error: ' + e.message);
+        }
+        setChatBusy(false);
+        setTimeout(refreshSummary, 3000);
+        setTimeout(refreshAgentState, 1000);
+        return;
+    }
+
+    // Clean up any previous turn before starting a new one (fixes duplicate spinner on interrupt)
+    if (_chatAbortController) {
+        _chatAbortController.abort();
+    }
+    if (_chatThinkingId) {
+        chatUI.removeThinkingIndicator(_chatThinkingId);
+        _chatThinkingId = null;
+    }
+
+    _chatAbortController = new AbortController();
+    const signal = _chatAbortController.signal;
+
+    // Fetch session_id so we can open SSE stream before the LLM starts
+    let sessionId = null;
+    try {
+        const sRes = await fetch(`/api/agents/${AGENT_ID}/chat/session?user_id=web_test`, {signal});
+        const sData = await sRes.json();
+        sessionId = sData.session_id || null;
+    } catch(e) { /* SSE won't work but chat still functions */ }
+
+    // Thinking bubble is created lazily on turn_begin SSE event (when LLM is actually called).
+    // thinkingId starts null and gets set via onThinkingId callback.
+    let thinkingId = null;
+    if (sessionId) {
+        chatUI.connectThinkingStream(
+            `/api/agents/${AGENT_ID}/chat/stream?session_id=${encodeURIComponent(sessionId)}`,
+            null,
+            {
+                onThinkingId: (id) => { thinkingId = id; _chatThinkingId = id; },
+                onSplit: (newId) => { thinkingId = newId; _chatThinkingId = newId; },
+            }
+        );
+    }
+
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/chat`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: msg, user_id: 'web_test'}),
+            signal
+        });
+        const data = await res.json();
+        if (data.buffered) {
+            // Buffered — SSE stream will handle the thinking bubble; poll waits for response
+            pollForResponse(null);
+            return; // setChatBusy(false) will be called when poll completes
+        } else if (data.injected) {
+            // Race: agent became busy between hasActiveStream check and POST — treat as injection
+            chatUI.removeThinkingIndicator(thinkingId);
+            chatUI.markLastUserBubbleQueued();
+        } else if (!data.success) {
+            chatUI.removeThinkingIndicator(thinkingId);
+            chatUI.appendMessage('error', 'Error: ' + (data.error || 'Unknown error'));
+        } else {
+            // Non-buffered: SSE may have already finalized, but ensure it's cleaned up
+            chatUI.closeStream();
+            chatUI.finalizeThinkingBubble(thinkingId);
+            if (data.tool_trace && data.tool_trace.length > 0) {
+                await chatUI.animateToolTrace(data.tool_trace);
+            }
+            chatUI.appendMessage(data.error ? 'error' : 'assistant', data.response);
+            await syncLastChatTs();
+        }
+    } catch(e) {
+        if (e.name === 'AbortError') return; // stopChat() already cleaned up
+        chatUI.closeStream();
+        chatUI.removeThinkingIndicator(thinkingId);
+        chatUI.appendMessage('error', 'Network error: ' + e.message);
+    }
+    setChatBusy(false);
+    // Refresh summary and agent state after background summarization completes (~2-3s delay)
+    setTimeout(refreshSummary, 3000);
+    setTimeout(refreshAgentState, 1000);
+}
+
+async function syncLastChatTs() {
+    try {
+        const sid = await _getChatSessionId();
+        const qs = sid ? `session_id=${encodeURIComponent(sid)}&limit=1` : `user_id=web_test&limit=1`;
+        const res = await fetch(`/api/agents/${AGENT_ID}/chat?${qs}`);
+        const data = await res.json();
+        for (const e of (data.entries || [])) {
+            if (e.ts > lastChatTs) lastChatTs = e.ts;
+        }
+    } catch(e) { /* ignore */ }
+}
+
+function pollForResponse(existingThinkingId) {
+    // Poll every 1s until a 'final' or 'error' entry arrives in JSONL.
+    // existingThinkingId: thinking bubble already shown (SSE streaming into it).
+    if (chatPollTimer) clearInterval(chatPollTimer);
+    let thinkingId = existingThinkingId || null;
+    // Collect intermediate entries across poll ticks for SSE fallback rendering.
+    // If SSE fails to deliver activity entries (race: agent completed before SSE connected),
+    // these are replayed into the thinking bubble when 'final' arrives.
+    const collectedIntermediates = [];
+    const pollStartTs = lastChatTs; // snapshot cursor at poll start
+    chatPollTimer = setInterval(async () => {
+        if (chatPolling) return;
+        chatPolling = true;
+        try {
+            const sid = await _getChatSessionId();
+            const qs = sid
+                ? `session_id=${encodeURIComponent(sid)}&after_ts=${lastChatTs}&limit=50`
+                : `user_id=web_test&after_ts=${lastChatTs}&limit=50`;
+            const res = await fetch(`/api/agents/${AGENT_ID}/chat?${qs}`);
+            const data = await res.json();
+            const entries = data.entries || [];
+            if (!entries.length) {
+                if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+                return;
+            }
+            const wasAtBottom = chatUI.isNearBottom(80);
+            // Only render non-user events (SSE already rendered thinking/tool events live)
+            // But we must detect 'final'/'error' to know when to stop polling.
+            let gotFinal = false;
+            for (const entry of entries) {
+                if (entry.ts <= lastChatTs) continue;
+                lastChatTs = entry.ts;
+                if (entry.type === 'final' || entry.type === 'error') {
+                    chatUI.closeStream();
+                    // SSE fallback: if SSE race-lost (agent finished before stream connected),
+                    // the thinking bubble will be empty. Replay intermediates from JSONL history.
+                    if (collectedIntermediates.length > 0) {
+                        if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+                        if (chatUI.getTimelineEntryCount(thinkingId) === 0) {
+                            for (const ie of collectedIntermediates) {
+                                if (ie.type === 'thinking') {
+                                    chatUI.appendTimelineEntry(thinkingId, {type: 'thinking', content: ie.content});
+                                } else if (ie.type === 'tool_call') {
+                                    chatUI.appendTimelineEntry(thinkingId, {type: 'tool_call', tool: ie.function, args: ie.params || {}, param_types: {}});
+                                } else if (ie.type === 'tool_output') {
+                                    let result;
+                                    try { result = JSON.parse(ie.content); } catch(e) { result = {data: ie.content}; }
+                                    chatUI.appendTimelineEntry(thinkingId, {type: 'tool_result', tool: ie.function, result, error: !!ie.error});
+                                } else if (ie.type === 'intermediate') {
+                                    chatUI.appendTimelineEntry(thinkingId, {type: 'response', content: ie.content});
+                                }
+                            }
+                        }
+                    }
+                    if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, (entry.metadata || {}).thinking_duration); thinkingId = null; }
+                    chatUI.appendMessage(entry.type === 'error' ? 'error' : 'assistant',
+                                        entry.content, {metadata: entry.metadata || {}});
+                    gotFinal = true;
+                } else if (['thinking', 'tool_call', 'tool_output', 'intermediate'].includes(entry.type)) {
+                    // Collect for SSE fallback — skipped if SSE is working (bubble already has entries)
+                    collectedIntermediates.push(entry);
+                }
+                // Other types are handled by SSE live stream; skip to avoid duplication
+            }
+            if (wasAtBottom) chatUI.scrollToBottom();
+            if (gotFinal) {
+                clearInterval(chatPollTimer);
+                chatPollTimer = null;
+                setChatBusy(false);
+                setTimeout(refreshSummary, 3000);
+                setTimeout(refreshAgentState, 1000);
+            }
+        } catch(e) { console.error('[pollForResponse]', e); }
+        finally { chatPolling = false; }
+    }, 1000);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+
+function switchPromptTab(tab) {
+    document.getElementById('prompt-tab-prompt').classList.toggle('hidden', tab !== 'prompt');
+    document.getElementById('prompt-tab-llm').classList.toggle('hidden', tab !== 'llm');
+    const btnPrompt = document.getElementById('prompt-tab-btn-prompt');
+    const btnLlm = document.getElementById('prompt-tab-btn-llm');
+    btnPrompt.className = 'px-4 py-2 text-sm font-medium border-b-2 ' + (tab === 'prompt' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700');
+    btnLlm.className = 'px-4 py-2 text-sm font-medium border-b-2 ' + (tab === 'llm' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700');
+}
+
+async function showCompiledPrompt() {
+    // Show modal immediately with loading spinner
+    const modal = document.getElementById('compiled-prompt-modal');
+    const spinner = document.getElementById('compiled-prompt-loading');
+    modal.classList.remove('hidden');
+    spinner.classList.remove('hidden');
+
+    // Fetch both in parallel
+    const [promptRes, llmRes] = await Promise.all([
+        fetch(`/api/agents/${AGENT_ID}/compiled-prompt`),
+        fetch(`/api/agents/${AGENT_ID}/chat/llm-preview?user_id=web_test`)
+    ]);
+    const data = await promptRes.json();
+    const llmData = await llmRes.json();
+
+    // System Prompt tab
+    document.getElementById('compiled-prompt-text').textContent = data.system_prompt || '(empty)';
+    const tools = data.tools || [];
+    document.getElementById('compiled-tools-count').textContent = `(${tools.length} tools)`;
+    document.getElementById('compiled-tools-json').textContent = JSON.stringify(tools, null, 2);
+
+    // LLM Request tab
+    const badge = document.getElementById('llm-preview-badge');
+    badge.classList.toggle('hidden', !llmData.has_summary);
+    const container = document.getElementById('llm-preview-messages');
+    const msgs = llmData.messages || [];
+    if (!msgs.length) {
+        container.innerHTML = '<p class="text-xs text-gray-400 italic">No messages yet. Start chatting first.</p>';
+    } else {
+        container.innerHTML = msgs.map((m, i) => {
+            const role = m.role || 'unknown';
+            const colors = {
+                system: 'border-l-purple-400 bg-purple-50',
+                user: 'border-l-blue-400 bg-blue-50',
+                assistant: 'border-l-green-400 bg-green-50',
+                tool: 'border-l-amber-400 bg-amber-50'
+            };
+            const labelColors = {
+                system: 'text-purple-600',
+                user: 'text-blue-600',
+                assistant: 'text-green-600',
+                tool: 'text-amber-600'
+            };
+            const cls = colors[role] || 'border-l-gray-400 bg-gray-50';
+            const labelCls = labelColors[role] || 'text-gray-600';
+            const content = typeof m.content === 'string' ? escapeHtml(m.content) : escapeHtml(JSON.stringify(m.content, null, 2));
+            const toolInfo = m.tool_calls ? `<div class="mt-1 text-[10px] text-gray-500">tool_calls: ${escapeHtml(JSON.stringify(m.tool_calls))}</div>` : '';
+            const toolId = m.tool_call_id ? `<span class="text-[10px] text-gray-400 ml-2">id: ${escapeHtml(m.tool_call_id)}</span>` : '';
+            return `<div class="border-l-4 ${cls} rounded-r-md p-3">
+                <div class="text-[10px] uppercase tracking-wide font-semibold ${labelCls} mb-1">[${i}] ${role}${toolId}</div>
+                <pre class="text-xs text-gray-700 font-mono whitespace-pre-wrap break-words">${content}</pre>
+                ${toolInfo}
+            </div>`;
+        }).join('');
+    }
+
+    // Hide spinner and switch to prompt tab
+    spinner.classList.add('hidden');
+    switchPromptTab('prompt');
+}
+
+async function confirmClearHistory() {
+    const confirmed = await showConfirm({
+        title: 'Clear Chat History',
+        message: 'Clear all chat history for this session? This cannot be undone.',
+        confirmText: 'Clear',
+        danger: true
+    });
+    if (!confirmed) return;
+    clearChat();
+}
+
+async function clearChat() {
+    document.getElementById('chat-messages').innerHTML = '';
+    chatLoaded = false;
+    lastChatTs = 0;
+    await fetch(`/api/agents/${AGENT_ID}/chat/clear`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_id: 'web_test'})});
+    // Clear summary panels (desktop + mobile)
+    const emptySummary = '<p class="text-sm text-gray-400 italic">No summary yet. Start chatting to generate one.</p>';
+    document.getElementById('summary-content').innerHTML = emptySummary;
+    document.getElementById('summary-meta').classList.add('hidden');
+    document.getElementById('mobile-summary-content').innerHTML = emptySummary;
+    document.getElementById('mobile-summary-meta').classList.add('hidden');
+    // Refresh agent state display (clear_session also deletes agent_state from DB)
+    refreshAgentState();
+}
+
+function toggleChatSummary() {
+    document.getElementById('mobile-chat-summary-overlay').classList.remove('hidden');
+}
+
+function closeMobileChatSummary() {
+    document.getElementById('mobile-chat-summary-overlay').classList.add('hidden');
+}
+
+async function refreshSummary() {
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/chat/summary?user_id=web_test`);
+        const data = await res.json();
+        const content = document.getElementById('summary-content');
+        const meta = document.getElementById('summary-meta');
+        const mobileContent = document.getElementById('mobile-summary-content');
+        const mobileMeta = document.getElementById('mobile-summary-meta');
+        if (data.summary) {
+            const html = '<div class="recap-prose">' + marked.parse(data.summary) + '</div>';
+            const metaText = `${data.message_count} messages summarized` + (data.updated_at ? ` \u00b7 ${data.updated_at}` : '');
+            content.innerHTML = html;
+            meta.textContent = metaText;
+            meta.classList.remove('hidden');
+            mobileContent.innerHTML = html;
+            mobileMeta.textContent = metaText;
+            mobileMeta.classList.remove('hidden');
+        } else {
+            const empty = '<p class="text-sm text-gray-400 italic">No summary yet. Start chatting to generate one.</p>';
+            content.innerHTML = empty;
+            meta.classList.add('hidden');
+            mobileContent.innerHTML = empty;
+            mobileMeta.classList.add('hidden');
+        }
+    } catch(e) { /* ignore */ }
+}
+
+async function refreshAgentState() {
+    if (!ENABLE_AGENT_STATE) return;
+    renderAgentState(AGENT_ID, 'web_test', ['agent-state-content', 'mobile-agent-state-content']);
+}
+
+document.addEventListener('evonic:agent-state-changed', function() {
+    refreshAgentState();
+});
+
+// ==================== Model Selector ====================
+async function loadAgentModelSelector() {
+    try {
+        const [modelsRes, agentModelRes] = await Promise.all([
+            fetch('/api/models'),
+            fetch(`/api/agents/${AGENT_ID}/model`)
+        ]);
+        const modelsData = await modelsRes.json();
+        const agentModelData = await agentModelRes.json();
+        const currentModelId = agentModelData.default_model_id || '';
+
+        const sel = document.getElementById('agent-model-select');
+        (modelsData.models || []).forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = `${m.name} (${m.model_name})`;
+            if (m.id === currentModelId) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        if (!currentModelId) sel.value = '';
+    } catch (err) {
+        console.error('[ModelSelector] Failed to load:', err);
+    }
+}
+loadAgentModelSelector();
+loadVariables();
+
+// ==================== Workplace Selector ====================
+const CURRENT_HOME_ID = '{{ agent.workplace_id or "" }}';
+const HOME_STATUS_DOT_CLS = {
+    connected:    'bg-green-500',
+    disconnected: 'bg-gray-400',
+    connecting:   'bg-yellow-400',
+    error:        'bg-red-500',
+};
+
+function updateWorkspaceVisibility() {
+    const sel = document.getElementById('agent-workplace-id');
+    const workspaceRow = document.getElementById('agent-workspace-row');
+    if (!sel || !workspaceRow) return;
+    const selectedOpt = sel.options[sel.selectedIndex];
+    const homeType = selectedOpt ? selectedOpt.dataset.type : '';
+    if (homeType === 'cloud') {
+        workspaceRow.classList.add('hidden');
+    } else {
+        workspaceRow.classList.remove('hidden');
+    }
+    updateSandboxVisibility();
+}
+
+function updateChatPanelTitle(connectionStatus) {
+    const sel = document.getElementById('agent-workplace-id');
+    const icon = document.getElementById('homePulseIcon');
+    if (!icon) return;
+    const selectedOpt = sel ? sel.options[sel.selectedIndex] : null;
+    const homeType = selectedOpt ? selectedOpt.dataset.type : '';
+    const isDisconnected = connectionStatus && connectionStatus !== 'connected';
+    if (homeType === 'remote') {
+        icon.classList.remove('hidden');
+        icon.className = 'inline-block w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0 ' + (isDisconnected ? 'bg-red-500' : 'bg-green-500');
+    } else if (homeType === 'cloud') {
+        icon.classList.remove('hidden');
+        icon.className = 'inline-block w-2.5 h-2.5 rounded-full animate-pulse flex-shrink-0 ' + (isDisconnected ? 'bg-red-500' : 'bg-blue-500');
+    } else {
+        icon.classList.add('hidden');
+    }
+}
+
+function updateSandboxVisibility() {
+    const sel = document.getElementById('agent-workplace-id');
+    const sandboxInput = document.getElementById('agent-sandbox');
+    const sandboxLabel = document.getElementById('sandbox-label');
+    const sandboxWarning = document.getElementById('sandbox-warning');
+    if (!sel || !sandboxInput || !sandboxWarning || !sandboxLabel) return;
+    const selectedOpt = sel.options[sel.selectedIndex];
+    const homeType = selectedOpt ? selectedOpt.dataset.type : '';
+    if (homeType === 'remote' || homeType === 'cloud') {
+        sandboxInput.disabled = true;
+        sandboxInput.checked = false;
+        sandboxLabel.classList.add('opacity-50', 'cursor-not-allowed');
+        sandboxWarning.classList.remove('hidden');
+    } else {
+        sandboxInput.disabled = false;
+        sandboxLabel.classList.remove('opacity-50', 'cursor-not-allowed');
+        sandboxWarning.classList.add('hidden');
+    }
+}
+
+async function loadWorkplaceSelector() {
+    try {
+        const res = await fetch('/api/workplaces');
+        const workplaces = await res.json();
+        const sel = document.getElementById('agent-workplace-id');
+        if (!sel) return;
+        workplaces.forEach(h => {
+            const opt = document.createElement('option');
+            opt.value = h.id;
+            opt.dataset.type = h.type;
+            const typeLabel = {local: 'Local', remote: 'Remote SSH', cloud: 'Cloud'}[h.type] || h.type;
+            opt.textContent = `${h.name} [${typeLabel}]`;
+            if (h.id === CURRENT_HOME_ID) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        updateWorkspaceVisibility();
+        if (CURRENT_HOME_ID) pollWorkplaceStatus();
+        updateChatPanelTitle();
+    } catch (err) {
+        console.error('[WorkplaceSelector] Failed to load:', err);
+    }
+}
+
+async function pollWorkplaceStatus() {
+    const homeId = document.getElementById('agent-workplace-id') ? document.getElementById('agent-workplace-id').value : '';
+    let connectionStatus = null;
+    if (!homeId) {
+        const dot = document.getElementById('workplace-status-indicator');
+        if (dot) dot.className = 'flex-shrink-0 inline-block w-2.5 h-2.5 rounded-full bg-gray-300';
+        hideWorkplaceConnectionOverlay();
+        updateChatPanelTitle();
+        return;
+    }
+    try {
+        const res = await fetch(`/api/workplaces/${homeId}/status`);
+        const data = await res.json();
+        connectionStatus = data.status || 'disconnected';
+        const dot = document.getElementById('workplace-status-indicator');
+        if (dot) dot.className = 'flex-shrink-0 inline-block w-2.5 h-2.5 rounded-full ' + (HOME_STATUS_DOT_CLS[connectionStatus] || 'bg-gray-400');
+        if (connectionStatus !== 'connected') {
+            showWorkplaceConnectionOverlay(homeId, connectionStatus);
+        } else {
+            hideWorkplaceConnectionOverlay();
+        }
+    } catch (e) {}
+    updateChatPanelTitle(connectionStatus);
+}
+
+function showWorkplaceConnectionOverlay(homeId, status) {
+    let overlay = document.getElementById('workplace-connection-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    const sel = document.getElementById('agent-workplace-id');
+    const selectedOpt = sel ? sel.options[sel.selectedIndex] : null;
+    const homeName = selectedOpt && selectedOpt.value ? selectedOpt.dataset.name || selectedOpt.textContent.split(' [')[0] : 'workplace';
+    const msg = status === 'error' ? `Connection error — ${homeName}.` : `Connecting to ${homeName}...`;
+    document.getElementById('workplace-overlay-msg').textContent = msg;
+}
+
+function hideWorkplaceConnectionOverlay() {
+    const overlay = document.getElementById('workplace-connection-overlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+async function retryWorkplaceConnect() {
+    const homeId = document.getElementById('agent-workplace-id').value;
+    if (!homeId) return;
+    try {
+        await fetch(`/api/workplaces/${homeId}/connect`, { method: 'POST' });
+        setTimeout(pollWorkplaceStatus, 1000);
+    } catch (e) {}
+}
+
+document.getElementById('agent-workplace-id').addEventListener('change', function() {
+    updateWorkspaceVisibility();
+    pollWorkplaceStatus();
+    updateChatPanelTitle();
+});
+loadWorkplaceSelector();
+// Poll workplace status every 5s
+setInterval(pollWorkplaceStatus, 5000);
+
+// ==================== Tab persistence ====================
+(function() {
+    const valid = ['chat', 'general', 'knowledge', 'tools', 'channels', 'skills'];
+    const hash = location.hash.replace('#', '');
+    if (hash && valid.includes(hash)) showTab(hash);
+    else if (!hash) showTab('chat');
+})();
+
+// ==================== Delete Agent ====================
+async function deleteAgent() {
+    if (!await showConfirm({title: 'Delete Agent', message: 'Are you sure you want to delete this agent? This cannot be undone.', confirmText: 'Delete'})) return;
+    const res = await fetch(`/api/agents/${AGENT_ID}`, {method: 'DELETE'});
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    window.location.href = '/agents';
+}
+
+// ==================== Enable / Disable Agent ====================
+let _agentEnabled = {{ 1 if agent.enabled != 0 else 0 }};
+
+async function toggleEnabled() {
+    const newEnabled = !_agentEnabled;
+    const action = newEnabled ? 'enable' : 'disable';
+    const confirmMsg = newEnabled
+        ? 'Enable this agent so it can process messages?'
+        : 'Disable this agent? It will stop processing new messages.';
+    if (!await showConfirm({title: action.charAt(0).toUpperCase() + action.slice(1) + ' Agent', message: confirmMsg, confirmText: action.charAt(0).toUpperCase() + action.slice(1)})) return;
+    const res = await fetch(`/api/agents/${AGENT_ID}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: newEnabled})
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    _agentEnabled = newEnabled;
+    const btn = document.getElementById('toggle-enabled-btn');
+    if (btn) {
+        const label = newEnabled ? 'Disable' : 'Enable';
+        btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg><span>${label}</span>`;
+        btn.title = `${label} Agent`;
+        btn.className = `flex items-center gap-1.5 text-sm ${newEnabled ? 'text-gray-500 hover:text-gray-700' : 'text-green-600 hover:text-green-800'} transition-colors`;
+    }
+}
+</script>
+{% endblock %}

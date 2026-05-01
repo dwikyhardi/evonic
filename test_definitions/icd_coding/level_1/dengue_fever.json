@@ -1,0 +1,17 @@
+{
+  "id": "icd_dengue_1",
+  "name": "ICD Coding — Demam Dengue",
+  "description": "Level 1 — penyakit tropis umum, dua kode ICD-10 (dengue + trombositopenia)",
+  "prompt": "Anak perempuan usia 10 tahun dirawat inap dengan demam tinggi 5 hari, nyeri kepala, nyeri belakang mata, mual, dan ruam kulit. Pemeriksaan fisik: petekie pada kedua lengan, hepatomegali ringan. Laboratorium: trombosit 45.000/μL, hematokrit 42%. NS1 antigen positif. Tidak ditemukan tanda kebocoran plasma atau syok. Diagnosis: Demam dengue klasik dengan trombositopenia. Tetapkan kode ICD-10-CM yang sesuai.",
+  "expected": {
+    "codes": [
+      {"code": "A90", "description": "Dengue fever [classical dengue]", "type": "PRIMARY"},
+      {"code": "D69.6", "description": "Thrombocytopenia, unspecified", "type": "SECONDARY"}
+    ]
+  },
+  "evaluator_id": "icd_code_judge",
+  "difficulty": "easy",
+  "timeout_ms": 60000,
+  "weight": 1.0,
+  "enabled": true
+}

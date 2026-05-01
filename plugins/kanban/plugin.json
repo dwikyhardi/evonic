@@ -1,0 +1,167 @@
+{
+  "id": "kanban",
+  "name": "Kanban Board",
+  "version": "1.0.0",
+  "description": "Kanban board plugin for task management with UI, API endpoints, and agent automation",
+  "author": "Evonic",
+  "enabled": true,
+  "events": ["tool_executed", "kanban_task_created", "kanban_task_updated", "schedule_fired"],
+  "nav_items": [
+    {"label": "Kanban", "path": "/board/kanban"}
+  ],
+  "dashboard_cards": [
+    {
+      "id": "kanban_todo_tasks",
+      "title": "Todo Tasks",
+      "handler": "dashboard_todo_tasks_card",
+      "link": "/board/kanban"
+    }
+  ],
+  "routes": [
+    {
+      "path": "/board/kanban",
+      "methods": ["GET"],
+      "handler": "kanban_page"
+    },
+    {
+      "path": "/api/kanban/tasks",
+      "methods": ["GET", "POST"],
+      "handler": "kanban_api"
+    },
+    {
+      "path": "/api/kanban/tasks/<task_id>",
+      "methods": ["PUT", "DELETE"],
+      "handler": "kanban_api"
+    }
+  ],
+  "cli_commands": [
+    {
+      "name": "kanban",
+      "help": "Manage kanban tasks (add, rm, update)",
+      "description": "Manage kanban tasks via CLI. Available subcommands: add, rm, update.",
+      "subcommands": [
+        {
+          "name": "add",
+          "help": "Create a new kanban task",
+          "description": "Create a new kanban task. Title is required.",
+          "handler": "cli_kanban_add_task",
+          "arguments": [
+            {"name": "title", "help": "Task title (required)"},
+            {"name": "--description", "short": "-d", "default": null, "help": "Task description (optional)"},
+            {"name": "--priority", "short": "-p", "default": "low", "choices": ["low", "medium", "high"], "help": "Task priority (default: low)"},
+            {"name": "--assignee", "short": "-a", "default": null, "help": "Agent ID to assign the task to (optional)"}
+          ]
+        },
+        {
+          "name": "rm",
+          "help": "Delete a kanban task by ID",
+          "description": "Delete a kanban task by its numeric ID.",
+          "handler": "cli_kanban_rm_task",
+          "arguments": [
+            {"name": "task_id", "help": "Task ID to delete"}
+          ]
+        },
+        {
+          "name": "update",
+          "help": "Update a kanban task by ID",
+          "description": "Update one or more fields of a kanban task.",
+          "handler": "cli_kanban_update_task",
+          "arguments": [
+            {"name": "task_id", "help": "Task ID to update"},
+            {"name": "--title", "short": "-t", "default": null, "help": "New title"},
+            {"name": "--description", "short": "-d", "default": null, "help": "New description"},
+            {"name": "--status", "short": "-s", "default": null, "choices": ["todo", "in-progress", "done"], "help": "New status"},
+            {"name": "--priority", "short": "-p", "default": null, "choices": ["low", "medium", "high"], "help": "New priority"},
+            {"name": "--assignee", "short": "-a", "default": null, "help": "New assignee (agent ID, or 'none' to unassign)"}
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": [
+    {
+      "name": "SUPER_AGENT_ID",
+      "label": "Super Agent ID",
+      "type": "string",
+      "default": "super",
+      "description": "Agent ID with full access to all kanban tasks and admin operations."
+    },
+    {
+      "name": "ELIGIBLE_AGENTS",
+      "label": "Eligible Agent IDs",
+      "type": "string",
+      "default": "",
+      "description": "Comma-separated list of agent IDs that can be notified about tasks (e.g. 'example_agent,siwa'). Leave empty to notify no agents."
+    },
+    {
+      "name": "SCAN_INTERVAL_SECONDS",
+      "label": "Scan Interval (seconds)",
+      "type": "number",
+      "default": 300,
+      "description": "How often to scan the Kanban board for assigned tasks. Default: 300 (5 minutes)."
+    },
+    {
+      "name": "STALE_SCAN_INTERVAL_SECONDS",
+      "label": "Stale Task Scan Interval (seconds)",
+      "type": "number",
+      "default": 60,
+      "description": "How often to check for stale in-progress tasks that the agent lost track of. Default: 60 (1 minute)."
+    },
+    {
+      "name": "CHANNEL_TYPE",
+      "label": "Notification Channel Type",
+      "type": "string",
+      "default": "telegram",
+      "description": "Channel type to use for sending task notifications to agents (e.g. 'telegram')."
+    },
+    {
+      "name": "FINISH_REMINDER",
+      "label": "Finish Reminder",
+      "type": "textarea",
+      "default": "Make sure to create a git commit summarizing the changes you made for this task.",
+      "description": "Reminder message injected into the tool response when an agent finishes a task (calls kanban:finish). Use this to enforce post-task actions like git commits, documentation updates, etc."
+    },
+    {
+      "name": "CLEAR_CONTEXT_ON_NEW_TASK",
+      "label": "Clear Context on New Task",
+      "type": "boolean",
+      "default": true,
+      "description": "Automatically clear the agent's chat history when activating a new task to prevent context bloat from previous tasks."
+    },
+    {
+      "name": "PERM_ALLOW_TASK_CREATION",
+      "label": "Allow Task Creation (non-super agents)",
+      "type": "boolean",
+      "default": true,
+      "description": "Allow non-super agents to create new kanban tasks."
+    },
+    {
+      "name": "PERM_ALLOW_TASK_EDITING",
+      "label": "Allow Task Editing (non-super agents)",
+      "type": "boolean",
+      "default": true,
+      "description": "Allow non-super agents to edit kanban tasks."
+    },
+    {
+      "name": "PERM_ALLOW_TASK_DELETION",
+      "label": "Allow Task Deletion (non-super agents)",
+      "type": "boolean",
+      "default": false,
+      "description": "Allow non-super agents to delete kanban tasks."
+    },
+    {
+      "name": "TASK_DELAY_SECONDS",
+      "label": "Task Delay Before Notification (seconds)",
+      "type": "number",
+      "default": 300,
+      "description": "Minimum seconds a task must exist before being notified to an agent. This gives users time to correct or modify the task after creation. Default: 300 (5 minutes)."
+    },
+    {
+      "name": "ENABLE_PROCESS_RECORDER",
+      "label": "Enable Process Recorder",
+      "type": "boolean",
+      "default": false,
+      "description": "Record the full agent execution process (thinking steps, tool calls, final response) when a task finishes. Viewable in the Process tab of task detail."
+    }
+  ]
+}

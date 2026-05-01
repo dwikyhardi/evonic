@@ -1,0 +1,1272 @@
+{% extends "base.html" %}
+{% from 'partials/toggle.html' import toggle %}
+
+{% block content %}
+<div class="settings-container">
+    {% include "partials/evaluate_subnav.html" %}
+
+    <div class="settings-header">
+        <h2>🗂️ Domains</h2>
+        <div class="settings-actions">
+            <button onclick="exportTests()" class="btn-secondary">Export Tests</button>
+            <button onclick="showImportModal()" class="btn-secondary">Import Tests</button>
+            <button onclick="syncToDb()" class="btn-primary">Sync to Database</button>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="flex items-center justify-between mb-4 px-1">
+        <div class="flex items-center gap-3">
+            {{ toggle(id='master-domain-toggle', checked=True, onchange='toggleAllDomains(this.checked)', extra_class='flex-shrink-0', title='Enable/disable all domains') }}
+            <span id="domains-enabled-count" class="text-sm text-gray-500">0/0 domains enabled</span>
+        </div>
+    </div>
+    <div id="domains-list">
+        <!-- Domains will be loaded here -->
+    </div>
+    <button onclick="showAddDomainModal()" class="btn-add">+ Add Domain</button>
+</div>
+
+<!-- Domain Modal -->
+<div id="domain-modal" class="modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[500px] max-h-[90vh] overflow-y-auto shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 id="domain-modal-title" class="m-0 text-gray-800 dark:text-gray-100">Add Domain</h3>
+            <button onclick="closeModal('domain-modal')" class="bg-transparent border-none text-gray-500 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <form id="domain-form">
+                <input type="hidden" id="domain-id">
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">ID</label>
+                    <input type="text" id="domain-id-input" placeholder="e.g., math (auto-generated if empty)" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Name *</label>
+                    <input type="text" id="domain-name" required placeholder="e.g., Mathematics" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Description</label>
+                    <textarea id="domain-description" rows="3" placeholder="Domain description" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                </div>
+                <div class="flex gap-4">
+                    <div class="mb-4 flex-1">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Icon</label>
+                        <select id="domain-icon" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                            <option value="chat">💬 Chat</option>
+                            <option value="calculator">🔢 Calculator</option>
+                            <option value="database">🗄️ Database</option>
+                            <option value="wrench">🔧 Wrench</option>
+                            <option value="brain">🧠 Brain</option>
+                            <option value="code">💻 Code</option>
+                            <option value="file">📄 File</option>
+                        </select>
+                    </div>
+                    <div class="mb-4 flex-1">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Color</label>
+                        <input type="color" id="domain-color" value="#3B82F6" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Default Evaluator</label>
+                    <select id="domain-evaluator" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                        <!-- Evaluators will be loaded here -->
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Domain System Prompt (Optional)</label>
+                    <textarea id="domain-system-prompt" rows="3" placeholder="Default system prompt for all tests in this domain" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                    <small class="text-gray-500 text-xs">This will be used as default for all tests unless overridden</small>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">System Prompt Mode</label>
+                    <select id="domain-system-prompt-mode" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                        <option value="overwrite">Overwrite (use as-is)</option>
+                        <option value="append">Append (tests can add to this)</option>
+                    </select>
+                    <small class="text-gray-500 text-xs">Default mode for tests (can be overridden per-test)</small>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Attached Tools</label>
+                    <div id="domain-tool-select" class="max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2 bg-white text-sm">
+                        <span class="text-gray-400">Loading tools...</span>
+                    </div>
+                    <small class="text-gray-500 text-xs">Tools available to all tests in this domain (append mode)</small>
+                </div>
+                <div class="mb-4">
+                    <label class="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 text-sm font-medium">
+                        <input type="checkbox" id="domain-enabled" checked> Enabled
+                    </label>
+                </div>
+            </form>
+        </div>
+        <div class="flex justify-end gap-2.5 p-5 border-t border-gray-200">
+            <button onclick="closeModal('domain-modal')" class="bg-gray-100 text-gray-700 border border-gray-300 px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-gray-200">Cancel</button>
+            <button onclick="saveDomain()" class="bg-blue-500 text-white border-none px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-blue-600">Save Domain</button>
+        </div>
+    </div>
+</div>
+
+<!-- Test Modal -->
+<div id="test-modal" class="modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[700px] max-h-[90vh] overflow-y-auto shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 id="test-modal-title" class="m-0 text-gray-800 dark:text-gray-100">Add Test</h3>
+            <button onclick="closeModal('test-modal')" class="bg-transparent border-none text-gray-500 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <form id="test-form">
+                <input type="hidden" id="test-id">
+                <div class="flex gap-4">
+                    <div class="mb-4 flex-1">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Domain</label>
+                        <select id="test-domain" required class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                            <!-- Domains will be loaded here -->
+                        </select>
+                    </div>
+                    <div class="mb-4 flex-1">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Level</label>
+                        <select id="test-level" required class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                            <option value="1">Level 1</option>
+                            <option value="2">Level 2</option>
+                            <option value="3">Level 3</option>
+                            <option value="4">Level 4</option>
+                            <option value="5">Level 5</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Test ID</label>
+                    <input type="text" id="test-id-input" placeholder="Auto-generated if empty" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Name *</label>
+                    <input type="text" id="test-name" required placeholder="Test name" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Description</label>
+                    <input type="text" id="test-description" placeholder="Brief description" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">System Prompt (Optional)</label>
+                    <textarea id="test-system-prompt" rows="3" placeholder="Custom system prompt for this test" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                    <small class="text-gray-500 text-xs">Leave empty to use domain-level system prompt</small>
+                </div>
+                <div class="mb-4" id="test-system-prompt-mode-group" style="display:none;">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">System Prompt Mode</label>
+                    <select id="test-system-prompt-mode" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                        <option value="overwrite">Overwrite (replace domain prompt)</option>
+                        <option value="append">Append (add to domain prompt)</option>
+                    </select>
+                    <small class="text-gray-500 text-xs">How this test's prompt combines with domain-level prompt</small>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Inherited Tools</label>
+                    <div id="test-inherited-tools" class="text-sm text-gray-500 italic min-h-[28px]">
+                        No inherited tools
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Attached Tools (this test)</label>
+                    <div id="test-tool-select" class="max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2 bg-white text-sm">
+                        <span class="text-gray-400">Loading tools...</span>
+                    </div>
+                    <small class="text-gray-500 text-xs">Additional tools for this test (appended to inherited tools)</small>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Prompt *</label>
+                    <textarea id="test-prompt" rows="4" required placeholder="The prompt to send to the LLM" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Expected (JSON)</label>
+                    <textarea id="test-expected" rows="4" placeholder='{"answer": 42, "type": "numeric"}' class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                </div>
+                <div class="flex gap-4">
+                    <div class="mb-4 flex-1">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Evaluator</label>
+                        <select id="test-evaluator" onchange="onTestEvaluatorChange()" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                            <!-- Evaluators will be loaded here -->
+                        </select>
+                        <div id="evaluator-hint" class="mt-1 text-xs text-blue-600 bg-blue-50 rounded px-2 py-1.5 border border-blue-100" style="display:none;"></div>
+                    </div>
+                    <div class="mb-4 flex-1">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Timeout (ms)</label>
+                        <input type="number" id="test-timeout" value="30000" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                    </div>
+                    <div class="mb-4 flex-1">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Weight</label>
+                        <input type="number" id="test-weight" value="1.0" step="0.1" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 text-sm font-medium">
+                        <input type="checkbox" id="test-enabled" checked> Enabled
+                    </label>
+                </div>
+            </form>
+        </div>
+        <div class="flex justify-between p-5 border-t border-gray-200">
+            <div>
+                <button id="duplicate-test-btn" onclick="duplicateTest()" class="bg-amber-500 text-white border-none px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-amber-600" style="display:none;">Duplicate</button>
+            </div>
+            <div class="flex gap-2.5">
+                <button onclick="closeModal('test-modal')" class="bg-gray-100 text-gray-700 border border-gray-300 px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-gray-200">Cancel</button>
+                <button onclick="saveTest()" class="bg-blue-500 text-white border-none px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-blue-600">Save Test</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Level System Prompt Modal -->
+<div id="level-modal" class="modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[500px] max-h-[90vh] overflow-y-auto shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 id="level-modal-title" class="m-0 text-gray-800 dark:text-gray-100">Level System Prompt</h3>
+            <button onclick="closeModal('level-modal')" class="bg-transparent border-none text-gray-500 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <form id="level-form">
+                <input type="hidden" id="level-domain-id">
+                <input type="hidden" id="level-number">
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">System Prompt (Optional)</label>
+                    <textarea id="level-system-prompt" rows="6" placeholder="System prompt for all tests in this level" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                    <small class="text-gray-500 text-xs">Leave empty to inherit from domain. This prompt sits between domain and test-level prompts.</small>
+                </div>
+                <div class="mb-4" id="level-mode-group" style="display:none;">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">System Prompt Mode</label>
+                    <select id="level-system-prompt-mode" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                        <option value="overwrite">Overwrite (replace domain prompt)</option>
+                        <option value="append">Append (add to domain prompt)</option>
+                    </select>
+                    <small class="text-gray-500 text-xs">How this level's prompt combines with the domain-level prompt</small>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Attached Tools</label>
+                    <div id="level-tool-select" class="max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2 bg-white text-sm">
+                        <span class="text-gray-400">Loading tools...</span>
+                    </div>
+                    <small class="text-gray-500 text-xs">Tools available to all tests in this level (appended to domain tools)</small>
+                </div>
+            </form>
+        </div>
+        <div class="flex justify-end gap-2.5 p-5 border-t border-gray-200">
+            <button onclick="closeModal('level-modal')" class="bg-gray-100 text-gray-700 border border-gray-300 px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-gray-200">Cancel</button>
+            <button onclick="saveLevelPrompt()" class="bg-blue-500 text-white border-none px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-blue-600">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="import-modal" class="modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[500px] max-h-[90vh] overflow-y-auto shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 class="m-0 text-gray-800 dark:text-gray-100">Import Tests</h3>
+            <button onclick="closeModal('import-modal')" class="bg-transparent border-none text-gray-500 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Import JSON</label>
+                <textarea id="import-json" rows="10" placeholder="Paste exported JSON here..." class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="inline-flex items-center gap-2 text-gray-600 dark:text-gray-300 text-sm font-medium">
+                    <input type="checkbox" id="import-merge" checked> Merge with existing tests
+                </label>
+            </div>
+        </div>
+        <div class="flex justify-end gap-2.5 p-5 border-t border-gray-200">
+            <button onclick="closeModal('import-modal')" class="bg-gray-100 text-gray-700 border border-gray-300 px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-gray-200">Cancel</button>
+            <button onclick="importTests()" class="bg-blue-500 text-white border-none px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-blue-600">Import</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.domain-tests {
+    padding: 0 20px 20px;
+    display: none;
+}
+
+.domain-tests.expanded {
+    display: block;
+}
+
+.level-group {
+    margin-bottom: 15px;
+}
+
+.level-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: #f3f4f6;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.level-prompt-badge {
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+.btn-sm {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+}
+
+.level-tests {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-left: 15px;
+}
+
+.test-item {
+    background: #f3f4f6;
+    padding: 8px 12px;
+    border-radius: 5px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #374151;
+}
+
+.test-item:hover {
+    background: #e5e7eb;
+}
+
+.test-item.disabled {
+    opacity: 0.5;
+}
+
+.test-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10B981;
+}
+
+.test-status.disabled {
+    background: #EF4444;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.btn-primary {
+    background: #3B82F6;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-primary:hover {
+    background: #2563EB;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.btn-add {
+    background: #10B981;
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-top: 20px;
+}
+
+.btn-add:hover {
+    background: #059669;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 14px;
+}
+
+.btn-icon:hover {
+    color: #1f2937;
+}
+
+.btn-icon.delete:hover {
+    color: #EF4444;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Dark mode overrides */
+html.dark .settings-header h2 { color: #f1f5f9; }
+html.dark .level-header { background: #1e293b; color: #e2e8f0; }
+html.dark .test-item { background: #1e293b; color: #cbd5e1; }
+html.dark .test-item:hover { background: #334155; }
+html.dark .btn-secondary { background: #1e293b; color: #e2e8f0; border-color: #475569; }
+html.dark .btn-secondary:hover { background: #334155; }
+html.dark .btn-icon { color: #94a3b8; }
+html.dark .btn-icon:hover { color: #f1f5f9; }
+html.dark .loading { color: #94a3b8; }
+/* Modal form elements */
+html.dark .modal label { color: #d1d5db; }
+html.dark .modal input[type="text"],
+html.dark .modal input[type="number"],
+html.dark .modal textarea,
+html.dark .modal select { background-color: #374151; color: #f1f5f9; border-color: #4b5563; }
+html.dark .modal small { color: #9ca3af; }
+html.dark .modal .border-b { border-color: #374151; }
+html.dark .modal .border-t { border-color: #374151; }
+html.dark .modal button.bg-gray-100 { background-color: #374151; color: #e2e8f0; border-color: #4b5563; }
+html.dark .modal button.bg-gray-100:hover { background-color: #4b5563; }
+html.dark .modal button.text-gray-500 { color: #9ca3af; }
+html.dark .modal button.text-gray-500:hover { color: #f1f5f9; }
+html.dark .modal .bg-white { background-color: #374151; }
+html.dark .modal .text-gray-400 { color: #9ca3af; }
+/* Domain card elements rendered by JS */
+html.dark .domain-card-name { color: #f1f5f9; }
+html.dark .domain-card-desc { color: #9ca3af; }
+html.dark .domain-card-stats { background: #334155; color: #cbd5e1; }
+html.dark .domain-card-edit { color: #94a3b8; }
+html.dark .domain-card-edit:hover { color: #e2e8f0; background: #334155; }
+html.dark .domain-card-delete { color: #94a3b8; }
+html.dark .domain-card-delete:hover { color: #fca5a5; background: rgba(239, 68, 68, 0.15); }
+/* Evaluator hint and summary */
+html.dark #evaluator-hint { background-color: rgba(59, 130, 246, 0.15); color: #93c5fd; border-color: rgba(59, 130, 246, 0.3); }
+html.dark #domains-enabled-count { color: #9ca3af; }
+</style>
+
+<script>
+let domains = [];
+let evaluators = [];
+let tools = [];
+
+// Modal Management
+function openModal(modalId) {
+    document.getElementById(modalId).classList.add('active');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+}
+
+// API Calls
+async function apiGet(url) {
+    const response = await fetch(url);
+    return response.json();
+}
+
+async function apiPost(url, data) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return response.json();
+}
+
+async function apiPut(url, data) {
+    const response = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return response.json();
+}
+
+async function apiDelete(url) {
+    const response = await fetch(url, { method: 'DELETE' });
+    return response.json();
+}
+
+// Load Data
+async function loadDomains() {
+    try {
+        const data = await apiGet('/api/settings/domains');
+        domains = data.domains || [];
+        renderDomains();
+    } catch (error) {
+        console.error('Error loading domains:', error);
+    }
+}
+
+async function loadEvaluators() {
+    try {
+        const data = await apiGet('/api/settings/evaluators');
+        evaluators = data.evaluators || [];
+        updateEvaluatorSelects();
+    } catch (error) {
+        console.error('Error loading evaluators:', error);
+    }
+}
+
+async function loadTools() {
+    try {
+        const data = await apiGet('/api/settings/tools');
+        tools = data.tools || [];
+    } catch (error) {
+        console.error('Error loading tools:', error);
+    }
+}
+
+// Render Functions
+function renderDomains() {
+    const $container = $('#domains-list');
+
+    if (domains.length === 0) {
+        $container.html('<div class="loading">No domains found. Click "Add Domain" to create one.</div>');
+        updateDomainsSummary();
+        return;
+    }
+
+    $container.html(domains.map(domain => `
+        <div class="bg-white dark:bg-gray-800 rounded-xl mb-3 border border-gray-200 dark:border-gray-700 overflow-hidden transition-all hover:border-indigo-200 ${domain.enabled === false ? 'opacity-50' : ''}"
+             id="domain-card-${domain.id}">
+            <div class="flex items-center px-5 py-4 gap-3">
+                <!-- Toggle switch -->
+                <label class="relative flex-shrink-0 cursor-pointer" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="sr-only peer" id="enable-${domain.id}"
+                           ${domain.enabled !== false ? 'checked' : ''}
+                           onchange="toggleDomainEnabled('${domain.id}', this.checked)">
+                    <span class="dyn-toggle"></span>
+                </label>
+                <!-- Icon -->
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl flex-shrink-0 ${domain.enabled === false ? 'grayscale' : ''}"
+                     style="background: ${domain.color}">${getDomainIcon(domain.icon)}</div>
+                <!-- Info -->
+                <div class="flex-1 min-w-0 cursor-pointer" onclick="toggleDomainTests('${domain.id}')">
+                    <div class="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight">${domain.name}</div>
+                    <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">${domain.description || 'No description'}</div>
+                </div>
+                <!-- Stats pills -->
+                <div class="flex gap-2 cursor-pointer" onclick="toggleDomainTests('${domain.id}')">
+                    <span class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">
+                        ${domain.total_tests || 0} tests
+                    </span>
+                    <span class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">
+                        ${domain.levels ? Object.keys(domain.levels).length : 0} levels
+                    </span>
+                </div>
+                <!-- Actions -->
+                <div class="flex gap-1">
+                    <button onclick="event.stopPropagation(); editDomain('${domain.id}')"
+                            class="px-2.5 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors border-none bg-transparent cursor-pointer">
+                        Edit
+                    </button>
+                    <button onclick="event.stopPropagation(); deleteDomain('${domain.id}')"
+                            class="px-2.5 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors border-none bg-transparent cursor-pointer">
+                        Delete
+                    </button>
+                </div>
+            </div>
+            <div class="domain-tests" id="domain-tests-${domain.id}">
+                ${renderLevelGroups(domain)}
+            </div>
+        </div>
+    `).join(''));
+
+    updateDomainsSummary();
+}
+
+function renderLevelGroups(domain) {
+    return [1, 2, 3, 4, 5].map(level => {
+        const levelData = domain.levels ? domain.levels[level] : null;
+        const testCount = levelData ? (typeof levelData === 'object' ? levelData.test_count : levelData) : 0;
+        const hasPrompt = levelData && typeof levelData === 'object' && levelData.has_system_prompt;
+        return `
+            <div class="level-group">
+                <div class="level-header">
+                    <span>Level ${level} (${testCount} tests) ${hasPrompt ? '<span class="level-prompt-badge" title="Has system prompt">📝</span>' : ''}</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn-secondary btn-sm" onclick="event.stopPropagation(); editLevelPrompt('${domain.id}', ${level})" title="Edit level system prompt">🎭 Prompt</button>
+                        <button class="btn-secondary" onclick="showAddTestModal('${domain.id}', ${level})">+ Add Test</button>
+                    </div>
+                </div>
+                <div class="level-tests" id="level-tests-${domain.id}-${level}">
+                    <span class="loading">Loading...</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateEvaluatorSelects() {
+    const selects = ['domain-evaluator', 'test-evaluator'];
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            select.innerHTML = '<option value="">-- Select Evaluator --</option>' +
+                evaluators.map(e => `<option value="${e.id}">${e.name} [${e.type}]</option>`).join('');
+        }
+    });
+}
+
+// Domain Functions
+function showAddDomainModal() {
+    document.getElementById('domain-modal-title').textContent = 'Add Domain';
+    document.getElementById('domain-form').reset();
+    document.getElementById('domain-id').value = '';
+    renderToolCheckboxes('domain-tool-select', []);
+    openModal('domain-modal');
+}
+
+function editDomain(domainId) {
+    const domain = domains.find(d => d.id === domainId);
+    if (!domain) return;
+
+    document.getElementById('domain-modal-title').textContent = 'Edit Domain';
+    document.getElementById('domain-id').value = domain.id;
+    document.getElementById('domain-id-input').value = domain.id;
+    document.getElementById('domain-name').value = domain.name;
+    document.getElementById('domain-description').value = domain.description || '';
+    document.getElementById('domain-icon').value = domain.icon || 'file';
+    document.getElementById('domain-color').value = domain.color || '#3B82F6';
+    document.getElementById('domain-evaluator').value = domain.evaluator_id || '';
+    document.getElementById('domain-system-prompt').value = domain.system_prompt || '';
+    document.getElementById('domain-system-prompt-mode').value = domain.system_prompt_mode || 'overwrite';
+    document.getElementById('domain-enabled').checked = domain.enabled !== false;
+    renderToolCheckboxes('domain-tool-select', domain.tool_ids || []);
+
+    openModal('domain-modal');
+}
+
+async function saveDomain() {
+    const id = document.getElementById('domain-id').value || null;
+    const data = {
+        id: document.getElementById('domain-id-input').value || undefined,
+        name: document.getElementById('domain-name').value,
+        description: document.getElementById('domain-description').value,
+        icon: document.getElementById('domain-icon').value,
+        color: document.getElementById('domain-color').value,
+        evaluator_id: document.getElementById('domain-evaluator').value,
+        system_prompt: document.getElementById('domain-system-prompt').value || null,
+        system_prompt_mode: document.getElementById('domain-system-prompt-mode').value,
+        enabled: document.getElementById('domain-enabled').checked,
+        tool_ids: getSelectedToolIds('domain-tool-select')
+    };
+
+    try {
+        let result;
+        if (id) {
+            result = await apiPut(`/api/settings/domains/${id}`, data);
+        } else {
+            result = await apiPost('/api/settings/domains', data);
+        }
+
+        if (result.success) {
+            closeModal('domain-modal');
+            loadDomains();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error saving domain: ' + error);
+    }
+}
+
+async function deleteDomain(domainId) {
+    if (!await showConfirm({title: 'Delete Domain', message: 'Delete this domain and all its tests? This cannot be undone.', confirmText: 'Delete'})) return;
+
+    try {
+        const result = await apiDelete(`/api/settings/domains/${domainId}`);
+        if (result.success) {
+            loadDomains();
+        }
+    } catch (error) {
+        alert('Error deleting domain: ' + error);
+    }
+}
+
+async function toggleDomainEnabled(domainId, enabled) {
+    try {
+        const result = await apiPut(`/api/settings/domains/${domainId}`, { enabled: enabled });
+        if (result.success) {
+            const domain = domains.find(d => d.id === domainId);
+            if (domain) domain.enabled = enabled;
+
+            $(`#enable-${domainId}`).prop('checked', enabled);
+            const $card = $(`#domain-card-${domainId}`);
+            $card.toggleClass('opacity-50', !enabled);
+            $card.find('.rounded-lg').toggleClass('grayscale', !enabled);
+            updateDomainsSummary();
+        } else {
+            $(`#enable-${domainId}`).prop('checked', !enabled);
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        $(`#enable-${domainId}`).prop('checked', !enabled);
+        alert('Error toggling domain: ' + error);
+    }
+}
+
+function toggleDomainTests(domainId) {
+    const $tests = $(`#domain-tests-${domainId}`);
+    $tests.toggleClass('expanded');
+    if ($tests.hasClass('expanded')) {
+        loadDomainTests(domainId);
+    }
+}
+
+function updateDomainsSummary() {
+    const total = domains.length;
+    const enabled = domains.filter(d => d.enabled !== false).length;
+    $('#domains-enabled-count').text(`${enabled}/${total} domains enabled`);
+    $('#master-domain-toggle').prop('checked', enabled === total && total > 0);
+}
+
+async function toggleAllDomains(enabled) {
+    const toToggle = domains.filter(d => (d.enabled !== false) !== enabled);
+    await Promise.all(toToggle.map(d => toggleDomainEnabled(d.id, enabled)));
+    updateDomainsSummary();
+}
+
+async function loadDomainTests(domainId) {
+    try {
+        const data = await apiGet(`/api/settings/tests?domain=${domainId}`);
+        const tests = data.tests || [];
+
+        const byLevel = {};
+        tests.forEach(test => {
+            if (!byLevel[test.level]) byLevel[test.level] = [];
+            byLevel[test.level].push(test);
+        });
+
+        [1, 2, 3, 4, 5].forEach(level => {
+            const container = document.getElementById(`level-tests-${domainId}-${level}`);
+            const levelTests = byLevel[level] || [];
+
+            if (levelTests.length === 0) {
+                container.innerHTML = '<span style="color: #888">No tests</span>';
+            } else {
+                container.innerHTML = levelTests.map(test => `
+                    <div class="test-item ${!test.enabled ? 'disabled' : ''}" onclick="editTest('${test.id}', '${domainId}')">
+                        <span class="test-status ${!test.enabled ? 'disabled' : ''}"></span>
+                        ${test.name}
+                    </div>
+                `).join('');
+            }
+        });
+    } catch (error) {
+        console.error('Error loading tests:', error);
+    }
+}
+
+// Level Functions
+async function editLevelPrompt(domainId, level) {
+    try {
+        const data = await apiGet(`/api/settings/levels/${domainId}/${level}`);
+        const levelData = data.level || {};
+
+        document.getElementById('level-modal-title').textContent = `Level ${level} System Prompt — ${domainId}`;
+        document.getElementById('level-domain-id').value = domainId;
+        document.getElementById('level-number').value = level;
+        document.getElementById('level-system-prompt').value = levelData.system_prompt || '';
+        document.getElementById('level-system-prompt-mode').value = levelData.system_prompt_mode || 'overwrite';
+
+        const modeGroup = document.getElementById('level-mode-group');
+        modeGroup.style.display = levelData.system_prompt ? 'block' : 'none';
+
+        document.getElementById('level-system-prompt').oninput = function() {
+            modeGroup.style.display = this.value.trim() ? 'block' : 'none';
+        };
+
+        renderToolCheckboxes('level-tool-select', levelData.tool_ids || []);
+
+        openModal('level-modal');
+    } catch (error) {
+        console.error('Error loading level:', error);
+        alert('Failed to load level configuration');
+    }
+}
+
+async function saveLevelPrompt() {
+    const domainId = document.getElementById('level-domain-id').value;
+    const level = document.getElementById('level-number').value;
+    const data = {
+        system_prompt: document.getElementById('level-system-prompt').value || null,
+        system_prompt_mode: document.getElementById('level-system-prompt-mode').value,
+        tool_ids: getSelectedToolIds('level-tool-select'),
+    };
+
+    try {
+        const result = await apiPut(`/api/settings/levels/${domainId}/${level}`, data);
+        if (result.success) {
+            closeModal('level-modal');
+            await loadDomains();
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Error saving level:', error);
+        alert('Failed to save level configuration');
+    }
+}
+
+// Test Functions
+function showAddTestModal(domainId, level) {
+    document.getElementById('test-modal-title').textContent = 'Add Test';
+    document.getElementById('test-form').reset();
+    document.getElementById('test-id').value = '';
+    document.getElementById('test-domain').value = domainId;
+    document.getElementById('test-level').value = level;
+
+    const domainSelect = document.getElementById('test-domain');
+    domainSelect.innerHTML = domains.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    domainSelect.value = domainId;
+
+    document.getElementById('test-system-prompt').oninput = toggleTestPromptModeVisibility;
+    toggleTestPromptModeVisibility();
+    renderToolCheckboxes('test-tool-select', []);
+    renderInheritedTools(domainId, level);
+
+    document.getElementById('test-domain').onchange = () => renderInheritedTools(document.getElementById('test-domain').value, document.getElementById('test-level').value);
+    document.getElementById('test-level').onchange = () => renderInheritedTools(document.getElementById('test-domain').value, document.getElementById('test-level').value);
+
+    document.getElementById('duplicate-test-btn').style.display = 'none';
+    openModal('test-modal');
+}
+
+async function editTest(testId, domainId) {
+    try {
+        const test = await apiGet(`/api/settings/tests/${testId}`);
+
+        document.getElementById('test-modal-title').textContent = 'Edit Test';
+
+        const domainSelect = document.getElementById('test-domain');
+        domainSelect.innerHTML = domains.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+
+        updateEvaluatorSelects();
+
+        document.getElementById('test-id').value = test.id;
+        document.getElementById('test-id-input').value = test.id;
+        domainSelect.value = test.domain_id;
+        document.getElementById('test-level').value = test.level;
+        document.getElementById('test-name').value = test.name || '';
+        document.getElementById('test-description').value = test.description || '';
+        document.getElementById('test-system-prompt').value = test.system_prompt || '';
+        document.getElementById('test-system-prompt-mode').value = test.system_prompt_mode || 'overwrite';
+        document.getElementById('test-prompt').value = test.prompt || '';
+        document.getElementById('test-expected').value = test.expected ? JSON.stringify(test.expected, null, 2) : '';
+        document.getElementById('test-evaluator').value = test.evaluator_id || '';
+        document.getElementById('test-timeout').value = test.timeout_ms || 30000;
+        document.getElementById('test-weight').value = test.weight || 1.0;
+        document.getElementById('test-enabled').checked = test.enabled !== false;
+
+        document.getElementById('test-system-prompt').oninput = toggleTestPromptModeVisibility;
+        toggleTestPromptModeVisibility();
+        renderToolCheckboxes('test-tool-select', test.tool_ids || []);
+        renderInheritedTools(test.domain_id, test.level);
+
+        document.getElementById('test-domain').onchange = () => renderInheritedTools(document.getElementById('test-domain').value, document.getElementById('test-level').value);
+        document.getElementById('test-level').onchange = () => renderInheritedTools(document.getElementById('test-domain').value, document.getElementById('test-level').value);
+
+        document.getElementById('duplicate-test-btn').style.display = '';
+        openModal('test-modal');
+    } catch (error) {
+        alert('Error loading test: ' + error);
+    }
+}
+
+async function saveTest() {
+    const testId = document.getElementById('test-id').value || null;
+
+    const name = document.getElementById('test-name').value.trim();
+    if (!name) {
+        alert('Test name is required');
+        document.getElementById('test-name').focus();
+        return;
+    }
+    const prompt = document.getElementById('test-prompt').value.trim();
+    if (!prompt) {
+        alert('Test prompt is required');
+        document.getElementById('test-prompt').focus();
+        return;
+    }
+    const domainId = document.getElementById('test-domain').value;
+    if (!domainId) {
+        alert('Domain is required');
+        document.getElementById('test-domain').focus();
+        return;
+    }
+
+    let expected = null;
+    try {
+        let expectedText = document.getElementById('test-expected').value.trim();
+        if (expectedText) {
+            expectedText = expectedText.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"').replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+            expected = JSON.parse(expectedText);
+        }
+    } catch (e) {
+        alert('Invalid JSON in Expected field');
+        return;
+    }
+
+    const data = {
+        id: document.getElementById('test-id-input').value || undefined,
+        domain_id: document.getElementById('test-domain').value,
+        level: parseInt(document.getElementById('test-level').value),
+        name: document.getElementById('test-name').value,
+        description: document.getElementById('test-description').value,
+        system_prompt: document.getElementById('test-system-prompt').value || null,
+        system_prompt_mode: document.getElementById('test-system-prompt-mode').value,
+        prompt: document.getElementById('test-prompt').value,
+        expected: expected,
+        evaluator_id: document.getElementById('test-evaluator').value,
+        timeout_ms: parseInt(document.getElementById('test-timeout').value),
+        weight: parseFloat(document.getElementById('test-weight').value),
+        enabled: document.getElementById('test-enabled').checked,
+        tool_ids: getSelectedToolIds('test-tool-select')
+    };
+
+    try {
+        let result;
+        if (testId) {
+            result = await apiPut(`/api/settings/tests/${testId}`, data);
+        } else {
+            result = await apiPost('/api/settings/tests', data);
+        }
+
+        if (result.success) {
+            closeModal('test-modal');
+            loadDomains();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error saving test: ' + error);
+    }
+}
+
+async function deleteTest(testId) {
+    if (!await showConfirm({title: 'Delete Test', message: 'Delete this test? This cannot be undone.', confirmText: 'Delete'})) return;
+
+    try {
+        const result = await apiDelete(`/api/settings/tests/${testId}`);
+        if (result.success) {
+            closeModal('test-modal');
+            loadDomains();
+        }
+    } catch (error) {
+        alert('Error deleting test: ' + error);
+    }
+}
+
+async function duplicateTest() {
+    const domainId = document.getElementById('test-domain').value;
+    const level = parseInt(document.getElementById('test-level').value);
+    const currentName = document.getElementById('test-name').value.trim();
+
+    if (!currentName) {
+        alert('Test name is required before duplicating');
+        return;
+    }
+
+    try {
+        const existing = await apiGet(`/api/settings/tests?domain=${domainId}&level=${level}`);
+        const existingNames = (existing.tests || []).map(t => t.name);
+
+        const baseName = currentName.replace(/\s*\(\d+\)$/, '');
+
+        let nextNum = 2;
+        while (existingNames.includes(nextNum === 1 ? baseName : `${baseName} (${nextNum})`)) {
+            nextNum++;
+        }
+        const newName = `${baseName} (${nextNum})`;
+
+        let expected = null;
+        try {
+            let expectedText = document.getElementById('test-expected').value.trim();
+            if (expectedText) {
+                expectedText = expectedText.replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"').replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+                expected = JSON.parse(expectedText);
+            }
+        } catch (e) {
+            alert('Invalid JSON in Expected field');
+            return;
+        }
+
+        const data = {
+            domain_id: domainId,
+            level: level,
+            name: newName,
+            description: document.getElementById('test-description').value,
+            system_prompt: document.getElementById('test-system-prompt').value || null,
+            system_prompt_mode: document.getElementById('test-system-prompt-mode').value,
+            prompt: document.getElementById('test-prompt').value,
+            expected: expected,
+            evaluator_id: document.getElementById('test-evaluator').value,
+            timeout_ms: parseInt(document.getElementById('test-timeout').value),
+            weight: parseFloat(document.getElementById('test-weight').value),
+            enabled: document.getElementById('test-enabled').checked,
+            tool_ids: getSelectedToolIds('test-tool-select')
+        };
+
+        const result = await apiPost('/api/settings/tests', data);
+        if (result.success) {
+            document.getElementById('test-id').value = result.test.id;
+            document.getElementById('test-id-input').value = result.test.id;
+            document.getElementById('test-name').value = newName;
+            document.getElementById('test-modal-title').textContent = 'Edit Test';
+            loadDomains();
+        } else {
+            alert('Error duplicating: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error duplicating test: ' + error);
+    }
+}
+
+function onTestEvaluatorChange() {
+    var select = document.getElementById('test-evaluator');
+    var hint = document.getElementById('evaluator-hint');
+    var expected = document.getElementById('test-expected');
+    var evalId = select.value;
+
+    if (!evalId) {
+        hint.style.display = 'none';
+        expected.placeholder = '{"answer": 42, "type": "numeric"}';
+        return;
+    }
+
+    var ev = evaluators.find(function(e) { return e.id === evalId; });
+    if (!ev) {
+        hint.style.display = 'none';
+        return;
+    }
+
+    var hintText = '<strong>' + ev.name + '</strong>';
+    if (ev.description) hintText += ' — ' + ev.description;
+    hint.innerHTML = hintText;
+    hint.style.display = 'block';
+
+    var placeholders = {
+        'regex_matcher': '(pattern1|pattern2|pattern3)',
+        'regex_exact_match': 'exact expected answer',
+        'regex_number_extractor': '{"answer": 42}',
+        'regex_multiple_choice': '{"answer": "A"}',
+        'keyword': '{"keywords": ["word1", "word2"], "type": "greeting"}',
+        'two_pass': '{"answer": 42, "type": "numeric", "tolerance": 0.1}',
+        'natural_text_compare': '{"answer": "Jawaban dalam teks natural yang diharapkan"}',
+        'tool_call': '{"tools": ["tool_name"], "result": "expected result"}'
+    };
+
+    expected.placeholder = placeholders[evalId] || '{"answer": "expected value"}';
+}
+
+function toggleTestPromptModeVisibility() {
+    const testPrompt = document.getElementById('test-system-prompt').value;
+    const modeGroup = document.getElementById('test-system-prompt-mode-group');
+
+    if (testPrompt && testPrompt.trim()) {
+        modeGroup.style.display = 'block';
+    } else {
+        modeGroup.style.display = 'none';
+    }
+}
+
+// Tool Multi-Select Helpers
+function renderToolCheckboxes(containerId, selectedIds) {
+    const container = document.getElementById(containerId);
+    selectedIds = selectedIds || [];
+
+    if (tools.length === 0) {
+        container.innerHTML = '<span class="text-gray-400 text-xs">No tools available. Create tools in Settings → Tools first.</span>';
+        return;
+    }
+
+    container.innerHTML = tools.map(tool => {
+        const checked = selectedIds.includes(tool.id) ? 'checked' : '';
+        const funcName = tool.function ? tool.function.name : tool.id;
+        return `
+            <label class="flex items-center gap-2 py-1 px-1 hover:bg-gray-50 rounded cursor-pointer">
+                <input type="checkbox" value="${tool.id}" ${checked} class="accent-blue-500 w-4 h-4">
+                <span class="text-gray-700">${tool.name}</span>
+                <code class="text-xs text-gray-400 ml-auto">${funcName}</code>
+            </label>
+        `;
+    }).join('');
+}
+
+function getSelectedToolIds(containerId) {
+    const container = document.getElementById(containerId);
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+async function renderInheritedTools(domainId, level) {
+    const container = document.getElementById('test-inherited-tools');
+    const inherited = [];
+
+    const domain = domains.find(d => d.id === domainId);
+    const domainToolIds = domain && domain.tool_ids ? domain.tool_ids : [];
+    for (const tid of domainToolIds) {
+        const t = tools.find(x => x.id === tid);
+        inherited.push({ name: t ? t.name : tid, funcName: t && t.function ? t.function.name : tid, source: 'domain' });
+    }
+
+    try {
+        const data = await apiGet(`/api/settings/levels/${domainId}/${level}`);
+        const levelToolIds = data.level && data.level.tool_ids ? data.level.tool_ids : [];
+        for (const tid of levelToolIds) {
+            const t = tools.find(x => x.id === tid);
+            inherited.push({ name: t ? t.name : tid, funcName: t && t.function ? t.function.name : tid, source: `level ${level}` });
+        }
+    } catch (e) { /* no level config */ }
+
+    if (inherited.length === 0) {
+        container.innerHTML = '<span class="text-gray-400 text-xs italic">No inherited tools from domain or level</span>';
+        return;
+    }
+
+    container.innerHTML = '<div class="flex flex-wrap gap-1.5">' + inherited.map(t =>
+        `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">` +
+        `<code class="text-blue-500 text-[11px]">${t.funcName}</code>` +
+        `<span class="text-blue-300">from ${t.source}</span>` +
+        `</span>`
+    ).join('') + '</div>';
+}
+
+// Import/Export/Sync
+async function exportTests() {
+    try {
+        const data = await apiGet('/api/settings/export');
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `test-definitions-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        alert('Error exporting tests: ' + error);
+    }
+}
+
+function showImportModal() {
+    document.getElementById('import-json').value = '';
+    openModal('import-modal');
+}
+
+async function importTests() {
+    const jsonText = document.getElementById('import-json').value.trim();
+    const merge = document.getElementById('import-merge').checked;
+
+    if (!jsonText) {
+        alert('Please paste JSON to import');
+        return;
+    }
+
+    try {
+        const data = JSON.parse(jsonText);
+        data.merge = merge;
+
+        const result = await apiPost('/api/settings/import', data);
+
+        if (result.errors && result.errors.length > 0) {
+            alert('Import completed with errors:\n' + result.errors.join('\n'));
+        } else {
+            alert(`Imported: ${result.domains_imported} domains, ${result.tests_imported} tests, ${result.evaluators_imported} evaluators`);
+        }
+
+        closeModal('import-modal');
+        loadDomains();
+        loadEvaluators();
+    } catch (error) {
+        alert('Error importing: ' + error);
+    }
+}
+
+async function syncToDb() {
+    try {
+        await apiPost('/api/settings/sync', {});
+        alert('Test definitions synced to database');
+    } catch (error) {
+        alert('Error syncing: ' + error);
+    }
+}
+
+function getDomainIcon(icon) {
+    const icons = {
+        'chat': '💬',
+        'calculator': '🔢',
+        'database': '🗄️',
+        'wrench': '🔧',
+        'brain': '🧠',
+        'code': '💻',
+        'file': '📄'
+    };
+    return icons[icon] || '📄';
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await Promise.all([loadEvaluators(), loadTools()]);
+    loadDomains();
+});
+</script>
+{% endblock %}

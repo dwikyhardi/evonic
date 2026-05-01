@@ -1,0 +1,18 @@
+{
+  "id": "kanban",
+  "name": "Kanban Agent",
+  "version": "1.0.0",
+  "description": "Allows agents to interact with the Kanban board: search tasks, pick up free-pick tasks, update status, and release tasks.",
+  "author": "Evonic",
+  "tools_file": "tools.json",
+  "lazy_tools": true,
+  "variables": [
+    {
+      "name": "create_task_super_only",
+      "label": "Create Task (Super Agent Only)",
+      "type": "boolean",
+      "default": false,
+      "description": "When enabled, only super agents can create new tasks. Regular agents will be denied."
+    }
+  ]
+}

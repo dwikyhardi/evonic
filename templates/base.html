@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Evonic</title>
+    <script>
+    // Anti-flash: apply theme before first paint
+    (function() {
+        var t = localStorage.getItem('evonic-theme') || 'system';
+        if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+        // Listen for system color scheme changes when theme is 'system'
+        if (t === 'system' && window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                document.documentElement.classList.toggle('dark', e.matches);
+            });
+        }
+    })();
+    </script>
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}?v=1"></script>
+    <script>tailwind.config = {
+    darkMode: 'class'
+  };</script>
+    <script src="{{ url_for('static', filename='js/ui-toggle.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/lucide.min.js') }}?v=1"></script>
+    <script>
+    // Init Lucide icons on DOM ready and expose refresh helper for dynamic content
+    document.addEventListener('DOMContentLoaded', function() {
+        lucide.createIcons();
+    });
+    // Global helper: re-render lucide icons after dynamic DOM updates
+    function refreshLucideIcons() {
+        lucide.createIcons();
+    }
+    </script>
+    <script src="{{ url_for('static', filename='js/marked.min.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/ui-utils.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='js/approval-modal.js') }}?v=1"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=16">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/recap-prose.css') }}?v=1">
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <a href="/" class="brand">
+                <svg class="brand-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="1.5" width="12" height="12" rx="2" transform="rotate(45 10 1.5)" fill="#667eea"/>
+                </svg>
+                <span>Evonic</span>
+            </a>
+
+            <button class="nav-toggle" onclick="document.querySelector('nav').classList.toggle('nav-open')" aria-label="Toggle navigation">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+
+            <nav>
+                {% if session.get('authenticated') %}
+                <a href="/" class="{{ 'nav-active' if request.path == '/' else '' }}">Dashboard</a>
+                <a href="/agents" class="{{ 'nav-active' if request.path.startswith('/agents') else '' }}">Agents</a>
+                <a href="/sessions" class="{{ 'nav-active' if request.path.startswith('/sessions') else '' }}">Sessions</a>
+                <a href="/evaluate" class="{{ 'nav-active' if request.path.startswith('/evaluate') else '' }}">Evaluation</a>
+                {% endif %}
+ 
+                {% if session.get('authenticated') %}
+                <a href="/settings" class="{{ 'nav-active' if request.path == '/settings' or request.path.startswith('/settings/') else '' }}">Settings</a>
+                <a href="/skills" class="{{ 'nav-active' if request.path.startswith('/skills') else '' }}">Skills</a>
+                <a href="/plugins" class="{{ 'nav-active' if request.path.startswith('/plugins') else '' }}">Plugins</a>
+                <a href="/scheduler" class="{{ 'nav-active' if request.path.startswith('/scheduler') else '' }}">Scheduler</a>
+                {% for _nav_item in plugin_nav_items %}
+                <a href="{{ _nav_item.path }}" class="{{ 'nav-active' if request.path.startswith(_nav_item.path) else '' }}">{{ _nav_item.label }}</a>
+                {% endfor %}
+                {% endif %}
+                {% if session.get('authenticated') %}
+                <hr class="nav-divider">
+                <a href="/logout" class="nav-logout">Logout</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+    
+    <main class="max-w-[1600px] mx-auto">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer>
+    </footer>
+
+</body>
+</html>

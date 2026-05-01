@@ -1,0 +1,210 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_search_tasks",
+      "description": "Search and list Kanban tasks. Returns all tasks on the board by default, sorted newest first. Use assignee to filter by a specific agent, query to search by title/description, status to filter by state, and limit to control result count.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "assignee": {
+            "type": "string",
+            "description": "Filter tasks by assignee agent ID. Leave empty to return tasks from all agents."
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query. Filters tasks by title or description (case-insensitive). A bare task ID (e.g. '211') returns the exact task if it exists."
+          },
+          "status": {
+            "type": "string",
+            "description": "Filter by task status. One of: todo, in-progress, done. Leave empty to return all statuses.",
+            "enum": [
+              "todo",
+              "in-progress",
+              "done"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return. Default 20, min 1, max 100."
+          }
+        },
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_update_status",
+      "description": "Update the status of a Kanban task that is assigned to this agent. Use 'in-progress' when starting work (after user approval) and 'done' when the task is complete.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "The ID of the task to update."
+          },
+          "status": {
+            "type": "string",
+            "description": "New status for the task.",
+            "enum": [
+              "in-progress",
+              "done"
+            ]
+          }
+        },
+        "required": [
+          "task_id",
+          "status"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_add_comment",
+      "description": "Add a progress note or comment to a Kanban task. Use this to log sub-steps, blockers, or intermediate findings while working on a task. This replaces internal task checklists — track your progress here so it is visible on the board.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "The ID of the task to comment on."
+          },
+          "content": {
+            "type": "string",
+            "description": "The comment content, e.g. a progress update, sub-step result, or blocker note."
+          }
+        },
+        "required": [
+          "task_id",
+          "content"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_get_task",
+      "description": "Retrieve a single Kanban task by its ID.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "The ID of the task to retrieve."
+          }
+        },
+        "required": [
+          "task_id"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_create_task",
+      "description": "Create a new task on the Kanban board.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the task (required)."
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the task (optional)."
+          },
+          "priority": {
+            "type": "string",
+            "description": "The priority of the task. One of: low, medium, high. Default is 'low'.",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "assignee": {
+            "type": "string",
+            "description": "The agent ID to assign the task to (optional)."
+          }
+        },
+        "required": [
+          "title"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_update_task",
+      "description": "Update a Kanban task's status, assignee, title, description, and/or priority. This is the successor to kanban_update_status. Supports updating all fields in a single call. For backward compatibility, kanban_update_status is still available.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "The ID of the task to update."
+          },
+          "status": {
+            "type": "string",
+            "description": "New status for the task.",
+            "enum": [
+              "in-progress",
+              "done"
+            ]
+          },
+          "assignee": {
+            "type": "string",
+            "description": "The agent ID to assign the task to. Use empty string to unassign."
+          },
+          "title": {
+            "type": "string",
+            "description": "New title for the task (optional)."
+          },
+          "description": {
+            "type": "string",
+            "description": "New description for the task (optional)."
+          },
+          "priority": {
+            "type": "string",
+            "description": "New priority for the task. One of: low, medium, high.",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "required": [
+          "task_id"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_delete_task",
+      "description": "Permanently delete a task from the Kanban board. Super agents can delete directly. Regular agents require human approval before deletion.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "The ID of the task to delete."
+          }
+        },
+        "required": [
+          "task_id"
+        ]
+      }
+    }
+  }
+]

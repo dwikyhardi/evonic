@@ -1,0 +1,16 @@
+{
+  "id": "tool_date_calc_3",
+  "name": "Get Date + Calculator",
+  "description": "Test calling get_current_date and calculator tools together - calculate days until an event",
+  "prompt": "Berapa hari lagi dari hari ini sampai 25 Desember 2026? Gunakan get_current_date untuk tahu hari ini, lalu hitung selisih hari dengan calculator",
+  "expected": {
+    "tools": ["get_current_date", "calculator"]
+  },
+  "evaluator_id": "tool_call",
+  "tool_ids": ["get_current_date", "calculator"],
+  "timeout_ms": 30000,
+  "weight": 1.0,
+  "enabled": true,
+  "created_at": "2026-04-22T07:30:00.000000",
+  "updated_at": "2026-04-22T07:30:00.000000"
+}

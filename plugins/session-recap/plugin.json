@@ -1,0 +1,48 @@
+{
+  "id": "session-recap",
+  "name": "Session Recap Extractor",
+  "version": "1.0.0",
+  "description": "Parses native session summaries to extract actionable items (payment verification, human escalation, unresolved issues) and sends notifications",
+  "author": "Evonic",
+  "enabled": false,
+  "events": [
+    "summary_updated"
+  ],
+  "variables": [
+    {
+      "name": "WEBHOOK_URL",
+      "label": "Notification Webhook URL",
+      "type": "string",
+      "default": "",
+      "description": "HTTP endpoint to receive extracted actionable items (POST)"
+    },
+    {
+      "name": "NOTIFY_AGENT_ID",
+      "label": "Notify via Agent ID",
+      "type": "string",
+      "default": "",
+      "description": "Agent ID to send admin notifications through (leave empty to skip)"
+    },
+    {
+      "name": "NOTIFY_CHANNEL_ID",
+      "label": "Notify Channel Type or ID",
+      "type": "string",
+      "default": "telegram",
+      "description": "Channel type (e.g. 'telegram', 'whatsapp') or internal channel UUID. The first active channel matching this type will be used."
+    },
+    {
+      "name": "NOTIFY_USER_ID",
+      "label": "Admin User ID",
+      "type": "string",
+      "default": "",
+      "description": "External user ID of the admin to notify on the channel"
+    },
+    {
+      "name": "MIN_MESSAGES",
+      "label": "Min messages before analysis",
+      "type": "number",
+      "default": 6,
+      "description": "Skip analysis for sessions with fewer summarized messages"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "id": "reasoning",
+  "name": "Reasoning",
+  "description": "Logical reasoning tests - tests deductive and inductive reasoning capabilities",
+  "icon": "brain",
+  "color": "#EF4444",
+  "evaluator_id": "two_pass"
+}

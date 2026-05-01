@@ -1,0 +1,992 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="controls">
+        <div style="display: flex; align-items: center; position: relative; min-height: 2.5rem;">
+            <a href="/history" style="text-decoration: none; color: #667eea; font-size: 0.9rem; font-weight: 500;">← History</a>
+            <div style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5rem; font-weight: 700; font-family: monospace;" class="text-gray-700 dark:text-gray-200">#{{ "%04d"|format(run_info.run_id) }}</div>
+        </div>
+    </div>
+    
+    <!-- Run Info Panel -->
+    <div style="margin-top: 1.5rem; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);" class="bg-white dark:bg-gray-800">
+        {% if run_info.summary %}
+        <div class="mb-4 pb-4 border-b border-gray-200">
+            <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{{ run_info.summary }}</p>
+        </div>
+        {% endif %}
+        <div class="run-info-grid">
+            <div class="info-item text-center">
+                <span class="info-label">Model</span>
+                <span class="info-value">{{ run_info.model_name or 'default' }}</span>
+            </div>
+            <div class="info-item text-center">
+                <span class="info-label">Passed</span>
+                <span class="flex items-baseline justify-center gap-1">
+                    <span class="info-value">{{ stats.status_counts.get('passed', 0) }}<span class="text-gray-400 dark:text-gray-500 font-normal"> / {{ stats.total_tests or 0 }}</span></span>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">domain</span>
+                </span>
+                <span class="flex items-baseline justify-center gap-1 mt-1">
+                    <span class="info-value">{{ individual_stats.passed }}<span class="text-gray-400 dark:text-gray-500 font-normal"> / {{ individual_stats.total }}</span></span>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">individual</span>
+                </span>
+            </div>
+            <div class="info-item text-center">
+                <span class="info-label">Overall Score</span>
+                <span class="info-value info-value-stat
+                    {% if run_info.overall_score is not none %}
+                        {% if run_info.overall_score >= 0.8 %}info-stat-high
+                        {% elif run_info.overall_score >= 0.6 %}info-stat-medium
+                        {% else %}info-stat-low
+                        {% endif %}
+                    {% endif %}">
+                    {% if run_info.overall_score is not none %}{{ "%.1f"|format(run_info.overall_score * 100) }}%{% else %}—{% endif %}
+                </span>
+            </div>
+            {% if run_info.total_tokens and run_info.total_tokens > 0 %}
+            <div class="info-item text-center">
+                <span class="info-label">Speed</span>
+                <span class="info-value text-blue-700 font-semibold">{{ "%.1f"|format((run_info.total_tokens or 0) / ((run_info.total_duration_ms or 1) / 1000)) }} tok/s</span>
+            </div>
+            <div class="info-item text-center">
+                <span class="info-label">Tokens</span>
+                <span class="info-value text-blue-700 font-semibold">{{ "{:,}".format(run_info.total_tokens or 0) }}</span>
+            </div>
+            <div class="info-item text-center">
+                <span class="info-label">Duration</span>
+                <span class="info-value text-blue-700 font-semibold">{{ "%.1f"|format((run_info.total_duration_ms or 0) / 1000) }}s</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Tabbed: Test Matrix / Evaluation Logs -->
+    <div style="margin-top: 1.5rem;">
+        <div class="detail-tabs">
+            <button class="detail-tab active" onclick="switchTab('matrix', this)">Test Matrix</button>
+            <button class="detail-tab" onclick="switchTab('notes', this)">Notes</button>
+            <button class="detail-tab" onclick="switchTab('logs', this)">Evaluation Logs</button>
+        </div>
+
+        <!-- Test Matrix Tab -->
+        <div id="tab-matrix" class="detail-tab-panel">
+            <!-- Matrix Header (desktop only) -->
+            <div class="hidden md:grid md:grid-cols-[160px_repeat(5,1fr)_120px] gap-2 p-4 bg-gray-50 dark:bg-gray-800 font-semibold rounded-t-lg text-sm">
+                <div class="flex items-center">Domain</div>
+                <div class="text-center">Level 1</div>
+                <div class="text-center">Level 2</div>
+                <div class="text-center">Level 3</div>
+                <div class="text-center">Level 4</div>
+                <div class="text-center">Level 5</div>
+                <div class="text-center">Total</div>
+            </div>
+
+            {% for domain in domains %}
+            <div class="grid grid-cols-5 gap-1 p-3 mb-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800
+                        md:grid-cols-[160px_repeat(5,1fr)_120px] md:gap-2 md:p-0 md:mb-0 md:border-x-0 md:border-t-0 md:border-b md:border-gray-200 dark:md:border-gray-700 md:rounded-none md:bg-transparent md:hover:bg-gray-50 dark:md:hover:bg-gray-700 transition-colors"
+                 id="row-{{ domain }}">
+                <div class="col-span-5 flex items-center gap-2 mb-2 md:col-span-1 md:mb-0">
+                    <span class="font-semibold text-sm">{{ (domain_names or {}).get(domain, domain.replace('_', ' ')) }}</span>
+                </div>
+                {% for level in range(1, 6) %}
+                <div class="level-cell flex flex-col items-center justify-center min-h-[36px] md:min-h-[44px] p-1 rounded-md font-medium cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                     id="cell-{{ domain }}-{{ level }}" onclick="showCellDetail('{{ domain }}', {{ level }})">
+                    <span class="text-[0.6rem] font-semibold text-gray-400 dark:text-gray-500 uppercase md:hidden">L{{ level }}</span>
+                    <div class="flex items-center justify-center gap-1 md:gap-2">
+                        <div class="status-dot w-3 h-3 md:w-4 md:h-4 rounded-full shrink-0 status-pending"></div>
+                        <span class="cell-score text-xs md:text-sm text-gray-500 dark:text-gray-400">-</span>
+                    </div>
+                    <div class="text-[0.6rem] md:text-[0.7rem] text-gray-500 dark:text-gray-400 mt-0.5 min-h-[1em]" id="duration-{{ domain }}-{{ level }}"></div>
+                </div>
+                {% endfor %}
+                <div class="col-span-5 flex flex-row items-center justify-center gap-3 p-1 bg-gray-50 dark:bg-gray-800 rounded-md mt-1
+                            md:col-span-1 md:flex-col md:gap-0 md:mt-0 md:min-h-[44px]"
+                     id="total-{{ domain }}">
+                    <div class="text-base md:text-lg font-bold text-gray-800 dark:text-gray-200" id="total-score-{{ domain }}">-</div>
+                    <span class="text-xs text-gray-500 dark:text-gray-400" id="total-passed-{{ domain }}">0/5</span>
+                    <div class="text-[0.7rem] text-gray-400 dark:text-gray-500" id="total-duration-{{ domain }}"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Notes Tab -->
+        <div id="tab-notes" class="detail-tab-panel" style="display: none;">
+            <div style="border-radius: 0 0 8px 8px; padding: 1.5rem;" class="bg-white dark:bg-gray-800">
+                {% set readonly = not session.get('authenticated') %}
+                <!-- Summary -->
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;" class="text-gray-500 dark:text-gray-400">Summary</label>
+                        <span id="summary-status" style="font-size: 0.75rem;" class="text-gray-400 dark:text-gray-500"></span>
+                    </div>
+                    <textarea id="summary-editor" maxlength="200"
+                        placeholder="Short description of this run..."
+                        {% if readonly %}readonly{% endif %}
+                        style="width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; font-family: inherit; resize: vertical; min-height: 3.5rem; max-height: 8rem; {% if readonly %}background: #f9fafb; cursor: default;{% endif %}">{{ run_info.summary or '' }}</textarea>
+                    <div style="text-align: right; font-size: 0.7rem; margin-top: 0.2rem;" class="text-gray-400 dark:text-gray-500">
+                        <span id="summary-charcount">{{ (run_info.summary or '')|length }}</span>/200
+                    </div>
+                </div>
+
+                <!-- Notes with markdown -->
+                <div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <label style="font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;" class="text-gray-500 dark:text-gray-400">Notes</label>
+                            {% if not readonly %}
+                            <div class="flex gap-1">
+                                <button id="btn-preview" onclick="toggleNotesView('preview')" class="px-2.5 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded cursor-pointer {% if run_info.notes %}bg-indigo-500 text-white{% else %}bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600{% endif %}">Preview</button>
+                                <button id="btn-edit" onclick="toggleNotesView('edit')" class="px-2.5 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded cursor-pointer {% if run_info.notes %}bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600{% else %}bg-indigo-500 text-white{% endif %}">Edit</button>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <span id="notes-status" style="font-size: 0.75rem;" class="text-gray-400 dark:text-gray-500"></span>
+                    </div>
+                    {% if not readonly %}
+                    <textarea id="notes-editor"
+                        style="width: 100%; min-height: 300px; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; resize: vertical; font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace; line-height: 1.6; tab-size: 4;{% if run_info.notes %} display: none;{% endif %}"
+                        placeholder="Add notes about this evaluation run... (supports Markdown)">{{ run_info.notes or '' }}</textarea>
+                    {% endif %}
+                    <div id="notes-preview" class="prose" style="{% if not readonly and not run_info.notes %}display: none;{% endif %} min-height: 100px; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.9rem; line-height: 1.6;">
+                        {% if readonly and not run_info.notes %}
+                        <span class="text-gray-400 dark:text-gray-500">No notes for this run.</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Evaluation Logs Tab -->
+        <div id="tab-logs" class="detail-tab-panel" style="display: none;">
+            <div class="log-container" style="margin-top: 0; box-shadow: none; border-radius: 0 0 8px 8px;">
+                <div id="log-box" class="log-content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Modal (shared component) -->
+{% include 'partials/test-modal.html' %}
+
+<!-- Training Data Modal (shared component) -->
+{% include 'partials/training-modal.html' %}
+
+<!-- Shared JS -->
+<script src="{{ url_for('static', filename='js/test-modal.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='js/training-data.js') }}?v=3"></script>
+
+<script>
+let testResultsData = {};  // Store all test results for modal access
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch matrix data
+    fetch('/api/run/{{ run_info.run_id }}/matrix')
+    .then(response => response.json())
+    .then(data => {
+        updateMatrix(data.domains);
+        // Generate logs from test results
+        generateLogs(data.domains);
+    })
+    .catch(error => {
+        console.error('Error fetching matrix:', error);
+    });
+
+    // Initialize notes markdown preview
+    initNotes();
+});
+
+// Notes auto-save and markdown preview
+function initNotes() {
+    const notesEditor = document.getElementById('notes-editor');
+    const notesPreview = document.getElementById('notes-preview');
+    const notesStatus = document.getElementById('notes-status');
+    const summaryEditor = document.getElementById('summary-editor');
+    const summaryStatus = document.getElementById('summary-status');
+
+    // Render initial markdown preview
+    if (notesPreview && typeof marked !== 'undefined') {
+        const raw = notesEditor ? notesEditor.value : notesPreview.textContent;
+        if (raw && raw.trim()) notesPreview.innerHTML = marked.parse(raw);
+    }
+
+    if (!notesEditor && !summaryEditor) return;
+
+    // Auto-save for notes
+    if (notesEditor) {
+        let saveTimeout = null;
+        let lastSaved = notesEditor.value;
+        notesEditor.addEventListener('input', function() {
+            if (saveTimeout) clearTimeout(saveTimeout);
+            notesStatus.textContent = 'Unsaved changes...';
+            notesStatus.style.color = '#f59e0b';
+            saveTimeout = setTimeout(function() {
+                if (notesEditor.value === lastSaved) return;
+                notesStatus.textContent = 'Saving...';
+                notesStatus.style.color = '#9ca3af';
+                fetch('/api/run/{{ run_info.run_id }}/notes', {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({notes: notesEditor.value})
+                }).then(r => r.json()).then(data => {
+                    if (data.success) {
+                        lastSaved = notesEditor.value;
+                        notesStatus.textContent = 'Saved';
+                        notesStatus.style.color = '#059669';
+                        setTimeout(() => { if (notesStatus.textContent === 'Saved') notesStatus.textContent = ''; }, 2000);
+                    } else {
+                        notesStatus.textContent = 'Save failed';
+                        notesStatus.style.color = '#dc2626';
+                    }
+                }).catch(() => {
+                    notesStatus.textContent = 'Save failed';
+                    notesStatus.style.color = '#dc2626';
+                });
+            }, 1000);
+        });
+    }
+
+    // Auto-save for summary
+    if (summaryEditor && !summaryEditor.readOnly) {
+        let saveTimeout = null;
+        let lastSaved = summaryEditor.value;
+        summaryEditor.addEventListener('input', function() {
+            document.getElementById('summary-charcount').textContent = summaryEditor.value.length;
+            if (saveTimeout) clearTimeout(saveTimeout);
+            summaryStatus.textContent = 'Unsaved changes...';
+            summaryStatus.style.color = '#f59e0b';
+            saveTimeout = setTimeout(function() {
+                if (summaryEditor.value === lastSaved) return;
+                summaryStatus.textContent = 'Saving...';
+                summaryStatus.style.color = '#9ca3af';
+                fetch('/api/run/{{ run_info.run_id }}/summary', {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({summary: summaryEditor.value})
+                }).then(r => r.json()).then(data => {
+                    if (data.success) {
+                        lastSaved = summaryEditor.value;
+                        summaryStatus.textContent = 'Saved';
+                        summaryStatus.style.color = '#059669';
+                        setTimeout(() => { if (summaryStatus.textContent === 'Saved') summaryStatus.textContent = ''; }, 2000);
+                    } else {
+                        summaryStatus.textContent = 'Save failed';
+                        summaryStatus.style.color = '#dc2626';
+                    }
+                }).catch(() => {
+                    summaryStatus.textContent = 'Save failed';
+                    summaryStatus.style.color = '#dc2626';
+                });
+            }, 1000);
+        });
+    }
+}
+
+function toggleNotesView(view) {
+    const editor = document.getElementById('notes-editor');
+    const preview = document.getElementById('notes-preview');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnPreview = document.getElementById('btn-preview');
+    const active = ['bg-indigo-500', 'text-white'];
+    const inactive = ['bg-white', 'text-gray-700', 'hover:bg-gray-50'];
+    if (view === 'preview') {
+        if (typeof marked !== 'undefined') {
+            preview.innerHTML = marked.parse(editor.value || '');
+        }
+        editor.style.display = 'none';
+        preview.style.display = '';
+        btnPreview.classList.remove(...inactive); btnPreview.classList.add(...active);
+        btnEdit.classList.remove(...active); btnEdit.classList.add(...inactive);
+    } else {
+        editor.style.display = '';
+        preview.style.display = 'none';
+        btnEdit.classList.remove(...inactive); btnEdit.classList.add(...active);
+        btnPreview.classList.remove(...active); btnPreview.classList.add(...inactive);
+        editor.focus();
+    }
+}
+
+function updateMatrix(matrix) {
+    for (const [domain, levels] of Object.entries(matrix)) {
+        let domainTotal = 0;
+        let domainCount = 0;
+        let domainPassed = 0;
+        let domainDuration = 0;
+        
+        for (const [level, data] of Object.entries(levels)) {
+            const cell = document.getElementById(`cell-${domain}-${level}`);
+            if (cell) {
+                // Store data for modal access
+                if (!testResultsData[domain]) testResultsData[domain] = {};
+                testResultsData[domain][level] = data;
+                
+                // Update status indicator
+                const statusEl = cell.querySelector('.status-dot');
+                const dotStatus = (data.status === 'failed' && data.details?.llm_error) ? 'technical-error' : data.status;
+                statusEl.className = 'status-dot w-3 h-3 md:w-4 md:h-4 rounded-full shrink-0 status-' + dotStatus;
+                
+                // Update score
+                const scoreEl = cell.querySelector('.cell-score');
+                if (data.score !== null && data.score !== undefined) {
+                    scoreEl.textContent = (data.score * 100).toFixed(0) + '%';
+                    domainTotal += data.score;
+                    domainCount++;
+                    if (data.status === 'passed') domainPassed++;
+                } else {
+                    scoreEl.textContent = '-';
+                }
+                
+                // Update duration
+                const durationEl = document.getElementById(`duration-${domain}-${level}`);
+                if (durationEl) {
+                    if (data.duration_ms) {
+                        const seconds = (data.duration_ms / 1000).toFixed(1);
+                        durationEl.textContent = seconds + 's';
+                        domainDuration += data.duration_ms;
+                    } else {
+                        durationEl.textContent = '';
+                    }
+                }
+            }
+        }
+        
+        // Update domain total
+        const scoreEl = document.getElementById(`total-score-${domain}`);
+        const passedEl = document.getElementById(`total-passed-${domain}`);
+        const durationEl = document.getElementById(`total-duration-${domain}`);
+        
+        if (domainCount > 0) {
+            const avgScore = domainTotal / domainCount;
+            
+            if (scoreEl) {
+                scoreEl.textContent = (avgScore * 100).toFixed(0) + '%';
+                scoreEl.style.color = avgScore >= 0.8 ? '#059669' : avgScore >= 0.6 ? '#d97706' : '#dc2626';
+            }
+            
+            if (passedEl) {
+                passedEl.textContent = `${domainPassed}/5`;
+            }
+        }
+        
+        // Show domain duration
+        if (durationEl && domainDuration > 0) {
+            const seconds = (domainDuration / 1000).toFixed(1);
+            durationEl.textContent = seconds + 's';
+        }
+    }
+}
+
+// Domains from actual test results
+const DOMAINS = {{ domains | tojson }};
+
+function generateLogs(matrix) {
+    const logBox = document.getElementById('log-box');
+    let logsHtml = '';
+    
+    const domains = DOMAINS;
+    
+    domains.forEach(domain => {
+        for (let level = 1; level <= 5; level++) {
+            const data = matrix[domain]?.[level];
+            if (!data || data.status === 'pending') continue;
+            
+            const statusIcon = data.status === 'passed' ? '✓' : '✗';
+            
+            // Truncate for display
+            const promptDisplay = data.prompt ? (data.prompt.substring(0, 100) + (data.prompt.length > 100 ? '...' : '')).replace(/\n/g, ' ') : 'No prompt';
+            const responseDisplay = data.response ? (data.response.substring(0, 100) + (data.response.length > 100 ? '...' : '')).replace(/\n/g, ' ') : 'No response';
+            
+            logsHtml += `<div class="log-entry" style="color: #374151;">═══════════════════════════════════════════════════════════════</div>`;
+            logsHtml += `<div class="log-entry"><strong>[TEST] ${domain.toUpperCase()} Level ${level}</strong></div>`;
+            logsHtml += `<div class="log-entry" style="color: #374151;">───────────────────────────────────────────────────────────────</div>`;
+            logsHtml += `<div class="log-entry" style="color: #3b82f6;">[INPUT] ${escapeHtml(promptDisplay)}</div>`;
+            
+            if (data.expected) {
+                const expectedStr = typeof data.expected === 'object' ? JSON.stringify(data.expected) : String(data.expected);
+                const expectedDisplay = expectedStr.substring(0, 80) + (expectedStr.length > 80 ? '...' : '');
+                logsHtml += `<div class="log-entry" style="color: #059669;">[EXPECTED] ${escapeHtml(expectedDisplay)}</div>`;
+            }
+            
+            logsHtml += `<div class="log-entry" style="color: #666;">[LLM] Response received in ${data.duration_ms || 0}ms</div>`;
+            logsHtml += `<div class="log-entry" style="color: #eab308;">[OUTPUT] ${escapeHtml(responseDisplay)}</div>`;
+            logsHtml += `<div class="log-entry" style="color: #666;">[EVAL] Using domain-specific evaluator</div>`;
+            logsHtml += `<div class="log-entry" style="color: #666;">[SCORING] Evaluating response...</div>`;
+            
+            const resultColor = data.status === 'passed' ? '#10b981' : '#ef4444';
+            logsHtml += `<div class="log-entry" style="color: ${resultColor}; font-weight: bold;">[RESULT] ${statusIcon} Status: ${data.status.toUpperCase()}, Score: ${data.score !== null ? (data.score * 100).toFixed(0) + '%' : 'N/A'}</div>`;
+            
+            if (data.details) {
+                const detailsStr = typeof data.details === 'object' ? data.details.details || JSON.stringify(data.details) : String(data.details);
+                const detailsDisplay = detailsStr.substring(0, 80);
+                logsHtml += `<div class="log-entry" style="color: #666;">[DETAILS] ${escapeHtml(detailsDisplay)}</div>`;
+            }
+        }
+    });
+    
+    if (logsHtml === '') {
+        logsHtml = '<div class="log-entry" style="color: #666;">No evaluation logs available.</div>';
+    }
+    
+    logBox.innerHTML = logsHtml;
+}
+
+// escapeHtml is now in shared /static/js/test-modal.js
+
+// Modal functions - use shared components from test-modal.js
+const RUN_ID = '{{ run_info.run_id }}';
+
+function showCellDetail(domain, level) {
+    const data = testResultsData[domain]?.[level];
+    
+    if (!data || data.status === 'pending') {
+        showModalNoData(domain, level);
+        return;
+    }
+    
+    // Fetch individual test results from API (same as index.html)
+    fetch(`/api/run/${RUN_ID}/tests/${domain}/${level}`)
+        .then(r => r.json())
+        .then(apiData => {
+            if (apiData.tests && apiData.tests.length > 0) {
+                // Add domain to each test for training data generation
+                apiData.tests.forEach(t => t.domain = domain);
+                showModalWithTests(domain, level, apiData.tests, data);
+            }
+        })
+        .catch(err => {
+            console.error('Failed to fetch test details:', err);
+            showModalNoData(domain, level);
+        });
+}
+
+// Bridge function for training data modal (uses shared component)
+function onGenerateTrainingDataClick(testIndex) {
+    // For multi-test view (from showModalWithTests)
+    if (typeof testIndex === 'number' && currentModalTests && currentModalTests[testIndex]) {
+        showTrainingDataModal(currentModalTests[testIndex]);
+    }
+}
+
+// Legacy showModalWithData is no longer used - tests now fetched from API
+// and displayed using shared showModalWithTests from test-modal.js
+
+function formatDetails(details) {
+    const modal = document.getElementById('test-modal');
+    const header = document.getElementById('modal-header');
+    const title = document.getElementById('modal-title');
+    const body = document.getElementById('modal-body');
+    
+    const statusIcon = data.status === 'passed' ? '✓' : data.status === 'failed' ? '✗' : '⏳';
+    const headerClass = data.status === 'passed' ? 'modal-header-success' : data.status === 'failed' ? 'modal-header-error' : 'modal-header';
+    
+    header.className = 'modal-header ' + headerClass;
+    title.innerHTML = `<span style="font-size: 1.2rem;">${statusIcon}</span> ${domain.toUpperCase()} Level ${level} - ${data.status.toUpperCase()}`;
+    
+    const scoreDisplay = data.score !== null && data.score !== undefined 
+        ? (data.score * 100).toFixed(1) + '%' 
+        : 'N/A';
+    
+    const scoreClass = data.status === 'passed' ? 'score-passed' : data.status === 'failed' ? 'score-failed' : '';
+    
+    let detailsHtml = `
+        <div class="detail-section">
+            <div class="detail-header">Score</div>
+            <div class="detail-content ${scoreClass}" style="font-size: 2rem; font-weight: bold;">
+                ${scoreDisplay}
+            </div>
+        </div>
+        
+        <div class="detail-section">
+            <div class="detail-header">Status</div>
+            <div class="detail-content">
+                <span class="status-badge status-badge-${data.status}">${data.status.toUpperCase()}</span>
+                ${data.duration_ms ? `<span style="margin-left: 1rem; color: #666;">Duration: ${data.duration_ms}ms</span>` : ''}
+            </div>
+        </div>
+        
+        ${data.model_name ? `
+        <div class="detail-section">
+            <div class="detail-header">Model</div>
+            <div class="detail-content">
+                <span style="background: #e0e7ff; color: #4338ca; padding: 0.25rem 0.75rem; border-radius: 9999px; font-weight: 600;">${escapeHtml(data.model_name)}</span>
+            </div>
+        </div>
+        ` : ''}
+        
+        ${data.details && data.details.llm_error ? `
+        <div class="detail-section">
+            <div class="detail-header" style="color: #dc2626; border-color: #dc2626;">⚠️ LLM Error (${escapeHtml(data.details.llm_error.type || 'unknown')})</div>
+            <div class="detail-content" style="background: #fef2f2; border-left: 4px solid #dc2626;">
+                <div style="color: #dc2626; font-weight: 600; margin-bottom: 0.5rem;">${escapeHtml(data.details.llm_error.message || 'Unknown error')}</div>
+                ${data.details.llm_error.detail ? `<div style="color: #666; font-size: 0.9rem;">${escapeHtml(data.details.llm_error.detail)}</div>` : ''}
+            </div>
+        </div>
+        ` : ''}
+        
+        <div class="detail-section">
+            <div class="detail-header input-header">📥 INPUT (Prompt)</div>
+            <div class="detail-content input-box">
+                ${data.prompt ? escapeHtml(data.prompt) : '<em style="color: #999;">No prompt recorded</em>'}
+            </div>
+        </div>
+        
+        <div class="detail-section">
+            <div class="detail-header expected-header">🎯 EXPECTED Output</div>
+            <div class="detail-content expected-box">
+                ${formatExpected(data.expected)}
+            </div>
+        </div>
+        
+        <div class="detail-section">
+            <div class="detail-header output-header">📤 OUTPUT (Model Response)</div>
+            <div class="detail-content output-box">
+                ${data.response ? escapeHtml(data.response) : '<em style="color: #999;">No response recorded</em>'}
+            </div>
+        </div>
+        
+        ${data.details && data.details.thinking ? `
+        <div class="detail-section">
+            <div class="detail-header" style="color: #7c3aed; border-color: #7c3aed;">🧠 Thinking Process</div>
+            <div class="detail-content" style="background: #f5f3ff; border-left: 4px solid #7c3aed; max-height: 300px; overflow-y: auto;">
+                <pre style="white-space: pre-wrap; word-wrap: break-word; font-size: 0.85rem; margin: 0; color: #4c1d95;">${escapeHtml(data.details.thinking)}</pre>
+            </div>
+        </div>
+        ` : ''}
+    `;
+    
+    if (data.details) {
+        detailsHtml += `
+            <div class="detail-section">
+                <div class="detail-header details-header">🔍 Evaluation Details</div>
+                <div class="detail-content details-box">
+                    ${formatDetails(data.details)}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Show PASS2 section if available
+    if (data.details && data.details.pass2) {
+        const pass2 = data.details.pass2;
+        const bgColor = pass2.success ? '#f0fdf4' : '#fef2f2';
+        const borderColor = pass2.success ? '#059669' : '#dc2626';
+        
+        detailsHtml += `
+            <div class="detail-section">
+                <div class="detail-header" style="color: ${borderColor}; border-color: ${borderColor};">🔄 PASS 2 Extraction</div>
+                <div class="detail-content" style="background: ${bgColor}; border-left: 4px solid ${borderColor};">
+                    <div style="margin-bottom: 0.75rem;">
+                        <span style="color: ${borderColor}; font-weight: 600;">${pass2.success ? '✓ Success' : '✗ Failed'}</span>
+                        ${pass2.format ? `<span style="background: #e0e7ff; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.85rem; margin-left: 0.5rem;">Format: ${pass2.format}</span>` : ''}
+                    </div>
+                    
+                    ${pass2.prompt ? `
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.25rem;">📥 PASS2 INPUT (Extraction Prompt):</div>
+                        <pre style="background: #eff6ff; padding: 0.75rem; border-radius: 4px; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; border-left: 3px solid #3b82f6;">${escapeHtml(pass2.prompt)}</pre>
+                    </div>
+                    ` : ''}
+                    
+                    ${pass2.raw_output ? `
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.85rem; color: #666; margin-bottom: 0.25rem;">📤 PASS2 OUTPUT (Extracted Answer):</div>
+                        <pre style="background: #f8fafc; padding: 0.75rem; border-radius: 4px; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; border-left: 3px solid #059669;">${escapeHtml(pass2.raw_output)}</pre>
+                    </div>
+                    ` : ''}
+                    
+                    ${pass2.thinking ? `
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.85rem; color: #7c3aed; margin-bottom: 0.25rem;">🧠 PASS2 THINKING:</div>
+                        <pre style="background: #f5f3ff; padding: 0.75rem; border-radius: 4px; font-size: 0.8rem; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto; border-left: 3px solid #7c3aed; color: #4c1d95;">${escapeHtml(pass2.thinking)}</pre>
+                    </div>
+                    ` : ''}
+                    
+                    ${pass2.extracted_answer ? `
+                    <div style="background: white; padding: 0.5rem 0.75rem; border-radius: 4px; display: inline-block;">
+                        <strong>Extracted:</strong> <code style="color: #059669; font-size: 1.1rem; font-weight: bold;">${escapeHtml(pass2.extracted_answer)}</code>
+                    </div>
+                    ` : ''}
+                    
+                    ${pass2.error ? `
+                    <div style="color: #dc2626; font-size: 0.85rem; margin-top: 0.5rem;"><strong>Error:</strong> ${escapeHtml(pass2.error)}</div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Add Generate Training Data button if conversation_log exists
+    if (data.details && data.details.conversation_log && data.details.conversation_log.length > 0) {
+        detailsHtml += `
+            <div class="detail-section mt-8 pt-4 border-t-2 border-dashed border-gray-200">
+                <button type="button"
+                        class="w-full py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white border-none rounded-lg text-sm font-semibold flex items-center justify-center transition-colors"
+                        onclick="onGenerateTrainingDataClick('${domain}', ${level})">
+                    Generate Training Data
+                </button>
+            </div>
+        `;
+    }
+    
+    body.innerHTML = detailsHtml;
+    modal.style.display = 'flex';
+}
+
+// All modal functions (closeModal, formatExpected, formatDetails, onGenerateTrainingDataClick)
+// are now in shared /static/js/test-modal.js and /static/js/training-data.js
+
+function switchTab(tab, btn) {
+    document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.detail-tab-panel').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById('tab-' + tab).style.display = 'block';
+}
+
+// Close test modal on outside click (training modal handled by shared JS)
+window.onclick = function(event) {
+    const testModal = document.getElementById('test-modal');
+    if (event.target === testModal) {
+        closeModal();
+    }
+}
+
+// Close test modal on Escape key (training modal handled by shared JS)
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const trainingModal = document.getElementById('training-modal');
+        // Only close test modal if training modal is not visible
+        if (!trainingModal || trainingModal.style.display !== 'flex') {
+            closeModal();
+        }
+    }
+});
+</script>
+
+<style>
+.run-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.info-item {
+    background: #f9fafb;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+}
+
+.info-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.info-value {
+    display: block;
+    font-weight: 500;
+}
+
+.info-value-stat {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin-top: 0.125rem;
+}
+
+.info-stat-high  { color: #059669; }
+.info-stat-medium { color: #d97706; }
+.info-stat-low   { color: #dc2626; }
+
+.summary-box {
+    background: #f0f9ff;
+    padding: 1rem;
+    border-radius: 6px;
+    color: #1e40af;
+    font-style: italic;
+}
+
+
+.status-indicator {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-completed {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.status-interrupted {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge-passed {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.status-badge-failed {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.status-badge-running {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.status-badge-pending {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.modal-header-success {
+    background: #d1fae5 !important;
+    border-bottom-color: #86efac !important;
+}
+
+.modal-header-error {
+    background: #fee2e2 !important;
+    border-bottom-color: #fecaca !important;
+}
+
+.input-header {
+    border-left: 4px solid #3b82f6;
+}
+
+.expected-header {
+    border-left: 4px solid #22c55e;
+}
+
+.output-header {
+    border-left: 4px solid #eab308;
+}
+
+.details-header {
+    border-left: 4px solid #8b5cf6;
+}
+
+.input-box {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.expected-box {
+    background: #f0fdf4;
+    border-left: 4px solid #22c55e;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.output-box {
+    background: #fefce8;
+    border-left: 4px solid #eab308;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.details-box {
+    background: #faf5ff;
+    border-left: 4px solid #8b5cf6;
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.score-passed {
+    color: #10b981;
+}
+
+.score-failed {
+    color: #ef4444;
+}
+
+/* Modal styles */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: stretch;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    padding: 1.25rem 1.5rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header-success {
+    background: #d1fae5 !important;
+    border-bottom: 1px solid #6ee7b7 !important;
+}
+
+.modal-header-error {
+    background: #fef2f2 !important;
+    border-bottom: 1px solid #fecaca !important;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.modal-close {
+    font-size: 1.75rem;
+    cursor: pointer;
+    color: #666;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    max-height: calc(90vh - 80px);
+}
+
+.detail-section {
+    margin-bottom: 1.5rem;
+}
+
+.detail-header {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 2px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.detail-content {
+    color: #4b5563;
+    line-height: 1.6;
+}
+
+.detail-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 0;
+}
+
+.detail-tab {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #6b7280;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.detail-tab:hover {
+    color: #374151;
+}
+
+.detail-tab.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+    font-weight: 600;
+}
+
+.detail-tab-panel {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+/* ===== Dark mode overrides ===== */
+html.dark .info-item { background: #1f2937; }
+html.dark .info-label { color: #9ca3af; }
+html.dark .summary-box { background: #1e3a5f; color: #93c5fd; }
+html.dark .input-box { background: #1e3a5f; border-left-color: #3b82f6; }
+html.dark .expected-box { background: #14532d; border-left-color: #22c55e; }
+html.dark .output-box { background: #422006; border-left-color: #eab308; }
+html.dark .details-box { background: #3b1f6e; border-left-color: #8b5cf6; }
+html.dark .modal-content { background: #1f2937; }
+html.dark .modal-header { background: #111827; border-bottom-color: #374151; }
+html.dark .modal-close { color: #d1d5db; }
+html.dark .modal-close:hover { color: #f9fafb; }
+html.dark .detail-header { color: #e5e7eb; border-bottom-color: #374151; }
+html.dark .detail-content { color: #d1d5db; }
+html.dark .detail-tabs { border-bottom-color: #374151; }
+html.dark .detail-tab { color: #9ca3af; }
+html.dark .detail-tab:hover { color: #e5e7eb; }
+html.dark .detail-tab.active { color: #818cf8; border-bottom-color: #818cf8; }
+html.dark .detail-tab-panel { background: #1f2937; border-color: #374151; }
+html.dark .status-completed { background: #065f46; color: #6ee7b7; }
+html.dark .status-interrupted { background: #78350f; color: #fcd34d; }
+html.dark .status-badge-passed { background: #065f46; color: #6ee7b7; }
+html.dark .status-badge-failed { background: #7f1d1d; color: #fca5a5; }
+html.dark .status-badge-running { background: #78350f; color: #fcd34d; }
+html.dark .status-badge-pending { background: #374151; color: #d1d5db; }
+html.dark .modal-header-success { background: #065f46 !important; border-bottom-color: #059669 !important; }
+html.dark .modal-header-error { background: #7f1d1d !important; border-bottom-color: #dc2626 !important; }
+
+/* Dark mode: override JS-generated inline white backgrounds */
+html.dark [style*="background: white"] { background: #1f2937 !important; }
+html.dark [style*="background: #eff6ff"] { background: #1e3a5f !important; }
+html.dark [style*="background: #f8fafc"] { background: #1f2937 !important; }
+html.dark [style*="background: #f5f3ff"] { background: #3b1f6e !important; }
+html.dark [style*="background: #fefce8"] { background: #422006 !important; }
+html.dark [style*="background: #f0fdf4"] { background: #14532d !important; }
+html.dark [style*="background: #faf5ff"] { background: #3b1f6e !important; }
+html.dark [style*="background: #f0f9ff"] { background: #1e3a5f !important; }
+html.dark [style*="background: #f9fafb"] { background: #1f2937 !important; }
+html.dark [style*="color: #4c1d95"] { color: #c4b5fd !important; }
+html.dark [style*="color: #1e40af"] { color: #93c5fd !important; }
+
+</style>
+{% endblock %}

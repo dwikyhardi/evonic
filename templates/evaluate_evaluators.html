@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="settings-container">
+    {% include "partials/evaluate_subnav.html" %}
+
+    <div class="settings-header">
+        <h2>⚖️ Evaluators</h2>
+    </div>
+
+    <div class="evaluators-list" id="evaluators-list">
+        <!-- Evaluators will be loaded here -->
+    </div>
+    <button onclick="showAddEvaluatorModal()" class="btn-add">+ Add Custom Evaluator</button>
+</div>
+
+<!-- Evaluator Modal -->
+<div id="evaluator-modal" class="modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[500px] max-h-[90vh] overflow-y-auto shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 id="evaluator-modal-title" class="m-0 text-gray-800 dark:text-gray-100">Add Custom Evaluator</h3>
+            <button onclick="closeModal('evaluator-modal')" class="bg-transparent border-none text-gray-500 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <form id="evaluator-form">
+                <input type="hidden" id="evaluator-id">
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-700 text-sm font-medium">ID</label>
+                    <input type="text" id="evaluator-id-input" placeholder="Auto-generated if empty" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-700 text-sm font-medium">Name *</label>
+                    <input type="text" id="evaluator-name" required placeholder="Evaluator name" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-700 text-sm font-medium">Description</label>
+                    <input type="text" id="evaluator-description" placeholder="Brief description" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-700 text-sm font-medium">Type</label>
+                    <select id="evaluator-type" onchange="toggleEvaluatorType()" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                        <option value="custom">LLM-based (Custom Prompt)</option>
+                        <option value="regex">Regex Pattern Matcher</option>
+                        <option value="hybrid">Hybrid (LLM + Regex)</option>
+                    </select>
+                </div>
+                <div class="mb-4" id="eval-prompt-group">
+                    <label class="block mb-1 text-gray-700 text-sm font-medium">Evaluation Prompt</label>
+                    <textarea id="evaluator-prompt" rows="5" placeholder="Prompt template for LLM evaluation. Use {response} and {expected} as placeholders." class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                    <small class="text-gray-500 text-xs">Use {response}, {expected}, {level} as placeholders</small>
+                </div>
+                <div class="mb-4" id="eval-regex-group">
+                    <label class="block mb-1 text-gray-700 text-sm font-medium">Extraction Regex</label>
+                    <input type="text" id="evaluator-regex" placeholder="SCORE:\s*(\d+)" class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+                    <small class="text-gray-500 text-xs">Regex pattern with capture group for score/answer extraction. Example patterns:<br>
+                        &bull; Extract number: <code>Jawaban:\s*(\d+)</code><br>
+                        &bull; Exact match: <code>^(Expected Answer)$</code><br>
+                        &bull; Extract date: <code>(\d{4}-\d{2}-\d{2})</code><br>
+                        &bull; Multiple choice: <code>Jawaban:\s*([ABCD])</code>
+                    </small>
+                </div>
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-700 text-sm font-medium">Config (JSON, optional)</label>
+                    <textarea id="evaluator-config" rows="2" placeholder='{"max_score": 3, "use_expected_as_pattern": true}' class="w-full p-2.5 border border-gray-300 rounded-md bg-white text-gray-800 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/10"></textarea>
+                    <small class="text-gray-500 text-xs">Optional settings: <code>max_score</code> (normalize score), <code>use_expected_as_pattern</code> (use expected as regex)</small>
+                </div>
+            </form>
+        </div>
+        <div class="flex justify-end gap-2.5 p-5 border-t border-gray-200">
+            <button onclick="closeModal('evaluator-modal')" class="bg-gray-100 text-gray-700 border border-gray-300 px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-gray-200">Cancel</button>
+            <button onclick="saveEvaluator()" class="bg-blue-500 text-white border-none px-5 py-2.5 rounded-md cursor-pointer text-sm hover:bg-blue-600">Save Evaluator</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.evaluator-card {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #e5e7eb;
+}
+
+.evaluator-info h4 {
+    margin: 0;
+    color: #1f2937;
+}
+
+.evaluator-info p {
+    margin: 5px 0 0;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.evaluator-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    margin-left: 10px;
+}
+
+.evaluator-type.custom {
+    background: #ede9fe;
+    color: #7c3aed;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.btn-primary {
+    background: #3B82F6;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn-primary:hover {
+    background: #2563EB;
+}
+
+.btn-add {
+    background: #10B981;
+    color: #fff;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-top: 20px;
+}
+
+.btn-add:hover {
+    background: #059669;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 14px;
+}
+
+.btn-icon:hover {
+    color: #1f2937;
+}
+
+.btn-icon.delete:hover {
+    color: #EF4444;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Dark mode overrides */
+html.dark .settings-header h2 { color: #f1f5f9; }
+html.dark .evaluator-card { background: #1e293b; border-color: #334155; }
+html.dark .evaluator-info h4 { color: #f1f5f9; }
+html.dark .evaluator-info p { color: #94a3b8; }
+html.dark .btn-icon { color: #94a3b8; }
+html.dark .btn-icon:hover { color: #f1f5f9; }
+html.dark .loading { color: #94a3b8; }
+/* Modal form elements */
+html.dark .modal label { color: #d1d5db; }
+html.dark .modal input[type="text"],
+html.dark .modal textarea,
+html.dark .modal select { background-color: #374151; color: #f1f5f9; border-color: #4b5563; }
+html.dark .modal small { color: #9ca3af; }
+html.dark .modal .border-b { border-color: #374151; }
+html.dark .modal .border-t { border-color: #374151; }
+html.dark .modal button.bg-gray-100 { background-color: #374151; color: #e2e8f0; border-color: #4b5563; }
+html.dark .modal button.bg-gray-100:hover { background-color: #4b5563; }
+html.dark .modal button.text-gray-500 { color: #9ca3af; }
+html.dark .modal button.text-gray-500:hover { color: #f1f5f9; }
+</style>
+
+<script>
+let evaluators = [];
+
+// Modal Management
+function openModal(modalId) {
+    document.getElementById(modalId).classList.add('active');
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+}
+
+// API Calls
+async function apiGet(url) {
+    const response = await fetch(url);
+    return response.json();
+}
+
+async function apiPost(url, data) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return response.json();
+}
+
+async function apiPut(url, data) {
+    const response = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    });
+    return response.json();
+}
+
+async function apiDelete(url) {
+    const response = await fetch(url, { method: 'DELETE' });
+    return response.json();
+}
+
+async function loadEvaluators() {
+    try {
+        const data = await apiGet('/api/settings/evaluators');
+        evaluators = data.evaluators || [];
+        renderEvaluators();
+    } catch (error) {
+        console.error('Error loading evaluators:', error);
+    }
+}
+
+function renderEvaluators() {
+    const container = document.getElementById('evaluators-list');
+
+    if (evaluators.length === 0) {
+        container.innerHTML = '<div class="loading">No evaluators found.</div>';
+        return;
+    }
+
+    container.innerHTML = evaluators.map(evaluator => `
+        <div class="evaluator-card">
+            <div class="evaluator-info">
+                <h4>${evaluator.name} <span class="evaluator-type ${evaluator.type}">${evaluator.type}</span></h4>
+                <p>${evaluator.description || 'No description'}</p>
+            </div>
+            <div class="evaluator-actions">
+                <button class="btn-icon" onclick="editEvaluator('${evaluator.id}')">✏️ Edit</button>
+                ${evaluator.type === 'custom' ? `
+                    <button class="btn-icon delete" onclick="deleteEvaluator('${evaluator.id}')">🗑️</button>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function showAddEvaluatorModal() {
+    document.getElementById('evaluator-modal-title').textContent = 'Add Custom Evaluator';
+    document.getElementById('evaluator-form').reset();
+    document.getElementById('evaluator-id').value = '';
+    document.getElementById('evaluator-config').value = '';
+    toggleEvaluatorType();
+    openModal('evaluator-modal');
+}
+
+function editEvaluator(evaluatorId) {
+    const evaluator = evaluators.find(e => e.id === evaluatorId);
+    if (!evaluator) return;
+
+    document.getElementById('evaluator-modal-title').textContent = 'Edit Evaluator';
+    document.getElementById('evaluator-id').value = evaluator.id;
+    document.getElementById('evaluator-id-input').value = evaluator.id;
+    document.getElementById('evaluator-name').value = evaluator.name;
+    document.getElementById('evaluator-description').value = evaluator.description || '';
+    document.getElementById('evaluator-type').value = evaluator.type || 'custom';
+    document.getElementById('evaluator-prompt').value = evaluator.eval_prompt || '';
+    document.getElementById('evaluator-regex').value = evaluator.extraction_regex || '';
+    document.getElementById('evaluator-config').value = evaluator.config ? JSON.stringify(evaluator.config, null, 2) : '';
+    toggleEvaluatorType();
+
+    openModal('evaluator-modal');
+}
+
+async function saveEvaluator() {
+    const evaluatorId = document.getElementById('evaluator-id').value || null;
+
+    var configValue = null;
+    var configStr = document.getElementById('evaluator-config').value.trim();
+    if (configStr) {
+        try {
+            configValue = JSON.parse(configStr);
+        } catch (e) {
+            alert('Invalid JSON in Config field: ' + e.message);
+            return;
+        }
+    }
+
+    const data = {
+        id: document.getElementById('evaluator-id-input').value || undefined,
+        name: document.getElementById('evaluator-name').value,
+        description: document.getElementById('evaluator-description').value,
+        type: document.getElementById('evaluator-type').value,
+        eval_prompt: document.getElementById('evaluator-prompt').value || null,
+        extraction_regex: document.getElementById('evaluator-regex').value || null,
+        config: configValue
+    };
+
+    try {
+        let result;
+        if (evaluatorId) {
+            result = await apiPut(`/api/settings/evaluators/${evaluatorId}`, data);
+        } else {
+            result = await apiPost('/api/settings/evaluators', data);
+        }
+
+        if (result.success) {
+            closeModal('evaluator-modal');
+            loadEvaluators();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error saving evaluator: ' + error);
+    }
+}
+
+async function deleteEvaluator(evaluatorId) {
+    if (!await showConfirm({title: 'Delete Evaluator', message: 'Delete this evaluator? This cannot be undone.', confirmText: 'Delete'})) return;
+
+    try {
+        const result = await apiDelete(`/api/settings/evaluators/${evaluatorId}`);
+        if (result.success) {
+            loadEvaluators();
+        }
+    } catch (error) {
+        alert('Error deleting evaluator: ' + error);
+    }
+}
+
+function toggleEvaluatorType() {
+    const type = document.getElementById('evaluator-type').value;
+    const promptGroup = document.getElementById('eval-prompt-group');
+    const regexGroup = document.getElementById('eval-regex-group');
+
+    if (type === 'regex') {
+        promptGroup.style.display = 'none';
+        regexGroup.style.display = 'block';
+    } else if (type === 'custom') {
+        promptGroup.style.display = 'block';
+        regexGroup.style.display = 'none';
+    } else if (type === 'hybrid') {
+        promptGroup.style.display = 'block';
+        regexGroup.style.display = 'block';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadEvaluators();
+});
+</script>
+{% endblock %}

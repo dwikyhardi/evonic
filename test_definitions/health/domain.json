@@ -1,0 +1,13 @@
+{
+  "id": "health",
+  "name": "Health",
+  "description": "Health and medical knowledge tests - covering BMI, nutrition, symptoms, and medical calculations",
+  "icon": "file",
+  "color": "#ef4444",
+  "evaluator_id": "two_pass",
+  "system_prompt": null,
+  "system_prompt_mode": "overwrite",
+  "tool_ids": [
+    "calculator"
+  ]
+}

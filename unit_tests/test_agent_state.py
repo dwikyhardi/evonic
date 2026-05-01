@@ -1,0 +1,369 @@
+"""Unit tests for backend/agent_state.py"""
+
+import pytest
+from backend.agent_state import AgentState, GUARDED_TOOLS
+
+
+class TestIsBlocked:
+    def test_write_tools_blocked_in_plan_mode(self):
+        ms = AgentState(mode="plan")
+        for tool in GUARDED_TOOLS:
+            assert ms.is_blocked(tool), f"{tool} should be blocked in plan mode"
+
+    def test_write_tools_allowed_in_execute_mode(self):
+        ms = AgentState(mode="execute")
+        for tool in GUARDED_TOOLS:
+            assert not ms.is_blocked(tool), f"{tool} should not be blocked in execute mode"
+
+    def test_non_write_tools_never_blocked(self):
+        for mode in ("plan", "execute"):
+            ms = AgentState(mode=mode)
+            for tool in ("read_file", "bash", "runpy", "calculator", "search_restaurants"):
+                assert not ms.is_blocked(tool), f"{tool} should not be blocked in {mode} mode"
+
+
+class TestSetMode:
+    def test_transition_plan_to_execute(self):
+        ms = AgentState(mode="plan", plan_file="plan/my-plan.md")
+        result = ms.set_mode("execute")
+        assert ms.mode == "execute"
+        assert "error" not in result
+        assert result["mode"] == "execute"
+
+    def test_transition_execute_to_plan(self):
+        ms = AgentState(mode="execute")
+        result = ms.set_mode("plan")
+        assert ms.mode == "plan"
+        assert result["mode"] == "plan"
+
+    def test_invalid_mode_returns_error(self):
+        ms = AgentState(mode="plan")
+        result = ms.set_mode("review")
+        assert "error" in result
+        assert ms.mode == "plan"  # unchanged
+
+    def test_reason_included_in_result(self):
+        ms = AgentState(plan_file="plan/my-plan.md")
+        result = ms.set_mode("execute", reason="user approved")
+        assert "user approved" in result["result"]
+
+    def test_execute_blocked_without_plan_file(self):
+        ms = AgentState(mode="plan")
+        result = ms.set_mode("execute")
+        assert "error" in result
+        assert ms.mode == "plan"  # unchanged
+
+    def test_execute_allowed_with_plan_file(self):
+        ms = AgentState(mode="plan", plan_file="plan/test.md")
+        result = ms.set_mode("execute")
+        assert "error" not in result
+        assert ms.mode == "execute"
+
+
+class TestSetPlanFile:
+    def test_set_plan_file(self):
+        ms = AgentState()
+        result = ms.set_plan_file("plan/my-plan.md")
+        assert ms.plan_file == "plan/my-plan.md"
+        assert "error" not in result
+        assert result["plan_file"] == "plan/my-plan.md"
+
+    def test_empty_path_returns_error(self):
+        ms = AgentState()
+        result = ms.set_plan_file("")
+        assert "error" in result
+        assert ms.plan_file is None
+
+
+class TestUpdateTasks:
+    def test_set_replaces_task_list(self):
+        ms = AgentState()
+        result = ms.update_tasks("set", tasks=["Task A", "Task B", "Task C"])
+        assert len(ms.tasks) == 3
+        assert ms.tasks[0]["text"] == "Task A"
+        assert ms.tasks[0]["status"] == "pending"
+        assert "error" not in result
+
+    def test_set_resets_ids_from_1(self):
+        ms = AgentState()
+        ms.update_tasks("set", tasks=["First"])
+        ms.update_tasks("set", tasks=["New A", "New B"])
+        assert ms.tasks[0]["id"] == 1
+        assert ms.tasks[1]["id"] == 2
+
+    def test_add_appends_task(self):
+        ms = AgentState()
+        ms.update_tasks("add", text="Write tests")
+        assert len(ms.tasks) == 1
+        assert ms.tasks[0]["text"] == "Write tests"
+        assert ms.tasks[0]["status"] == "pending"
+
+    def test_add_auto_increments_id(self):
+        ms = AgentState()
+        ms.update_tasks("add", text="First")
+        ms.update_tasks("add", text="Second")
+        assert ms.tasks[0]["id"] == 1
+        assert ms.tasks[1]["id"] == 2
+
+    def test_done_marks_task(self):
+        ms = AgentState()
+        ms.update_tasks("set", tasks=["Step 1", "Step 2"])
+        result = ms.update_tasks("done", task_id=1)
+        assert ms.tasks[0]["status"] == "done"
+        assert "error" not in result
+
+    def test_in_progress_marks_task(self):
+        ms = AgentState()
+        ms.update_tasks("set", tasks=["Step 1"])
+        ms.update_tasks("in_progress", task_id=1)
+        assert ms.tasks[0]["status"] == "in_progress"
+
+    def test_remove_deletes_task(self):
+        ms = AgentState()
+        ms.update_tasks("set", tasks=["Keep", "Delete me"])
+        ms.update_tasks("remove", task_id=2)
+        assert len(ms.tasks) == 1
+        assert ms.tasks[0]["text"] == "Keep"
+
+    def test_done_nonexistent_task_returns_error(self):
+        ms = AgentState()
+        result = ms.update_tasks("done", task_id=99)
+        assert "error" in result
+
+    def test_add_without_text_returns_error(self):
+        ms = AgentState()
+        result = ms.update_tasks("add")
+        assert "error" in result
+
+    def test_set_without_tasks_returns_error(self):
+        ms = AgentState()
+        result = ms.update_tasks("set")
+        assert "error" in result
+
+    def test_unknown_action_returns_error(self):
+        ms = AgentState()
+        result = ms.update_tasks("explode")
+        assert "error" in result
+
+
+class TestRender:
+    def test_plan_mode_shows_blocked_note(self):
+        ms = AgentState(mode="plan")
+        rendered = ms.render()
+        assert "blocked" in rendered.lower()
+        assert "plan" in rendered
+
+    def test_execute_mode_shows_allowed_note(self):
+        ms = AgentState(mode="execute")
+        rendered = ms.render()
+        assert "allowed" in rendered.lower()
+
+    def test_tasks_rendered_with_checkboxes(self):
+        ms = AgentState()
+        ms.update_tasks("set", tasks=["Read file", "Write fix"])
+        ms.update_tasks("done", task_id=1)
+        rendered = ms.render()
+        assert "[x]" in rendered
+        assert "[ ]" in rendered
+        assert "Read file" in rendered
+        assert "Write fix" in rendered
+
+    def test_in_progress_task_shows_tilde(self):
+        ms = AgentState()
+        ms.update_tasks("add", text="Working on it")
+        ms.update_tasks("in_progress", task_id=1)
+        rendered = ms.render()
+        assert "[~]" in rendered
+
+    def test_no_tasks_shows_hint(self):
+        ms = AgentState()
+        rendered = ms.render()
+        assert "No tasks" in rendered or "update_tasks" in rendered
+
+
+class TestSerializeDeserialize:
+    def test_roundtrip_empty(self):
+        ms = AgentState()
+        restored = AgentState.deserialize(ms.serialize())
+        assert restored.mode == ms.mode
+        assert restored.tasks == ms.tasks
+        assert restored.plan_file is None
+
+    def test_roundtrip_with_tasks_and_mode(self):
+        ms = AgentState(mode="execute")
+        ms.update_tasks("set", tasks=["A", "B", "C"])
+        ms.update_tasks("done", task_id=2)
+        restored = AgentState.deserialize(ms.serialize())
+        assert restored.mode == "execute"
+        assert len(restored.tasks) == 3
+        assert restored.tasks[1]["status"] == "done"
+
+    def test_next_task_id_preserved(self):
+        ms = AgentState()
+        ms.update_tasks("add", text="First")
+        ms.update_tasks("add", text="Second")
+        restored = AgentState.deserialize(ms.serialize())
+        restored.update_tasks("add", text="Third")
+        assert restored.tasks[2]["id"] == 3  # not 1
+
+    def test_invalid_json_returns_fresh_state(self):
+        restored = AgentState.deserialize("not valid json{{{")
+        assert restored.mode == "plan"
+        assert restored.tasks == []
+
+    def test_plan_file_roundtrip(self):
+        ms = AgentState(plan_file="plan/runpy-heuristic.md")
+        restored = AgentState.deserialize(ms.serialize())
+        assert restored.plan_file == "plan/runpy-heuristic.md"
+
+    def test_plan_file_none_roundtrip(self):
+        ms = AgentState()
+        restored = AgentState.deserialize(ms.serialize())
+        assert restored.plan_file is None
+
+    def test_states_roundtrip(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'pending', data={'task_id': '42'},
+                     allowed_tools=['kanban_update_status', 'state'])
+        restored = AgentState.deserialize(ms.serialize())
+        slot = restored.get_state('kanban')
+        assert slot is not None
+        assert slot['state'] == 'pending'
+        assert slot['data'] == {'task_id': '42'}
+        assert slot['allowed_tools'] == ['kanban_update_status', 'state']
+
+    def test_empty_states_roundtrip(self):
+        ms = AgentState()
+        restored = AgentState.deserialize(ms.serialize())
+        assert restored.states == {}
+
+
+class TestStates:
+    def test_set_and_get_state(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'pending', data={'task_id': '1'})
+        slot = ms.get_state('kanban')
+        assert slot is not None
+        assert slot['state'] == 'pending'
+        assert slot['data'] == {'task_id': '1'}
+
+    def test_get_state_returns_none_for_missing_namespace(self):
+        ms = AgentState()
+        assert ms.get_state('kanban') is None
+
+    def test_clear_state_removes_slot(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'active')
+        ms.clear_state('kanban')
+        assert ms.get_state('kanban') is None
+
+    def test_clear_state_noop_for_missing(self):
+        ms = AgentState()
+        ms.clear_state('nonexistent')  # should not raise
+
+    def test_multiple_namespaces_independent(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'active')
+        ms.set_state('deploy', 'locked')
+        assert ms.get_state('kanban')['state'] == 'active'
+        assert ms.get_state('deploy')['state'] == 'locked'
+        ms.clear_state('kanban')
+        assert ms.get_state('kanban') is None
+        assert ms.get_state('deploy') is not None
+
+    def test_overwrite_state_slot(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'pending')
+        ms.set_state('kanban', 'active')
+        assert ms.get_state('kanban')['state'] == 'active'
+
+    # ── is_blocked_by_state ───────────────────────────────────────────────────
+
+    def test_blocked_tool_not_in_allowed_tools(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'pending', allowed_tools=['kanban_update_status', 'state'])
+        result = ms.is_blocked_by_state('write_file')
+        assert result is not None
+        assert isinstance(result, str)
+        assert 'write_file' in result
+
+    def test_allowed_tool_passes(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'pending', allowed_tools=['kanban_update_status', 'state'])
+        assert ms.is_blocked_by_state('kanban_update_status') is None
+
+    def test_blocked_tools_list_blocks_listed_tool(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'active', blocked_tools=['rm_rf', 'drop_db'])
+        result = ms.is_blocked_by_state('rm_rf')
+        assert result is not None
+        assert 'rm_rf' in result
+
+    def test_blocked_tools_list_allows_unlisted_tool(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'active', blocked_tools=['rm_rf'])
+        assert ms.is_blocked_by_state('write_file') is None
+
+    def test_no_states_never_blocks(self):
+        ms = AgentState()
+        assert ms.is_blocked_by_state('write_file') is None
+
+    def test_error_message_includes_namespace_and_state(self):
+        ms = AgentState()
+        ms.set_state('kanban', 'pending', allowed_tools=['state'])
+        msg = ms.is_blocked_by_state('bash')
+        assert 'kanban' in msg
+        assert 'pending' in msg
+
+    # ── is_blocked integration ────────────────────────────────────────────────
+
+    def test_is_blocked_returns_true_for_mode_block(self):
+        ms = AgentState(mode='plan')
+        result = ms.is_blocked('write_file')
+        assert result is True
+
+    def test_is_blocked_returns_string_for_state_block(self):
+        ms = AgentState(mode='execute')
+        ms.set_state('kanban', 'pending', allowed_tools=['state'])
+        result = ms.is_blocked('write_file')
+        assert isinstance(result, str)
+        assert 'write_file' in result
+
+    def test_is_blocked_returns_false_when_nothing_blocks(self):
+        ms = AgentState(mode='execute')
+        result = ms.is_blocked('write_file')
+        assert not result
+
+    def test_mode_block_takes_precedence_over_state(self):
+        ms = AgentState(mode='plan')
+        ms.set_state('kanban', 'pending', allowed_tools=['write_file'])
+        # In plan mode, write_file is blocked by mode (returns True before state check)
+        result = ms.is_blocked('write_file')
+        assert result is True
+
+    # ── render ────────────────────────────────────────────────────────────────
+
+    def test_render_shows_active_states_when_set(self):
+        ms = AgentState(mode='execute')
+        ms.set_state('kanban', 'pending', allowed_tools=['kanban_update_status'])
+        rendered = ms.render()
+        assert 'Active States' in rendered
+        assert 'kanban' in rendered
+        assert 'pending' in rendered
+
+    def test_render_no_states_section_when_empty(self):
+        ms = AgentState(mode='execute')
+        rendered = ms.render()
+        assert 'Active States' not in rendered
+
+    def test_render_shows_allowed_tools_when_set(self):
+        ms = AgentState(mode='execute')
+        ms.set_state('kanban', 'pending', allowed_tools=['kanban_update_status', 'state'])
+        rendered = ms.render()
+        assert 'kanban_update_status' in rendered
+
+    def test_render_shows_blocked_tools_when_no_allowed(self):
+        ms = AgentState(mode='execute')
+        ms.set_state('kanban', 'active', blocked_tools=['drop_db'])
+        rendered = ms.render()
+        assert 'drop_db' in rendered

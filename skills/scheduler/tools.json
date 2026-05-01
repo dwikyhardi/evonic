@@ -1,0 +1,79 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "create_schedule",
+      "description": "Create a new scheduled job. Supports one-shot (date), recurring (interval), and cron triggers. Actions can send a message to an agent or emit a system event.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable name for this schedule (e.g. 'Daily standup reminder', 'Check deploy status')."
+          },
+          "trigger_type": {
+            "type": "string",
+            "enum": ["date", "interval", "cron"],
+            "description": "Type of trigger. 'date' = one-shot at specific time. 'interval' = recurring every N seconds/minutes/hours. 'cron' = cron-like pattern."
+          },
+          "trigger_config": {
+            "type": "object",
+            "description": "Trigger parameters. For 'date': {\"run_date\": \"2026-04-21T09:00:00\"}. For 'interval': {\"seconds\": 300} or {\"minutes\": 5} or {\"hours\": 1}. For 'cron': {\"hour\": 9, \"minute\": 0} or {\"day_of_week\": \"mon-fri\", \"hour\": 9}."
+          },
+          "action_type": {
+            "type": "string",
+            "enum": ["agent_message", "emit_event"],
+            "description": "What to do when the schedule fires. 'agent_message' sends a message to an agent. 'emit_event' emits a system event."
+          },
+          "action_config": {
+            "type": "object",
+            "description": "Action parameters. For 'agent_message': {\"agent_id\": \"...\", \"message\": \"...\"}. For 'emit_event': {\"event_name\": \"...\", \"payload\": {...}}. If agent_id is omitted in agent_message, defaults to the calling agent."
+          },
+          "max_runs": {
+            "type": "integer",
+            "description": "Maximum number of times this schedule should fire. Omit or null for unlimited. Automatically set to 1 for 'date' triggers."
+          }
+        },
+        "required": ["name", "trigger_type", "trigger_config", "action_type", "action_config"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "cancel_schedule",
+      "description": "Cancel and remove a scheduled job by its ID. You can only cancel schedules you own.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "schedule_id": {
+            "type": "string",
+            "description": "The UUID of the schedule to cancel."
+          }
+        },
+        "required": ["schedule_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "list_schedules",
+      "description": "List scheduled jobs. Returns schedules owned by this agent. Super admin can list all schedules including plugin-owned ones.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "include_disabled": {
+            "type": "boolean",
+            "description": "If true, include disabled/completed schedules. Default: false (only active)."
+          },
+          "all": {
+            "type": "boolean",
+            "description": "If true, list all schedules regardless of owner (super admin only)."
+          }
+        },
+        "required": []
+      }
+    }
+  }
+]

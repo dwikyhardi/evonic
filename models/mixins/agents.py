@@ -1,0 +1,220 @@
+import sqlite3
+from typing import Dict, Any, List, Optional
+
+
+class AgentMixin:
+    """Agent CRUD and agent-tool/skill mapping. Requires self._connect() from the host class."""
+
+    def get_agents(self) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM agents ORDER BY last_active_at DESC NULLS LAST, name")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_agent(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def create_agent(self, agent: Dict[str, Any]) -> str:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO agents (id, name, description, system_prompt, model, is_super, enabled,
+                    vision_enabled, inject_agent_id, inject_datetime, send_intermediate_responses, enable_agent_state,
+                    workspace, agent_messaging_enabled, sandbox_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                agent['id'], agent.get('name', agent['id']),
+                agent.get('description', ''), agent.get('system_prompt', ''),
+                agent.get('model'),
+                1 if agent.get('is_super') else 0,
+                0 if agent.get('enabled') is False else 1,
+                1,  # vision_enabled
+                1,  # inject_agent_id
+                1,  # inject_datetime
+                1,  # send_intermediate_responses
+                1,  # enable_agent_state
+                agent.get('workspace'),
+                1 if agent.get('agent_messaging_enabled') is not False else 0,
+                1 if agent.get('sandbox_enabled') else 0,
+            ))
+            conn.commit()
+        return agent['id']
+
+    def update_agent(self, agent_id: str, data: Dict[str, Any]) -> bool:
+        allowed = {'name', 'description', 'model', 'vision_enabled',
+                   'summarize_threshold', 'summarize_tail', 'summarize_prompt',
+                   'message_buffer_seconds', 'inject_agent_id', 'inject_datetime',
+                   'send_intermediate_responses', 'outbound_buffer_seconds', 'enable_agent_state', 'workspace',
+                   'enabled', 'is_super', 'sandbox_enabled', 'safety_checker_enabled', 'primary_channel_id',
+                   'avatar_path', 'disable_parallel_tool_execution', 'disable_turn_prefetch',
+                   'agent_messaging_enabled', 'workplace_id'}
+        updates = {k: v for k, v in data.items() if k in allowed}
+        if not updates:
+            return False
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [agent_id]
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE agents SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                values
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_agent(self, agent_id: str) -> bool:
+        # Super agent cannot be deleted
+        agent = self.get_agent(agent_id)
+        if agent and agent.get('is_super'):
+            raise ValueError("Super agent cannot be deleted")
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM agents WHERE id = ?", (agent_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_super_agent(self) -> Optional[Dict[str, Any]]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM agents WHERE is_super = 1 LIMIT 1")
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def has_super_agent(self) -> bool:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM agents WHERE is_super = 1 LIMIT 1")
+            return cursor.fetchone() is not None
+
+    # ==================== Agent Tools ====================
+
+    def get_agent_tools(self, agent_id: str) -> List[str]:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT tool_id FROM agent_tools WHERE agent_id = ?", (agent_id,))
+            return [row[0] for row in cursor.fetchall()]
+
+    def set_agent_tools(self, agent_id: str, tool_ids: List[str]):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM agent_tools WHERE agent_id = ?", (agent_id,))
+            for tid in tool_ids:
+                cursor.execute(
+                    "INSERT INTO agent_tools (agent_id, tool_id) VALUES (?, ?)",
+                    (agent_id, tid)
+                )
+            conn.commit()
+
+    def clear_all_agent_tools(self):
+        with self._connect() as conn:
+            conn.execute("DELETE FROM agent_tools")
+            conn.commit()
+
+    # ==================== Agent Skills ====================
+
+    def get_agent_skills(self, agent_id: str) -> List[str]:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT skill_id FROM agent_skills WHERE agent_id = ?", (agent_id,))
+            return [row[0] for row in cursor.fetchall()]
+
+    def set_agent_skills(self, agent_id: str, skill_ids: List[str]):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM agent_skills WHERE agent_id = ?", (agent_id,))
+            for sid in skill_ids:
+                cursor.execute(
+                    "INSERT INTO agent_skills (agent_id, skill_id) VALUES (?, ?)",
+                    (agent_id, sid)
+                )
+            conn.commit()
+
+    # ==================== Agent Variables ====================
+
+    def get_agent_variables(self, agent_id: str) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT key, value, is_secret FROM agent_variables WHERE agent_id = ? ORDER BY key",
+                (agent_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_agent_variables_dict(self, agent_id: str) -> Dict[str, str]:
+        """Return agent variables as a flat {key: value} dict."""
+        rows = self.get_agent_variables(agent_id)
+        return {r['key']: r['value'] for r in rows}
+
+    def set_agent_variable(self, agent_id: str, key: str, value: str, is_secret: bool = False):
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO agent_variables (agent_id, key, value, is_secret) VALUES (?, ?, ?, ?)",
+                (agent_id, key, value, 1 if is_secret else 0)
+            )
+            conn.commit()
+
+    def delete_agent_variable(self, agent_id: str, key: str) -> bool:
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM agent_variables WHERE agent_id = ? AND key = ?",
+                (agent_id, key)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def set_agent_variables_bulk(self, agent_id: str, variables: List[Dict[str, Any]]):
+        """Replace all variables for an agent with the given list."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM agent_variables WHERE agent_id = ?", (agent_id,))
+            for var in variables:
+                cursor.execute(
+                    "INSERT INTO agent_variables (agent_id, key, value, is_secret) VALUES (?, ?, ?, ?)",
+                    (agent_id, var['key'], var.get('value', ''), 1 if var.get('is_secret') else 0)
+                )
+            conn.commit()
+
+    # ==================== Primary Channel ====================
+
+    def set_primary_channel(self, agent_id: str, channel_id: str) -> bool:
+        """Set a channel as primary for an agent. Auto-demotes any existing primary."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE agents SET primary_channel_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (channel_id, agent_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def unset_primary_channel(self, agent_id: str) -> bool:
+        """Clear the primary channel for an agent."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE agents SET primary_channel_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (agent_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_primary_channel_id(self, agent_id: str) -> Optional[str]:
+        """Return the primary channel ID for an agent, or None."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT primary_channel_id FROM agents WHERE id = ?",
+                (agent_id,)
+            )
+            row = cursor.fetchone()
+            return row[0] if row else None

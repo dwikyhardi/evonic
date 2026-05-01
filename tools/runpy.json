@@ -1,0 +1,44 @@
+{
+  "id": "runpy",
+  "name": "Run Python",
+  "description": "Execute Python code in a sandboxed Docker container with persistent state per session.",
+  "system_prompt": "## runpy \u2014 Python Sandbox\n\nWhen using the `runpy` tool, the working directory is `/workspace`. Always use paths relative to `/workspace` (e.g. `templates/index.html`, `static/style.css`) \u2014 never bare filenames.\n\n### evonic helpers\n\n**File & directory** (import directly: `from evonic import tree, find, stats`)\n- `tree()` \u2014 directory tree; first line is `(cwd: /workspace)` for orientation\n- `find(glob_pattern, path='.')` \u2014 list files matching a glob\n- `stats()` \u2014 workspace summary (file count, size, git branch)\n\n**display** \u2014 structured output (`from evonic import display`)\n- `json(obj)` \u00b7 `diff(a, b)` \u00b7 `truncate(text, max_lines=50)`\n\n**shell** \u2014 run commands (`from evonic import shell`)\n- `run(command, timeout=30, cwd=None)` \u2192 ShellResult(stdout, stderr, exit_code, ok)\n\n\u26a0\ufe0f **Always use `result.print()` instead of `print(result.stdout)`** when running shell commands. `result.print()` automatically shows stdout, stderr, and exit code on failure \u2014 `print(result.stdout)` silently hides errors and non-zero exit codes, making failures look like empty output.\n```python\n# CORRECT\nresult = shell.run('rg \"pattern\" -tpy')\nresult.print()\n\n# WRONG \u2014 silent on failure, hides exit_code and stderr\nprint(result.stdout)\n```\n\n**files** \u2014 file manipulation (`from evonic import files`)\n- `patch(patch_text, path='.', strip=1, dry_run=False)` \u2014 apply unified diff. \u26a0\ufe0f NOT for JSON files.\n\n**http** \u2014 network (requires network=bridge) (`from evonic import http`)\n- `get(url, headers=None, timeout=10)` \u00b7 `post(url, data=None, json=None, headers=None)` \u00b7 `download(url, path)`\n\n**code_analysis** \u2014 static analysis (`from evonic import code_analysis`)\n- `outline(path)` \u00b7 `list_functions(path)`\n\n**system** (`from evonic import system`)\n- `ps()` \u00b7 `ports()` \u00b7 `chmod(path, mode)` \u00b7 `chown(path, owner)` \u00b7 `disk_usage()` \u00b7 `env()` \u00b7 `uname()`\n\n### Code style\n- Write **compact** Python code \u2014 no unnecessary comments\n- Only use comments for non-obvious logic or important caveats\n- Prefer one-liners and concise expressions over verbose equivalents\n- Skip docstrings unless the code block is complex (>10 lines)\n- This reduces token usage without sacrificing readability\n\n### Priority rule\nUse `evonic` helpers first. Fall back to standard Python (`os`, `pathlib`, etc.) only when evonic doesn't cover the need.",
+  "function": {
+    "name": "runpy",
+    "description": "Execute Python code in an isolated Docker container. The container persists across calls within the same session \u2014 files and installed packages are available in subsequent calls. Working directory is /workspace.\n\nPre-installed evonic helpers: top-level: tree(), find(), stats() | display: json(), diff(), truncate() | shell: run(), which() | files: patch(), | http: get(), post(), download() | code_analysis: outline(), list_functions() | system: ps(), ports(), chmod(), chown(), disk_usage(), env(), uname()\n\nFirst call includes available_helpers listing all modules and functions. Use action='destroy' to tear down the container.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Python source code to execute. Runs via 'python3 -' (stdin). All standard library modules are available. Install packages with pip inside the code if needed.",
+          "view": "code"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "run",
+            "destroy"
+          ],
+          "description": "Action to perform. 'run' (default) executes the code. 'destroy' tears down the container for this session and frees resources."
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Maximum execution time in seconds. Default 60, max 300. Increase for long-running scripts."
+        },
+        "env": {
+          "type": "object",
+          "description": "Optional environment variables injected for this execution only. Keys and values must be strings.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "code"
+      ]
+    }
+  },
+  "mock_response": "var args = ARGS;\nvar code = args.code || '';\nvar action = args.action || 'run';\nif (action === 'destroy') {\n  console.log(JSON.stringify({ result: 'container_destroyed', session_id: 'mock-session' }));\n} else if (!code) {\n  console.log(JSON.stringify({ error: \"Missing required argument: 'code'\" }));\n} else {\n  // Simulate a simple execution result\n  console.log(JSON.stringify({ stdout: '42\\n', stderr: '', exit_code: 0, execution_time: 0.05 }));\n}",
+  "mock_response_type": "javascript"
+}

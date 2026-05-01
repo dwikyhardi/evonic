@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Skills</h2>
+            <p class="text-sm text-gray-500 mt-1">Manage installable skill packages and agent skillset templates</p>
+        </div>
+        <button onclick="document.getElementById('upload-modal').classList.remove('hidden')"
+                class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            Upload Skill
+        </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 mb-6 border-b border-gray-200">
+        <button onclick="switchTab('skills')" id="tab-skills"
+                class="px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 transition-colors">
+            Skills
+        </button>
+        <button onclick="switchTab('skillsets')" id="tab-skillsets"
+                class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors">
+            Skillsets
+        </button>
+    </div>
+
+    <!-- Skills Tab -->
+    <div id="panel-skills">
+        <!-- Skills Grid -->
+        <div id="skills-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Populated by JS -->
+        </div>
+
+        <div id="empty-state" class="hidden text-center py-16 text-gray-400">
+            <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+            <p class="text-lg font-medium">No skills installed</p>
+            <p class="text-sm mt-1">Upload a skill zip package to get started</p>
+        </div>
+    </div>
+
+    <!-- Skillsets Tab -->
+    <div id="panel-skillsets" class="hidden">
+        <!-- Skillsets Grid -->
+        <div id="skillsets-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Populated by JS -->
+        </div>
+
+        <div id="skillsets-empty" class="hidden text-center py-16 text-gray-400">
+            <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            <p class="text-lg font-medium">No skillsets available</p>
+            <p class="text-sm mt-1">Skillset templates help you create pre-configured agents quickly</p>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div id="upload-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" onclick="closeUploadModal()"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[480px] shadow-xl">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Upload Skill Package</h3>
+            <div id="drop-zone"
+                 class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors"
+                 onclick="document.getElementById('file-input').click()">
+                <svg class="w-10 h-10 mx-auto mb-3 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                <p class="text-sm text-gray-600 dark:text-gray-300 font-medium">Click or drag & drop a .zip file</p>
+                <p id="file-name" class="text-xs text-gray-400 dark:text-gray-500 mt-2"></p>
+            </div>
+            <input type="file" id="file-input" accept=".zip" class="hidden" onchange="onFileSelected(this)">
+        </div>
+        <div class="flex gap-3 justify-end px-6 pb-5">
+            <button onclick="closeUploadModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+            <button id="upload-btn" onclick="uploadSkill()" disabled
+                    class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors">
+                Install
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedFile = null;
+
+async function loadSkills() {
+    const res = await fetch('/api/skills');
+    const data = await res.json();
+    const skills = data.skills || [];
+    const grid = document.getElementById('skills-grid');
+    const empty = document.getElementById('empty-state');
+
+    if (skills.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    grid.innerHTML = skills.map(s => `
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow overflow-hidden">
+            <div class="p-5">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex-1 min-w-0 cursor-pointer" onclick="window.location.href='/skills/${s.id}'">
+                        <h3 class="font-semibold text-gray-800 dark:text-gray-100 truncate">${esc(s.name || s.id)}</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">v${esc(s.version || '?')} by ${esc(s.author || 'Unknown')}</p>
+                    </div>
+                    ${mkToggle({ checked: !!s.enabled, onChange: `toggleSkill('${s.id}', this.checked)`, extraClass: 'ml-3 flex-shrink-0' })}
+                </div>
+                <p class="text-sm text-gray-500 line-clamp-2 mb-3">${esc(s.description || 'No description')}</p>
+                <div class="flex justify-between items-center">
+                    <span class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        ${s.tool_count || 0} tools
+                    </span>
+                    <button onclick="deleteSkill('${s.id}', '${esc(s.name || s.id)}')"
+                            class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors" title="Delete">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function toggleSkill(skillId, enabled) {
+    const res = await fetch(`/api/skills/${skillId}/toggle`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled})
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        toast.show(err.error || 'Failed to toggle skill', 'error');
+        loadSkills();
+    }
+}
+
+async function deleteSkill(skillId, name) {
+    const confirmed = await showConfirm({
+        title: `Delete "${name}"?`,
+        message: 'This will uninstall the skill and remove all its files. This cannot be undone.',
+        confirmText: 'Delete',
+        danger: true
+    });
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/skills/${skillId}`, {method: 'DELETE'});
+    if (!res.ok) {
+        const err = await res.json();
+        toast.show(err.error || 'Failed to delete skill', 'error');
+    }
+    loadSkills();
+}
+
+function onFileSelected(input) {
+    selectedFile = input.files[0];
+    document.getElementById('file-name').textContent = selectedFile ? selectedFile.name : '';
+    document.getElementById('upload-btn').disabled = !selectedFile;
+}
+
+async function uploadSkill() {
+    if (!selectedFile) return;
+    const btn = document.getElementById('upload-btn');
+    btn.disabled = true;
+    btn.textContent = 'Installing...';
+
+    const form = new FormData();
+    form.append('file', selectedFile);
+
+    try {
+        const res = await fetch('/api/skills/upload', {method: 'POST', body: form});
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            toast.show(data.error || 'Upload failed', 'error');
+            return;
+        }
+        closeUploadModal();
+        loadSkills();
+    } catch (e) {
+        toast.show('Upload failed: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Install';
+    }
+}
+
+function closeUploadModal() {
+    document.getElementById('upload-modal').classList.add('hidden');
+    selectedFile = null;
+    document.getElementById('file-input').value = '';
+    document.getElementById('file-name').textContent = '';
+    document.getElementById('upload-btn').disabled = true;
+}
+
+// Drag & drop
+const dropZone = document.getElementById('drop-zone');
+if (dropZone) {
+    ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, ev => {
+        ev.preventDefault();
+        dropZone.classList.add('border-indigo-400', 'bg-indigo-50/50');
+    }));
+    ['dragleave', 'drop'].forEach(e => dropZone.addEventListener(e, ev => {
+        ev.preventDefault();
+        dropZone.classList.remove('border-indigo-400', 'bg-indigo-50/50');
+    }));
+    dropZone.addEventListener('drop', ev => {
+        const file = ev.dataTransfer.files[0];
+        if (file && file.name.endsWith('.zip')) {
+            selectedFile = file;
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('upload-btn').disabled = false;
+        }
+    });
+}
+
+// ==================== Tab Switching ====================
+
+function switchTab(tab) {
+    document.getElementById('panel-skills').classList.toggle('hidden', tab !== 'skills');
+    document.getElementById('panel-skillsets').classList.toggle('hidden', tab !== 'skillsets');
+    const tabSkills = document.getElementById('tab-skills');
+    const tabSkillsets = document.getElementById('tab-skillsets');
+    if (tab === 'skills') {
+        tabSkills.className = 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 transition-colors';
+        tabSkillsets.className = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors';
+    } else {
+        tabSkillsets.className = 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 transition-colors';
+        tabSkills.className = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors';
+        if (!window._skillsetsLoaded) {
+            loadSkillsets();
+            window._skillsetsLoaded = true;
+        }
+    }
+    location.hash = tab;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const hash = location.hash.replace('#', '');
+    if (hash === 'skillsets') switchTab('skillsets');
+});
+
+// ==================== Skillsets ====================
+
+async function loadSkillsets() {
+    try {
+        const res = await fetch('/api/skillsets');
+        const data = await res.json();
+        const skillsets = data.skillsets || [];
+        const grid = document.getElementById('skillsets-grid');
+        const empty = document.getElementById('skillsets-empty');
+
+        if (skillsets.length === 0) {
+            grid.innerHTML = '';
+            empty.classList.remove('hidden');
+            return;
+        }
+        empty.classList.add('hidden');
+
+        grid.innerHTML = skillsets.map(s => `
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow overflow-hidden">
+                <div class="p-5">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex-1 min-w-0 cursor-pointer" onclick="window.location.href='/skillset/${esc(s.id)}'">
+                            <h3 class="font-semibold text-gray-800 dark:text-gray-100 truncate">${esc(s.name || s.id)}</h3>
+                            <p class="text-xs text-gray-400 mt-0.5">ID: ${esc(s.id)}</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500 line-clamp-2 mb-3 cursor-pointer" onclick="window.location.href='/skillset/${esc(s.id)}'">${esc(s.description || 'No description')}</p>
+                    <div class="flex justify-between items-center">
+                        <span class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-full">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            ${s.tools_count || 0} tools
+                        </span>
+                        <button onclick="previewSkillset('${esc(s.id)}')"
+                                class="text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded transition-colors">
+                            Preview
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.error('Failed to load skillsets:', e);
+    }
+}
+
+async function previewSkillset(skillId) {
+    try {
+        const res = await fetch(`/api/skillsets/${skillId}/resolve`);
+        const data = await res.json();
+        if (!res.ok) return;
+
+        const toolsHtml = (data.resolved_tools || []).map(t =>
+            `<span class="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded mr-1 mb-1">${esc(t)}</span>`
+        ).join('');
+        const unresolvedHtml = (data.unresolved_tools || []).map(t =>
+            `<span class="inline-block bg-red-50 text-red-600 text-xs px-2 py-1 rounded mr-1 mb-1">${esc(t)}</span>`
+        ).join('');
+
+        const promptPreview = (data.system_prompt || '').substring(0, 200) + (data.system_prompt && data.system_prompt.length > 200 ? '...' : '');
+
+        const modal = document.getElementById('skillset-preview-modal');
+        document.getElementById('preview-name').textContent = data.name || skillId;
+        document.getElementById('preview-desc').textContent = data.description || '';
+        document.getElementById('preview-prompt').textContent = promptPreview;
+        document.getElementById('preview-tools').innerHTML = toolsHtml || '<span class="text-gray-400 text-xs">No tools</span>';
+        document.getElementById('preview-unresolved').innerHTML = unresolvedHtml || '';
+        document.getElementById('preview-unresolved').parentElement.classList.toggle('hidden', !data.unresolved_tools || data.unresolved_tools.length === 0);
+        document.getElementById('preview-create-btn').onclick = function() {
+            closeSkillsetPreview();
+            window.location.href = `/agents?skillset=${skillId}`;
+        };
+        document.getElementById('preview-edit-btn').onclick = function() {
+            closeSkillsetPreview();
+            window.location.href = `/skillset/${skillId}`;
+        };
+        modal.classList.remove('hidden');
+    } catch (e) {
+        console.error('Failed to preview skillset:', e);
+    }
+}
+
+function closeSkillsetPreview() {
+    document.getElementById('skillset-preview-modal').classList.add('hidden');
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
+loadSkills();
+</script>
+
+<!-- Skillset Preview Modal -->
+<div id="skillset-preview-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" onclick="closeSkillsetPreview()"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[560px] shadow-xl max-h-[80vh] overflow-y-auto">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1" id="preview-name"></h3>
+            <p class="text-sm text-gray-500 mb-4" id="preview-desc"></p>
+
+            <div class="mb-4">
+                <label class="block mb-1 text-xs font-medium text-gray-500 uppercase">System Prompt</label>
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-md p-3 text-sm text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto" id="preview-prompt"></div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block mb-1 text-xs font-medium text-gray-500 uppercase">Tools</label>
+                <div id="preview-tools"></div>
+            </div>
+
+            <div class="mb-4 hidden">
+                <label class="block mb-1 text-xs font-medium text-red-500 uppercase">Unresolved Tools</label>
+                <div id="preview-unresolved"></div>
+            </div>
+
+        </div>
+        <div class="flex gap-3 justify-end px-6 pb-5">
+            <button onclick="closeSkillsetPreview()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Close</button>
+            <button id="preview-edit-btn" class="px-4 py-2 border border-indigo-500 text-indigo-600 hover:bg-indigo-50 rounded-md text-sm font-medium transition-colors">Edit</button>
+            <button id="preview-create-btn" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Create Agent from this</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

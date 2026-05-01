@@ -1,0 +1,1355 @@
+{% extends "base.html" %}
+{% from 'partials/toggle.html' import toggle_widget %}
+
+{% block content %}
+<style>
+footer { display: none; }
+/* Dark mode */
+html.dark .recap-prose { color: #cbd5e1; }
+html.dark .recap-prose th, html.dark .recap-prose td { border-color: #334155; }
+html.dark .recap-prose th { background: #1e293b; color: #f1f5f9; }
+html.dark .recap-prose tr:nth-child(even) { background: #0f172a; }
+html.dark .recap-prose tr:hover { background: #334155; }
+html.dark .recap-prose h1, html.dark .recap-prose h2, html.dark .recap-prose h3, html.dark .recap-prose h4, html.dark .recap-prose h5, html.dark .recap-prose h6 { color: #f1f5f9; }
+html.dark .recap-prose blockquote { border-left-color: #475569; color: #94a3b8; }
+html.dark .recap-prose code { background: #1e293b; color: #e2e8f0; }
+html.dark .recap-prose pre { background: #1e293b; }
+/* Dark mode: session list */
+html.dark #session-list .hover\\:bg-gray-50:hover { background: #1f2937; }
+html.dark #session-list .bg-indigo-50 { background: #1e1b4b; }
+html.dark #session-list .text-gray-800 { color: #f3f4f6; }
+html.dark #session-list .text-gray-500 { color: #9ca3af; }
+html.dark #session-list .text-gray-400 { color: #9ca3af; }
+html.dark #session-list .text-gray-300 { color: #9ca3af; }
+html.dark #session-list .text-indigo-400 { color: #818cf8; }
+html.dark #session-list .border-l-transparent { border-color: #374151; }
+html.dark #session-list .bg-red-400 { background: #f87171; }
+html.dark #mobile-dropdown { background: #1f2937; border-color: #374151; }
+html.dark #mobile-dropdown .hover\\:bg-gray-50:hover { background: #1f2937; }
+html.dark #mobile-dropdown .text-gray-800 { color: #f3f4f6; }
+html.dark #mobile-dropdown .text-gray-400 { color: #9ca3af; }
+html.dark #mobile-dropdown .border-b { border-color: #374151; }
+/* Delete button on session list item */
+#session-list .session-item .session-delete-btn { opacity: 0; transition: opacity 0.15s, color 0.15s; }
+#session-list .session-item:hover .session-delete-btn { opacity: 1; }
+#session-list .session-item .session-delete-btn:hover { color: #ef4444 !important; }
+/* User ID color coding by type */
+.user-id-system { color: #97989F; }
+.user-id-agent  { color: #97989F; }
+.user-id-human  { color: #15803d; }
+</style>
+<div class="sessions-page flex flex-col h-[calc(100vh-3.5rem)]">
+
+    <!-- Tab bar -->
+    <div class="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
+        <button id="tab-chat-btn" onclick="switchTab('chat')"
+                class="px-5 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 transition-colors">
+            Chat
+        </button>
+        <button id="tab-settings-btn" onclick="switchTab('settings')"
+                class="px-5 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors">
+            Settings
+        </button>
+    </div>
+
+    <!-- ==================== Chat Tab ==================== -->
+    <div id="tab-chat" class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- Mobile: autocomplete search bar -->
+    <div class="md:hidden p-3 bg-white border-b border-gray-200 relative dark:bg-gray-800">
+        <input type="text" id="mobile-search" placeholder="Search session (agent or user ID)..."
+               class="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+               oninput="onMobileSearch(this.value)" onfocus="showMobileDropdown()" autocomplete="off">
+        <div id="mobile-dropdown" class="hidden absolute left-3 right-3 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-64 overflow-y-auto z-50"></div>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Desktop: session sidebar -->
+        <div id="sidebar" class="hidden md:flex flex-col w-[320px] border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
+            <div id="SidebarSearch" class="p-3 border-b border-gray-100 dark:border-gray-600">
+                <input type="text" id="sidebar-search" placeholder="Search agent or user ID..."
+                       class="w-full p-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+                       oninput="debouncedLoadSessions(this.value)" autocomplete="off">
+            </div>
+            <div id="session-list" class="flex-1 overflow-y-auto"></div>
+        </div>
+
+        <!-- Chat room -->
+        <div id="chat-room" class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-800 min-w-0">
+            <!-- Chat header -->
+            <div id="chat-header" class="hidden p-3 bg-white dark:bg-gray-800 border-b border-gray-200 flex-shrink-0 dark:border-gray-600">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span id="hdr-agent" class="font-semibold text-gray-800 dark:text-gray-400 text-sm truncate"></span>
+                            <span id="hdr-channel-badge" class="text-xs px-2 py-0.5 rounded font-medium"></span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-0.5">
+                            User: <span id="hdr-user" class="text-gray-600 dark:text-gray-400"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <span class="text-xs text-gray-500">B</span>
+                            {{ toggle_widget(id='bot-toggle', onchange='toggleBot(this.checked)') }}
+                        </label>
+                        <button id="stop-agent-btn" onclick="stopAgent()" class="hidden text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 bg-red-50 hover:bg-red-100 transition-colors" title="Stop agent">
+                            Stop
+                        </button>
+                        <button id="mobile-summary-btn" onclick="toggleSummary()" class="text-indigo-500 hover:text-indigo-700 hidden" title="View summary">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        </button>
+                        <span class="w-px h-4 bg-gray-200 self-center"></span>
+                        <button onclick="toggleSessionChatFullscreen()" id="session-chat-fullscreen-btn" title="Fullscreen" class="ml-auto text-gray-400 hover:text-gray-600 flex items-center">
+                            <svg id="session-fs-expand-icon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                            <svg id="session-fs-collapse-icon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages + Summary side by side -->
+            <div class="flex flex-1 overflow-hidden">
+                <!-- Messages -->
+                <div class="relative flex-1 min-w-0 flex flex-col overflow-hidden">
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 min-w-0">
+                    <div id="empty-state" class="flex items-center justify-center h-full text-gray-400 text-sm">
+                        Select a session to view conversation
+                    </div>
+                </div>
+                <!-- Scroll-to-bottom button -->
+                <button id="scroll-to-bottom-btn" class="scroll-to-bottom-btn hidden" onclick="scrollChatToBottom()" title="Scroll to bottom">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+                        <path fill-rule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v10.638l3.96-4.158a.75.75 0 1 1 1.08 1.04l-5.25 5.5a.75.75 0 0 1-1.08 0l-5.25-5.5a.75.75 0 1 1 1.08-1.04l3.96 4.158V3.75A.75.75 0 0 1 10 3Z" clip-rule="evenodd"/>
+                    </svg>
+                </button>
+                </div>
+
+                <!-- Side panels wrapper (Agent State + Session Recap stacked vertically) -->
+                <div id="side-panels-wrapper" class="hidden lg:flex flex-col border-l dark:border-gray-600 border-gray-200 bg-white dark:bg-gray-800 flex-shrink-0 min-h-0" style="width: 300px;">
+                    <!-- Agent State Panel -->
+                    <div id="agent-state-panel" class="flex-shrink-0">
+                        <div id="AgentState" class="flex justify-between items-center px-4 py-3 border-b border-gray-100 dark:border-gray-600">
+                            <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-100 uppercase tracking-wide">Agent State</h4>
+                            <button onclick="loadAgentState()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                            </button>
+                        </div>
+                        <div id="agent-state-content" class="overflow-y-auto p-4" style="max-height:200px;">
+                            <p class="text-xs text-gray-400 italic">No state yet.</p>
+                        </div>
+                    </div>
+
+                    <!-- Summary Panel -->
+                    <div id="summary-panel" class="flex flex-col flex-1 min-h-0">
+                        <div id="SessionRecap" class="flex justify-between items-center px-4 py-3 border-b border-gray-100 dark:border-gray-600 flex-shrink-0">
+                            <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-100 uppercase tracking-wide">Session Recap</h4>
+                            <div class="flex items-center gap-4">
+                                <button onclick="forceRecap(this)" class="text-xs text-gray-400 hover:text-indigo-500 p-1" title="Recap Now">✨</button>
+                                <button onclick="loadSessionSummary()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="summary-content" class="flex-1 overflow-y-auto p-4">
+                            <p class="text-xs text-gray-400 italic">No summary yet.</p>
+                        </div>
+                        <div id="summary-meta" class="hidden px-4 py-2 border-t border-gray-100 dark:border-gray-600 text-[10px] text-gray-400 flex-shrink-0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reply input -->
+            <div id="reply-bar" class="hidden p-3 bg-white border-t border-gray-200 flex-shrink-0 dark:bg-gray-800 dark:border-gray-600">
+                <form onsubmit="sendReply(event)" class="flex gap-2">
+                    <input type="text" id="reply-input" placeholder="Type a reply as the bot..."
+                           class="flex-1 p-2.5 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                    <button type="submit" id="reply-btn" class="px-4 py-2.5 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 transition-colors flex-shrink-0">Send</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    </div><!-- /tab-chat -->
+
+    <!-- ==================== Settings Tab ==================== -->
+    <div id="tab-settings" class="flex-1 overflow-y-auto hidden">
+        <div class="max-w-2xl mx-auto p-6 space-y-8">
+
+            <!-- Clear All Sessions -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Clear All Sessions</h3>
+                        <p class="text-xs text-gray-500 mt-1">Permanently delete all chat sessions, messages, and summaries across all agents. This action cannot be undone.</p>
+                    </div>
+                    <button onclick="clearAllSessions()" class="flex-shrink-0 px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Perspective Toggle -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Chat Perspective</h3>
+                        <p class="text-xs text-gray-500 mt-1">When set to <strong>B</strong> (left side), your messages appear on the left. When set to <strong>A</strong> (right side), your messages appear on the right. Works for both agent↔user and agent↔agent sessions.</p>
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer select-none flex-shrink-0">
+                        <span class="text-xs text-gray-500">B</span>
+                        <div class="relative">
+                            <input type="checkbox" id="chat-perspective-toggle" class="sr-only peer" onchange="toggleChatPerspective(this.checked)">
+                            <div class="w-11 h-6 bg-gray-300 dark:bg-gray-600 rounded-full peer-checked:bg-indigo-500 dark:peer-checked:bg-indigo-400 transition-colors"></div>
+                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        </div>
+                        <span class="text-xs text-gray-500">A</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Events Dispatch Toggle -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Events Dispatch</h3>
+                        <p class="text-xs text-gray-500 mt-1">When enabled, events (turn_complete, message_received, summary_updated, etc.) are dispatched to third-party plugins. Disable to stop all plugin event processing.</p>
+                    </div>
+                    <label class="flex items-center cursor-pointer select-none flex-shrink-0">
+                        <div class="relative">
+                            <input type="checkbox" id="events-dispatch-toggle" class="sr-only peer" onchange="toggleEventsDispatch(this.checked)">
+                            <div class="w-11 h-6 bg-gray-300 dark:bg-gray-600 rounded-full peer-checked:bg-indigo-500 dark:peer-checked:bg-indigo-400 transition-colors"></div>
+                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+        </div>
+    </div><!-- /tab-settings -->
+
+</div>
+
+<!-- Mobile Summary Overlay -->
+<div id="mobile-summary-overlay" class="md:hidden fixed inset-0 z-[70] hidden">
+    <div class="absolute inset-0 bg-black/40" onclick="closeMobileSummary()"></div>
+    <div class="absolute bottom-0 left-0 right-0 max-h-[70vh] bg-white dark:bg-gray-800 flex flex-col shadow-xl rounded-t-2xl transform transition-transform duration-200">
+        <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 dark:border-gray-600">
+            <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Session Recap</h4>
+            <div class="flex items-center gap-4">
+                <button onclick="forceRecap(this)" class="text-sm text-gray-400 hover:text-indigo-500 p-1" title="Recap Now">✨</button>
+                <button onclick="loadSessionSummary()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                </button>
+            </div>
+        </div>
+        <div id="mobile-summary-content" class="flex-1 overflow-y-auto p-4">
+            <p class="text-xs text-gray-400 italic">No summary yet.</p>
+        </div>
+        <div id="mobile-summary-meta" class="hidden px-4 py-2 border-t border-gray-100 dark:border-gray-600 text-[10px] text-gray-400"></div>
+        <!-- Mobile Agent State -->
+        <div class="border-t border-gray-200 dark:border-gray-600">
+            <div id="MobileAgentState" class="flex justify-between items-center px-4 py-2 border-b border-gray-100 dark:border-gray-600">
+                <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Agent State</h5>
+                <button onclick="loadAgentState()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
+                </button>
+            </div>
+            <div id="mobile-agent-state-content" class="p-4">
+                <p class="text-xs text-gray-400 italic">No state yet.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=17"></script>
+<script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
+<script>
+let allSessions = [];
+let currentSessionId = null;
+let currentAgentId = null;
+let lastChatTs = 0;
+let pollTimer = null;
+let sidebarPollTimer = null;
+let _selectGeneration = 0;  // incremented on every selectSession call; guards stale async renders
+let _sseThinkingId = null;  // active thinking bubble from SSE
+let _sseCompleted = false;  // true after SSE done fires, prevents duplicate timeline rendering on poll
+let _pendingIntermediateResponse = null;  // queued intermediate response, shown when next thinking event starts
+let _pollThinkingId = null;  // active thinking bubble from incremental poll (persists across calls)
+let _pollInFlight = false;  // guard against concurrent pollNewMessages calls
+let _chatPerspective = 'B';  // 'B' (left) or 'A' (right) — controls which side your messages appear on
+
+// ==================== Reasoning State (refresh recovery) ====================
+// Save { sessionId, lastSeq } to sessionStorage while a turn is in progress so
+// that on page refresh the client can replay the trace and resume from the right seq.
+
+const _REASONING_KEY = 'evonic_active_reasoning';
+const _LAST_SESSION_KEY = 'evonic_last_session';
+
+function saveReasoningState(sessionId, lastSeq) {
+    try { sessionStorage.setItem(_REASONING_KEY, JSON.stringify({ sessionId, lastSeq })); } catch (_) {}
+}
+function clearReasoningState() {
+    try { sessionStorage.removeItem(_REASONING_KEY); } catch (_) {}
+}
+function loadReasoningState() {
+    try { return JSON.parse(sessionStorage.getItem(_REASONING_KEY) || 'null'); } catch (_) { return null; }
+}
+
+// ==================== SSE Event Dispatcher (module-level) ====================
+// Kept outside connectSessionStream so selectSession can call it during replay.
+
+function dispatchSessionEvent(evtName, data, sessionId) {
+    if (currentSessionId !== sessionId) return;
+    if (evtName === 'thinking') {
+        showStopBtn(true);
+        // Clear any pending intermediate response — it was already shown inside the bubble
+        // via a response_chunk timeline entry. We no longer split the bubble.
+        if (_pendingIntermediateResponse !== null) {
+            _pendingIntermediateResponse = null;
+        }
+        if (!_sseThinkingId) {
+            // Finalize any orphaned poll bubble before SSE takes over
+            if (_pollThinkingId) {
+                chatUI.finalizeThinkingBubble(_pollThinkingId);
+                _pollThinkingId = null;
+            }
+            _sseThinkingId = chatUI.showThinkingIndicator();
+        }
+        chatUI.appendTimelineEntry(_sseThinkingId, {type: 'thinking', content: data.content});
+    } else if (evtName === 'tool_call_started') {
+        if (!_sseThinkingId) {
+            _sseThinkingId = chatUI.showThinkingIndicator();
+        }
+        chatUI.appendTimelineEntry(_sseThinkingId, {type: 'tool_call', tool: data.tool, args: data.args, param_types: data.param_types || {}});
+    } else if (evtName === 'tool_executed') {
+        if (!_sseThinkingId) {
+            _sseThinkingId = chatUI.showThinkingIndicator();
+        }
+        chatUI.appendTimelineEntry(_sseThinkingId, {type: 'tool_result', tool: data.tool, result: data.result, error: data.error});
+        if (['save_plan', 'set_mode', 'update_tasks', 'state'].includes(data.tool)) {
+            loadAgentState();
+        }
+    } else if (evtName === 'response_chunk') {
+        if (data.content && _sseThinkingId) {
+            chatUI.appendTimelineEntry(_sseThinkingId, {type: 'response', content: data.content});
+        }
+        if (data.send_as_message && !data.is_final && data.content) {
+            _pendingIntermediateResponse = data.content;
+        }
+    } else if (evtName === 'approval_required') {
+        if (_sseThinkingId) {
+            chatUI.appendApprovalCard(_sseThinkingId, data, currentAgentId);
+            chatUI.setApprovalPendingState(_sseThinkingId, true);
+        }
+        document.dispatchEvent(new CustomEvent('evonic:approval-required', {detail: data}));
+    } else if (evtName === 'approval_resolved') {
+        if (_sseThinkingId) {
+            chatUI.setApprovalPendingState(_sseThinkingId, false);
+        }
+        chatUI.resolveApprovalCard(data);
+        document.dispatchEvent(new CustomEvent('evonic:approval-resolved', {detail: data}));
+    } else if (evtName === 'turn_split') {
+        // Injected message consumed by loop — finalize current bubble, start new one
+        if (_sseThinkingId) {
+            chatUI.finalizeThinkingBubble(_sseThinkingId);
+        }
+        _sseThinkingId = chatUI.showThinkingIndicator();
+        chatUI.markQueuedAsDelivered();
+    } else if (evtName === 'session_clear') {
+        // Clear chat history when session is cleared, reset cursor so poll reloads
+        lastChatTs = 0;
+        chatUI.clearContainer();
+    }
+}
+
+const POLL_INTERVAL = 2000;       // poll chat every 2s
+const SIDEBAR_POLL_INTERVAL = 5000; // refresh sidebar every 5s
+
+const chatUI = ChatUI({
+    containerId: 'chat-messages',
+    userAlign: 'left',
+    assistantAlign: 'right',
+    showTimestamps: true,
+    userBubbleClass: 'bg-white text-gray-800 border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100',
+    assistantBubbleClass: 'bg-gray-200 text-gray-800 dark:bg-[#152A3A] border dark:border-[#1B394F] dark:text-gray-100 rounded-2xl px-4 py-2.5 text-sm chat-prose break-words',
+    formatTimestamp: formatTime,
+});
+
+// Scroll-to-bottom button logic
+(function() {
+    const msgs = document.getElementById('chat-messages');
+    const btn = document.getElementById('scroll-to-bottom-btn');
+    if (!msgs || !btn) return;
+    msgs.addEventListener('scroll', function() {
+        const nearBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
+        btn.classList.toggle('hidden', nearBottom);
+    });
+})();
+
+function scrollChatToBottom() {
+    chatUI.scrollToBottom();
+    document.getElementById('scroll-to-bottom-btn').classList.add('hidden');
+}
+
+// Render a flat list of JSONL entries into the chat container.
+// Pass { persistent: true } when called from incremental polling so the thinking
+// bubble persists across multiple poll calls within a single turn.
+function renderEntries(entries, { persistent = false } = {}) {
+    let thinkingId = persistent ? _pollThinkingId : null;
+    for (const entry of entries) {
+        if (entry.ts > lastChatTs) lastChatTs = entry.ts;
+        const type = entry.type;
+        if (type === 'user') {
+            chatUI.appendMessage('user', entry.content || '', {timestamp: entry.ts ? new Date(entry.ts).toISOString() : null});
+        } else if (type === 'thinking') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            chatUI.appendTimelineEntry(thinkingId, {type: 'thinking', content: entry.content});
+        } else if (type === 'tool_call') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            chatUI.appendTimelineEntry(thinkingId, {type: 'tool_call', tool: entry.function, args: entry.params || {}, param_types: {}});
+        } else if (type === 'tool_output') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            let result;
+            try { result = JSON.parse(entry.content); } catch (_) { result = entry.content; }
+            chatUI.appendTimelineEntry(thinkingId, {type: 'tool_result', result, error: !!entry.error});
+        } else if (type === 'intermediate') {
+            if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
+            chatUI.appendTimelineEntry(thinkingId, {type: 'response', content: entry.content});
+        } else if (type === 'final') {
+            const meta = entry.metadata || {};
+            if (thinkingId) {
+                chatUI.finalizeThinkingBubble(thinkingId, meta.thinking_duration);
+                thinkingId = null;
+            }
+            if (entry.content) {
+                chatUI.appendMessage('assistant', entry.content, {timestamp: entry.ts ? new Date(entry.ts).toISOString() : null, metadata: meta});
+            }
+        } else if (type === 'error') {
+            if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId); thinkingId = null; }
+            chatUI.appendMessage('error', entry.content || '');
+        } else if (type === 'system') {
+            chatUI.appendMessage('system', entry.content || '');
+        } else if (type === 'turn_end') {
+            if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, entry.thinking_duration); thinkingId = null; }
+        }
+    }
+    if (persistent) {
+        _pollThinkingId = thinkingId;  // save for next incremental poll call
+    } else if (thinkingId) {
+        // In-progress turn detected: remove the incomplete bubble so the event-buffer
+        // replay (dispatchSessionEvent / restoreActiveReasoning) can create a fresh one
+        // without duplicating the entries that are already in the buffer.
+        chatUI.removeThinkingIndicator(thinkingId);
+    }
+}
+
+// Render a history message whose timeline should be split into per-iteration bubbles
+// (used when send_intermediate_responses was ON during that turn — SQLite fallback).
+function renderInterleavedHistory(msg) {
+    const timeline = msg.metadata.timeline;
+    // Split timeline into iteration groups — each 'thinking' entry starts a new group
+    // Only split into a new group when the previous group had an intermediate response.
+    // Consecutive thinking entries with no response between them stay in the same bubble.
+    const groups = [];
+    let group = [];
+    let prevHadResponse = false;
+    for (const entry of timeline) {
+        if (entry.type === 'thinking' && group.length > 0 && prevHadResponse) {
+            groups.push(group);
+            group = [];
+            prevHadResponse = false;
+        }
+        group.push(entry);
+        if (entry.type === 'response') prevHadResponse = true;
+    }
+    if (group.length > 0) groups.push(group);
+
+    for (const g of groups) {
+        const thinkId = chatUI.showThinkingIndicator();
+        for (const entry of g) {
+            chatUI.appendTimelineEntry(thinkId, entry);
+        }
+        chatUI.finalizeThinkingBubble(thinkId);
+        // Show intermediate response (type='response') as a standalone bubble
+        const resp = g.find(e => e.type === 'response');
+        if (resp) {
+            chatUI.appendMessage('assistant', resp.content);
+        }
+    }
+    // Final response text
+    chatUI.appendMessage(msg.role, msg.content, {timestamp: msg.created_at});
+}
+
+// ==================== Session List ====================
+
+async function loadSessions(search) {
+    const q = (search || '').trim();
+    const url = q ? `/api/sessions?search=${encodeURIComponent(q)}` : '/api/sessions';
+    const res = await fetch(url);
+    const data = await res.json();
+    allSessions = data.sessions || [];
+    renderSessionList();
+}
+
+let searchDebounce;
+function debouncedLoadSessions(val) {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => loadSessions(val), 300);
+}
+
+function renderSessionList() {
+    const list = document.getElementById('session-list');
+    if (!allSessions.length) {
+        list.innerHTML = '<div class="p-6 text-center text-gray-400 text-sm">No sessions found</div>';
+        return;
+    }
+    list.innerHTML = allSessions.map(s => {
+        const active = s.id === currentSessionId ? 'bg-indigo-50 border-l-2 border-l-indigo-500' : 'border-l-2 border-l-transparent hover:bg-gray-600';
+        const preview = s.last_message ? truncate(s.last_message, 50) : 'No messages';
+        const prefixIcon = s.last_message_role === 'assistant' ? '<span class="text-indigo-400 mr-1">Bot:</span>' : '';
+        const chBadge = channelBadge(s.channel_type);
+        const botDot = s.bot_enabled ? '' : '<span class="inline-block w-1.5 h-1.5 rounded-full bg-red-400 ml-1" title="Bot disabled"></span>';
+        const displayName = s.peer_agent_name ? [esc(s.agent_name || 'Unknown'), esc(s.peer_agent_name)].sort().join(' - ') : esc(s.agent_name || 'Unknown');
+        return `
+        <div class="session-item relative p-3 cursor-pointer ${active} transition-colors" onclick="selectSession('${s.id}')">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-sm font-medium truncate ${userIdColorClass(s.external_user_id)}">${displayName}</span>
+                ${chBadge}${botDot}
+            </div>
+            <div class="text-[10px] text-gray-500 truncate">${esc(s.external_user_id.split('__')[1])}</div>
+            <div class="text-xs text-gray-400 mt-1 truncate">${prefixIcon}${esc(preview)}</div>
+            <div class="text-[10px] text-gray-300 mt-1">${timeAgo(s.updated_at)}</div>
+            <button onclick="event.stopPropagation(); deleteSession('${s.id}')" title="Delete session"
+                class="session-delete-btn absolute top-2 right-2 text-gray-300 hover:text-red-500">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+        </div>`;
+    }).join('');
+}
+
+// ==================== Mobile Autocomplete ====================
+
+let mobileSearchTimeout;
+function onMobileSearch(val) {
+    clearTimeout(mobileSearchTimeout);
+    mobileSearchTimeout = setTimeout(async () => {
+        await loadSessions(val);
+        renderMobileDropdown();
+    }, 300);
+}
+
+function showMobileDropdown() {
+    if (allSessions.length) renderMobileDropdown();
+}
+
+function renderMobileDropdown() {
+    const dd = document.getElementById('mobile-dropdown');
+    if (!allSessions.length) { dd.classList.add('hidden'); return; }
+    dd.classList.remove('hidden');
+    dd.innerHTML = allSessions.slice(0, 20).map(s => {
+        const chBadge = channelBadge(s.channel_type);
+        const displayName = s.peer_agent_name ? [esc(s.agent_name || 'Unknown'), esc(s.peer_agent_name)].sort().join(' - ') : esc(s.agent_name || 'Unknown');
+        return `
+        <div class="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-50 dark:border-gray-600 last:border-0" onclick="selectSession('${s.id}'); document.getElementById('mobile-dropdown').classList.add('hidden');">
+            <div class="flex items-center gap-2">
+                <span class="text-sm font-medium truncate ${userIdColorClass(s.external_user_id)}">${displayName}</span>
+                ${chBadge}
+            </div>
+            <div class="text-xs text-gray-400">${esc(s.external_user_id)} &middot; ${timeAgo(s.updated_at)}</div>
+        </div>`;
+    }).join('');
+}
+
+document.addEventListener('click', e => {
+    const dd = document.getElementById('mobile-dropdown');
+    const input = document.getElementById('mobile-search');
+    if (!dd.contains(e.target) && e.target !== input) dd.classList.add('hidden');
+});
+
+// ==================== Chat Room ====================
+
+async function selectSession(sessionId) {
+    const gen = ++_selectGeneration;  // capture this call's generation; stale callbacks check against it
+    stopPolling();
+    disconnectSessionStream();
+    currentSessionId = sessionId;
+    currentAgentId = null;
+    lastChatTs = 0;
+    _sseThinkingId = null;
+    _sseCompleted = false;
+    _pendingIntermediateResponse = null;
+    _pollThinkingId = null;
+    _pollInFlight = false;
+    renderSessionList();
+
+    const res = await fetch(`/api/sessions/${sessionId}`);
+    if (_selectGeneration !== gen) return;  // another selectSession started while we awaited
+    const data = await res.json();
+    if (data.error) return;
+
+    const s = data.session;
+    const messages = data.messages || [];
+    currentAgentId = s.agent_id || null;
+
+    // Remember last visited session
+    try { sessionStorage.setItem(_LAST_SESSION_KEY, sessionId); } catch (_) {}
+
+    // Update header
+    document.getElementById('chat-header').classList.remove('hidden');
+    document.getElementById('reply-bar').classList.remove('hidden');
+    document.getElementById('empty-state')?.classList.add('hidden');
+
+    document.getElementById('hdr-agent').textContent = s.agent_name || 'Unknown';
+    document.getElementById('hdr-user').textContent = s.external_user_id;
+
+    const badge = document.getElementById('hdr-channel-badge');
+    if (s.channel_type === 'telegram') {
+        badge.className = 'text-xs px-2 py-0.5 rounded font-medium bg-blue-100 text-blue-700';
+        badge.textContent = 'Telegram';
+    } else if (s.channel_type === 'whatsapp') {
+        badge.className = 'text-xs px-2 py-0.5 rounded font-medium bg-green-100 text-green-700';
+        badge.textContent = 'WhatsApp';
+    } else if (s.channel_type) {
+        badge.className = 'text-xs px-2 py-0.5 rounded font-medium bg-purple-100 text-purple-700';
+        badge.textContent = s.channel_type;
+    } else {
+        badge.className = 'text-xs px-2 py-0.5 rounded font-medium bg-gray-100 text-gray-500';
+        badge.textContent = 'Web';
+    }
+
+    document.getElementById('bot-toggle').checked = !!s.bot_enabled;
+
+    // Render messages — prefer JSONL if available, fall back to SQLite
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = '';
+    if (currentAgentId) {
+        try {
+            const qs = `session_id=${encodeURIComponent(sessionId)}&limit=30`;
+            const jr = await fetch(`/api/agents/${encodeURIComponent(currentAgentId)}/chat?${qs}`);
+            if (_selectGeneration !== gen) return;  // stale — another selectSession started
+            if (jr.ok) {
+                const jd = await jr.json();
+                if (_selectGeneration !== gen) return;
+                const entries = jd.entries || [];
+                if (entries.length) {
+                    chatUI.batchRender(() => renderEntries(entries));
+                } else {
+                    // JSONL empty — fall back to SQLite messages
+                    _renderSqliteMessages(messages, container);
+                }
+            } else {
+                _renderSqliteMessages(messages, container);
+            }
+        } catch (_) {
+            // Clear any partial render before falling back to SQLite
+            container.innerHTML = '';
+            _pollThinkingId = null;
+            _renderSqliteMessages(messages, container);
+        }
+    } else {
+        _renderSqliteMessages(messages, container);
+    }
+
+    // Show side panels wrapper on desktop only; keep hidden on mobile
+    const spw = document.getElementById('side-panels-wrapper');
+    if (window.innerWidth >= 1024) {
+        spw.classList.remove('hidden');
+        spw.classList.add('lg:flex');
+    } else {
+        spw.classList.add('hidden');
+        spw.classList.remove('lg:flex');
+    }
+    showMobileSummaryBtn(true);
+    clearSummaryPanel();
+    loadSessionSummary();
+    clearAgentStatePanel();
+    loadAgentState();
+
+    // Always check for any in-progress reasoning trace on the server.
+    // This is a fast in-memory buffer lookup — no I/O cost.
+    // Replay found events so the thinking bubble is restored immediately,
+    // then start SSE from resumeSeq so the backend only delivers the gap
+    // between this fetch and the moment the SSE subscription is registered.
+    let resumeSeq = 0;
+    if (currentAgentId) {
+        try {
+            const r = await fetch(`/api/agents/${encodeURIComponent(currentAgentId)}/chat/events?session_id=${encodeURIComponent(sessionId)}&after=0`);
+            if (_selectGeneration !== gen) return;  // stale — another selectSession started
+            if (r.ok) {
+                const body = await r.json();
+                if (_selectGeneration !== gen) return;
+                const events = body.events || [];
+                // Only replay the current in-progress turn: skip everything up to the last 'done'
+                const lastDoneIdx = events.reduce((idx, ev, i) => ev.event === 'done' ? i : idx, -1);
+                const replayEvents = lastDoneIdx >= 0 ? events.slice(lastDoneIdx + 1) : events;
+                if (replayEvents.length) {
+                    for (const ev of replayEvents) {
+                        if (ev.seq > resumeSeq) resumeSeq = ev.seq;
+                        dispatchSessionEvent(ev.event, ev.data, sessionId);
+                    }
+                    chatUI.scrollToBottom();
+                } else {
+                    clearReasoningState();
+                }
+            }
+        } catch (_) {}
+    }
+
+    // Connect SSE for real-time thinking events, then start polling.
+    connectSessionStream(sessionId, resumeSeq);
+    startPolling();
+}
+
+function _renderSqliteMessages(messages, container) {
+    if (!messages.length) {
+        container.innerHTML = '<div data-empty-state class="text-center text-gray-400 text-sm py-8">No messages yet</div>';
+        return;
+    }
+    for (const msg of messages) {
+        if (msg.role === 'assistant' && msg.metadata?.send_intermediate_responses && msg.metadata?.timeline?.length) {
+            renderInterleavedHistory(msg);
+        } else {
+            chatUI.appendMessage(msg.role, msg.content, {timestamp: msg.created_at, metadata: msg.metadata});
+        }
+    }
+    container.scrollTop = container.scrollHeight;
+}
+
+// ==================== Real-time Polling ====================
+
+function startPolling() {
+    stopPolling();
+    pollTimer = setInterval(pollNewMessages, POLL_INTERVAL);
+}
+
+function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function pollNewMessages() {
+    if (!currentSessionId || !currentAgentId) return;
+    if (_pollInFlight) return;
+    _pollInFlight = true;
+    const pollGen = _selectGeneration;  // capture generation; discard result if session changed
+    try {
+        const qs = `session_id=${encodeURIComponent(currentSessionId)}&after_ts=${lastChatTs}`;
+        const res = await fetch(`/api/agents/${encodeURIComponent(currentAgentId)}/chat?${qs}`);
+        if (_selectGeneration !== pollGen) return;  // session changed while fetch was in-flight
+        const data = await res.json();
+        if (_selectGeneration !== pollGen) return;
+        const entries = data.entries || [];
+        if (!entries.length) return;
+
+        const wasAtBottom = chatUI.isNearBottom(80);
+
+        // If SSE is active, only act when the turn has actually ended.
+        // Mid-turn entries (thinking, tool_call, tool_output) are already shown live
+        // via SSE — finalizing the bubble early would split it into multiple bubbles.
+        const turnEnded = entries.some(e => e.type === 'final' || e.type === 'turn_end' || e.type === 'error');
+        if (_sseThinkingId || _sseCompleted) {
+            if (!turnEnded) {
+                // Turn still in progress — advance cursor only for non-user/system entries.
+                // User/system messages (e.g. injected notifications) must NOT have their
+                // timestamps advanced here; they would otherwise fall below lastChatTs and
+                // be silently dropped when the turn eventually ends.
+                for (const e of entries) {
+                    if (e.type !== 'user' && e.type !== 'system' && e.ts > lastChatTs) lastChatTs = e.ts;
+                }
+                return;
+            }
+            clearReasoningState();
+            if (_sseThinkingId) {
+                chatUI.finalizeThinkingBubble(_sseThinkingId);
+                _sseThinkingId = null;
+            }
+            // Finalize any poll bubble that was created before SSE started — do not orphan it
+            if (_pollThinkingId) {
+                chatUI.finalizeThinkingBubble(_pollThinkingId);
+            }
+            _sseCompleted = false;
+            _pollThinkingId = null;
+            // Only render final/user entries — SSE already showed the thinking+tool details
+            const finalEntries = entries.filter(e => e.type === 'final' || e.type === 'user' || e.type === 'error' || e.type === 'system');
+            renderEntries(finalEntries);
+            // Still advance lastChatTs for all entries
+            for (const e of entries) { if (e.ts > lastChatTs) lastChatTs = e.ts; }
+        } else {
+            renderEntries(entries, { persistent: true });
+        }
+
+        if (wasAtBottom) chatUI.scrollToBottom();
+
+        // Refresh summary when new messages arrive
+        loadSessionSummary();
+        loadAgentState();
+    } catch (e) {
+        // Silently ignore poll errors
+    } finally {
+        _pollInFlight = false;
+    }
+}
+
+// ==================== SSE Stream ====================
+
+let _sessionEs = null;
+
+// afterSeq: last seq the client already has from replay; SSE pre-fills only the gap above it.
+function connectSessionStream(sessionId, afterSeq = 0) {
+    // Close the old EventSource if any, but do NOT finalize the thinking bubble —
+    // it may have been restored by the replay in selectSession and must be kept alive.
+    if (_sessionEs) {
+        _sessionEs.close();
+        _sessionEs = null;
+    }
+    if (!currentAgentId) return;
+    const url = `/api/agents/${encodeURIComponent(currentAgentId)}/chat/stream?session_id=${encodeURIComponent(sessionId)}&after=${afterSeq}`;
+    const es = new EventSource(url);
+    _sessionEs = es;
+
+    let _lastSeq = afterSeq;  // start from where the replay left off
+    let _fillingGap = false;
+    const _gapQueue = [];
+
+    async function fillGap(fromSeq, upToSeq) {
+        try {
+            const res = await fetch(`/api/agents/${encodeURIComponent(currentAgentId)}/chat/events?session_id=${encodeURIComponent(sessionId)}&after=${fromSeq}&up_to=${upToSeq}`);
+            const body = await res.json();
+            for (const ev of (body.events || [])) {
+                if (ev.seq <= _lastSeq) continue;
+                _lastSeq = ev.seq;
+                dispatchSessionEvent(ev.event, ev.data, sessionId);
+            }
+        } catch (err) {
+            console.warn('[gap-fill] failed:', err);
+            _lastSeq = upToSeq - 1;
+        }
+    }
+
+    function handleSeq(evtName, data, dispatch) {
+        const seq = data.seq || 0;
+        if (_fillingGap) {
+            _gapQueue.push({evtName, data});
+            return;
+        }
+        // Skip events already covered by the replay or a previous gap-fill
+        if (seq && seq <= _lastSeq) return;
+        if (seq && _lastSeq > 0 && seq > _lastSeq + 1) {
+            _fillingGap = true;
+            _gapQueue.push({evtName, data});
+            fillGap(_lastSeq, seq).then(() => {
+                _fillingGap = false;
+                while (_gapQueue.length > 0) {
+                    const item = _gapQueue.shift();
+                    const itemSeq = item.data.seq || 0;
+                    if (itemSeq && itemSeq <= _lastSeq) continue;
+                    if (itemSeq) _lastSeq = itemSeq;
+                    dispatchSessionEvent(item.evtName, item.data, sessionId);
+                }
+            });
+            return;
+        }
+        if (seq) _lastSeq = seq;
+        dispatch(data);
+    }
+
+    for (const evtName of ['thinking', 'tool_call_started', 'tool_executed', 'response_chunk', 'turn_split', 'session_clear', 'approval_required', 'approval_resolved']) {
+        es.addEventListener(evtName, e => {
+            if (currentSessionId !== sessionId) return;
+            const data = JSON.parse(e.data);
+            handleSeq(evtName, data, d => dispatchSessionEvent(evtName, d, sessionId));
+        });
+    }
+
+    es.addEventListener('done', () => {
+        if (currentSessionId !== sessionId) return;
+        showStopBtn(false);
+        clearReasoningState();
+        // Flush any pending intermediate response before closing
+        if (_pendingIntermediateResponse !== null) {
+            if (_sseThinkingId) {
+                chatUI.finalizeThinkingBubble(_sseThinkingId);
+                _sseThinkingId = null;
+            }
+            chatUI.appendMessage('assistant', _pendingIntermediateResponse);
+            _pendingIntermediateResponse = null;
+        }
+        if (_sseThinkingId) {
+            chatUI.finalizeThinkingBubble(_sseThinkingId);
+            _sseThinkingId = null;
+        }
+        _sseCompleted = true;
+        // Reconnect so we're ready for the next incoming message
+        es.close();
+        if (_sessionEs === es) {
+            _sessionEs = null;
+            const doneGen = _selectGeneration;
+            setTimeout(() => {
+                if (currentSessionId === sessionId && _selectGeneration === doneGen) connectSessionStream(sessionId);
+            }, 500);
+        }
+    });
+
+    es.onerror = () => {
+        // SSE dropped — reconnect after a short delay if session is still active.
+        // Do NOT clear reasoning state here: the turn may still be running,
+        // and the saved state lets a page refresh recover properly.
+        // Do NOT finalize the thinking bubble — keep _sseThinkingId alive so the
+        // reconnected stream continues appending to the same bubble.
+        _pendingIntermediateResponse = null;
+        es.close();
+        if (_sessionEs === es) {
+            _sessionEs = null;
+            setTimeout(() => {
+                if (currentSessionId === sessionId) connectSessionStream(sessionId);
+            }, 2000);
+        }
+    };
+}
+
+function disconnectSessionStream() {
+    if (_sessionEs) {
+        _sessionEs.close();
+        _sessionEs = null;
+    }
+    if (_sseThinkingId) {
+        chatUI.finalizeThinkingBubble(_sseThinkingId);
+        _sseThinkingId = null;
+    }
+    showStopBtn(false);
+}
+
+// Sidebar refresh: keep session list up to date
+function startSidebarPolling() {
+    sidebarPollTimer = setInterval(() => {
+        const search = document.getElementById('sidebar-search')?.value || '';
+        loadSessions(search);
+    }, SIDEBAR_POLL_INTERVAL);
+}
+
+// ==================== Admin Reply ====================
+
+async function sendReply(e) {
+    e.preventDefault();
+    if (!currentSessionId) return;
+    const input = document.getElementById('reply-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const btn = document.getElementById('reply-btn');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    const res = await fetch(`/api/sessions/${currentSessionId}/reply`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, perspective: _chatPerspective})
+    });
+    const data = await res.json();
+    btn.disabled = false;
+    btn.textContent = 'Send';
+
+    if (data.error) return alert(data.error);
+    input.value = '';
+    // Scroll to bottom so the latest message is visible
+    chatUI.scrollToBottom();
+}
+
+function showStopBtn(show) {
+    const btn = document.getElementById('stop-agent-btn');
+    if (show) btn.classList.remove('hidden');
+    else btn.classList.add('hidden');
+}
+
+// ==================== Stop Agent ====================
+
+async function stopAgent() {
+    if (!currentSessionId) return;
+    const btn = document.getElementById('stop-agent-btn');
+    btn.disabled = true;
+    btn.textContent = 'Stopping...';
+    try {
+        const res = await fetch(`/api/sessions/${currentSessionId}/stop`, {method: 'POST'});
+        const data = await res.json();
+        if (data.error) alert(data.error);
+    } catch(e) {
+        console.error('Stop failed:', e);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Stop';
+    }
+}
+
+// ==================== Bot Toggle ====================
+
+async function toggleBot(enabled) {
+    if (!currentSessionId) return;
+    await fetch(`/api/sessions/${currentSessionId}/bot`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled})
+    });
+    const search = document.getElementById('sidebar-search')?.value || '';
+    loadSessions(search);
+}
+
+// ==================== Delete Session ====================
+
+async function deleteSession(sessionId) {
+    if (!sessionId) return;
+    if (!await showConfirm({title: 'Delete Session', message: 'This will clear all chat history for this session. The session will be hidden from the list but not deleted.', confirmText: 'Delete'})) return;
+    await fetch(`/api/sessions/${sessionId}`, {method: 'DELETE'});
+    if (sessionId === currentSessionId) {
+        stopPolling();
+        currentSessionId = null;
+        lastChatTs = 0;
+        document.getElementById('chat-header').classList.add('hidden');
+        document.getElementById('reply-bar').classList.add('hidden');
+        document.getElementById('chat-messages').innerHTML = '<div id="empty-state" class="flex items-center justify-center h-full text-gray-400 text-sm">Select a session to view conversation</div>';
+        document.getElementById('side-panels-wrapper').classList.remove('lg:flex');
+        document.getElementById('side-panels-wrapper').classList.add('hidden');
+        document.getElementById('mobile-summary-overlay').classList.add('hidden');
+        showMobileSummaryBtn(false);
+        clearSummaryPanel();
+    }
+    const search = document.getElementById('sidebar-search')?.value || '';
+    loadSessions(search);
+}
+
+// ==================== Session Recap ====================
+
+let lastSummaryText = null;
+
+async function loadSessionSummary() {
+    if (!currentSessionId) return;
+    try {
+        const res = await fetch(`/api/sessions/${currentSessionId}/summary`);
+        const data = await res.json();
+        const rendered = data.summary
+            ? '<div class="recap-prose">' + marked.parse(data.summary) + '</div>'
+            : null;
+        const metaText = data.summary
+            ? `${data.message_count} msgs summarized` + (data.updated_at ? ` \u00b7 ${formatTime(data.updated_at)}` : '')
+            : null;
+
+        // Update both desktop and mobile panels
+        ['', 'mobile-'].forEach(prefix => {
+            const content = document.getElementById(prefix + 'summary-content');
+            const meta = document.getElementById(prefix + 'summary-meta');
+            if (!content) return;
+            if (rendered) {
+                if (data.summary !== lastSummaryText) content.innerHTML = rendered;
+                meta.textContent = metaText;
+                meta.classList.remove('hidden');
+            } else {
+                content.innerHTML = '<p class="text-xs text-gray-400 italic">No summary yet.</p>';
+                meta.classList.add('hidden');
+            }
+        });
+        lastSummaryText = data.summary || null;
+    } catch(e) { /* ignore */ }
+}
+
+async function forceRecap(btn) {
+    if (!currentSessionId) return;
+    const original = btn.textContent;
+    btn.textContent = '⏳';
+    btn.disabled = true;
+    try {
+        await fetch(`/api/sessions/${currentSessionId}/summarize`, { method: 'POST' });
+        // Poll until summary updates (max ~15s)
+        const before = lastSummaryText;
+        for (let i = 0; i < 15; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            await loadSessionSummary();
+            if (lastSummaryText !== before) break;
+        }
+    } catch(e) { /* ignore */ } finally {
+        btn.textContent = original;
+        btn.disabled = false;
+    }
+}
+
+function clearSummaryPanel() {
+    ['', 'mobile-'].forEach(prefix => {
+        const content = document.getElementById(prefix + 'summary-content');
+        const meta = document.getElementById(prefix + 'summary-meta');
+        if (!content) return;
+        content.innerHTML = '<p class="text-xs text-gray-400 italic">No summary yet.</p>';
+        meta.classList.add('hidden');
+    });
+    lastSummaryText = null;
+}
+
+// ==================== Agent State ====================
+
+async function loadAgentState() {
+    if (!currentAgentId) return;
+    const userId = document.getElementById('hdr-user')?.textContent || 'web_test';
+    renderAgentState(currentAgentId, userId, ['agent-state-content', 'mobile-agent-state-content']);
+}
+
+function clearAgentStatePanel() {
+    clearAgentState(['agent-state-content', 'mobile-agent-state-content']);
+}
+
+function toggleMobileSummary() {
+    const overlay = document.getElementById('mobile-summary-overlay');
+    if (overlay.classList.contains('hidden')) {
+        overlay.classList.remove('hidden');
+    } else {
+        overlay.classList.add('hidden');
+    }
+}
+
+function closeMobileSummary() {
+    document.getElementById('mobile-summary-overlay').classList.add('hidden');
+}
+
+function toggleSummary() {
+    const spw = document.getElementById('side-panels-wrapper');
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+        toggleMobileSummary();
+    } else {
+        // Toggle desktop wrapper
+        if (spw.classList.contains('lg:flex')) {
+            hideSummaryPanel();
+        } else {
+            spw.classList.remove('hidden');
+            spw.classList.add('lg:flex');
+            loadSessionSummary();
+        }
+    }
+}
+
+function hideSummaryPanel() {
+    document.getElementById('side-panels-wrapper').classList.remove('lg:flex');
+    document.getElementById('side-panels-wrapper').classList.add('hidden');
+    closeMobileSummary();
+}
+
+function showMobileSummaryBtn(show) {
+    const btn = document.getElementById('mobile-summary-btn');
+    if (btn) {
+        if (show) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+    }
+}
+
+// ==================== Helpers ====================
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function truncate(s, n) { return s && s.length > n ? s.substring(0, n) + '...' : (s || ''); }
+
+function userIdColorClass(userId) {
+    if (!userId) return '';
+    if (userId.startsWith('__system__')) return 'user-id-system';
+    if (userId.startsWith('__agent__')) return 'user-id-agent';
+    return 'user-id-human';
+}
+
+function channelBadge(type) {
+    if (type === 'telegram') return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-medium">TG</span>';
+    if (type === 'whatsapp') return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-600 font-medium">WA</span>';
+    if (type === 'discord') return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 font-medium">DC</span>';
+    if (type) return `<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">${esc(type)}</span>`;
+    return '<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400 font-medium">Web</span>';
+}
+
+function timeAgo(ts) {
+    if (!ts) return '';
+    const diff = (Date.now() - new Date(ts + (ts.includes('Z') ? '' : 'Z')).getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
+function formatTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts + (ts.includes('Z') ? '' : 'Z'));
+    return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+// ==================== Tabs ====================
+
+function switchTab(tab) {
+    const chatTab = document.getElementById('tab-chat');
+    const settingsTab = document.getElementById('tab-settings');
+    const chatBtn = document.getElementById('tab-chat-btn');
+    const settingsBtn = document.getElementById('tab-settings-btn');
+
+    const activeClass = 'border-indigo-500 text-indigo-600';
+    const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700';
+
+    if (tab === 'settings') {
+        chatTab.classList.add('hidden');
+        settingsTab.classList.remove('hidden');
+        chatBtn.className = chatBtn.className.replace(activeClass, inactiveClass);
+        settingsBtn.className = settingsBtn.className.replace(inactiveClass, activeClass);
+        loadSettingsState();
+    } else {
+        settingsTab.classList.add('hidden');
+        chatTab.classList.remove('hidden');
+        settingsBtn.className = settingsBtn.className.replace(activeClass, inactiveClass);
+        chatBtn.className = chatBtn.className.replace(inactiveClass, activeClass);
+    }
+}
+
+// ==================== Settings ====================
+
+async function loadSettingsState() {
+    try {
+        const res = await fetch('/api/settings/events-dispatch');
+        const data = await res.json();
+        document.getElementById('events-dispatch-toggle').checked = data.enabled;
+    } catch(e) { /* ignore */ }
+    // Load chat perspective from localStorage (migrate legacy 'bot'/'user' to 'B'/'A')
+    const stored = localStorage.getItem('evonic_chat_perspective');
+    if (stored === 'A' || stored === 'user') {
+        _chatPerspective = 'A';
+    } else {
+        _chatPerspective = 'B';
+    }
+    document.getElementById('chat-perspective-toggle').checked = _chatPerspective === 'A';
+    chatUI.setPerspective(_chatPerspective);
+    updateReplyPlaceholder();
+}
+
+function toggleChatPerspective(aMode) {
+    _chatPerspective = aMode ? 'A' : 'B';
+    localStorage.setItem('evonic_chat_perspective', _chatPerspective);
+    chatUI.setPerspective(_chatPerspective);
+    updateReplyPlaceholder();
+    showToast(aMode ? 'Messages will appear as A (right side)' : 'Messages will appear as B (left side)');
+}
+
+function updateReplyPlaceholder() {
+    const input = document.getElementById('reply-input');
+    if (input) {
+        input.placeholder = _chatPerspective === 'A'
+            ? 'Type a reply as A (right side)...'
+            : 'Type a reply as B (left side)...';
+    }
+}
+
+async function clearAllSessions() {
+    if (!await showConfirm({
+        title: 'Clear All Sessions',
+        message: 'This will permanently delete ALL chat sessions, messages, and summaries across ALL agents. This cannot be undone.',
+        confirmText: 'Clear All'
+    })) return;
+
+    const res = await fetch('/api/sessions/clear-all', {method: 'POST'});
+    const data = await res.json();
+    if (data.success) {
+        // Reset chat view
+        stopPolling();
+        currentSessionId = null;
+        lastChatTs = 0;
+        allSessions = [];
+        renderSessionList();
+        document.getElementById('chat-header').classList.add('hidden');
+        document.getElementById('reply-bar').classList.add('hidden');
+        document.getElementById('chat-messages').innerHTML = '<div id="empty-state" class="flex items-center justify-center h-full text-gray-400 text-sm">Select a session to view conversation</div>';
+        document.getElementById('side-panels-wrapper').classList.remove('lg:flex');
+        document.getElementById('side-panels-wrapper').classList.add('hidden');
+        showMobileSummaryBtn(false);
+        clearSummaryPanel();
+        showToast('All sessions cleared successfully');
+    }
+}
+
+async function toggleEventsDispatch(enabled) {
+    try {
+        await fetch('/api/settings/events-dispatch', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({enabled})
+        });
+        showToast(enabled ? 'Events dispatch enabled' : 'Events dispatch disabled');
+    } catch(e) {
+        showToast('Failed to update setting', true);
+    }
+}
+
+function showToast(message, isError) {
+    const existing = document.getElementById('settings-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'settings-toast';
+    toast.className = `fixed bottom-6 right-6 px-4 py-2.5 rounded-lg text-sm font-medium shadow-lg z-50 transition-opacity ${isError ? 'bg-red-500 text-white' : 'bg-gray-800 text-white'}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+}
+
+// ==================== Fullscreen ====================
+
+let _sessionChatFullscreen = false;
+
+function toggleSessionChatFullscreen() {
+    const $tab = $('#tab-chat');
+    // The sessions tab bar is the flex-shrink-0 sibling above #tab-chat
+    const $tabBar = $tab.siblings('.flex-shrink-0');
+    _sessionChatFullscreen = !_sessionChatFullscreen;
+
+    if (_sessionChatFullscreen) {
+        $tab.addClass('chat-fullscreen');
+        $tabBar.hide();
+        $('#mobile-search').closest('.md\\:hidden').hide();
+        $('body').css('overflow', 'hidden');
+        $('#session-fs-expand-icon').addClass('hidden');
+        $('#session-fs-collapse-icon').removeClass('hidden');
+    } else {
+        $tab.removeClass('chat-fullscreen');
+        $tabBar.show();
+        $('#mobile-search').closest('.md\\:hidden').show();
+        $('body').css('overflow', '');
+        $('#session-fs-expand-icon').removeClass('hidden');
+        $('#session-fs-collapse-icon').addClass('hidden');
+    }
+
+    requestAnimationFrame(function () { chatUI.scrollToBottom(); });
+}
+
+$(document).on('keydown', function (e) {
+    if (e.key === 'Escape' && _sessionChatFullscreen) toggleSessionChatFullscreen();
+});
+
+// ==================== Init ====================
+// Load chat perspective from localStorage on page load
+(function initChatPerspective() {
+    const stored = localStorage.getItem('evonic_chat_perspective');
+    if (stored === 'A' || stored === 'user') {
+        _chatPerspective = 'A';
+    } else {
+        _chatPerspective = 'B';
+    }
+    document.getElementById('chat-perspective-toggle').checked = _chatPerspective === 'A';
+    chatUI.setPerspective(_chatPerspective);
+    updateReplyPlaceholder();
+})();
+loadSessions();
+startSidebarPolling();
+
+// Auto-open last visited session on page load
+(async () => {
+    try {
+        const lastSession = sessionStorage.getItem(_LAST_SESSION_KEY);
+        if (lastSession) {
+            // Wait a brief moment for session list to load
+            await new Promise(r => setTimeout(r, 300));
+            selectSession(lastSession);
+        }
+    } catch (_) {}
+})();
+
+// Cleanup on page leave
+window.addEventListener('beforeunload', () => { stopPolling(); disconnectSessionStream(); clearInterval(sidebarPollTimer); });
+</script>
+{% endblock %}

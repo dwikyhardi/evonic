@@ -1,0 +1,10 @@
+{
+  "id": "scheduler",
+  "name": "Scheduler",
+  "version": "1.0.0",
+  "description": "Create, list, and cancel scheduled tasks — reminders, recurring jobs, delayed execution, and cron-based triggers.",
+  "author": "Evonic",
+  "tools_file": "tools.json",
+  "lazy_tools": false,
+  "variables": []
+}

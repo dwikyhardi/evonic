@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Scheduler</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage scheduled jobs — reminders, recurring tasks, and timed triggers</p>
+        </div>
+        <button onclick="openCreateModal()"
+                class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            New Schedule
+        </button>
+    </div>
+
+    <!-- Filter -->
+    <div class="flex gap-2 mb-4">
+        <select id="filter-owner" onchange="loadSchedules()" class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200">
+            <option value="">All owners</option>
+            <option value="agent">Agents</option>
+            <option value="plugin">Plugins</option>
+            <option value="user">User/Admin</option>
+            <option value="system">System</option>
+        </select>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm dark:text-gray-100">
+                <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider dark:bg-gray-700 dark:text-gray-400">
+                    <tr>
+                        <th class="px-4 py-3 text-left">Name</th>
+                        <th class="px-4 py-3 text-left">Owner</th>
+                        <th class="px-4 py-3 text-left">Trigger</th>
+                        <th class="px-4 py-3 text-left">Action</th>
+                        <th class="px-4 py-3 text-left">Next Run</th>
+                        <th class="px-4 py-3 text-left">Last Run</th>
+                        <th class="px-4 py-3 text-center">Runs</th>
+                        <th class="px-4 py-3 text-center">Status</th>
+                        <th class="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="schedules-body" class="divide-y divide-gray-100 dark:divide-gray-700">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="empty-state" class="hidden text-center py-16 text-gray-400 dark:text-gray-500">
+        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-lg font-medium">No schedules</p>
+        <p class="text-sm mt-1">Create a schedule to get started</p>
+    </div>
+</div>
+
+<!-- Create Modal -->
+<div id="create-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" onclick="closeCreateModal()"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[560px] shadow-xl max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">New Schedule</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                    <input id="f-name" type="text" placeholder="e.g. Daily standup reminder" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Trigger Type</label>
+                        <select id="f-trigger-type" onchange="onTriggerTypeChange()" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                            <option value="date">One-shot (Date)</option>
+                            <option value="interval">Interval</option>
+                            <option value="cron">Cron</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Action Type</label>
+                        <select id="f-action-type" onchange="onActionTypeChange()" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                            <option value="agent_message">Agent Message</option>
+                            <option value="emit_event">Emit Event</option>
+                            <option value="webhook">Webhook</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Trigger Config -->
+                <div id="trigger-date-fields">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Run Date</label>
+                    <input id="f-run-date" type="datetime-local" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                </div>
+                <div id="trigger-interval-fields" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Interval</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input id="f-interval-value" type="number" min="1" value="5" class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                        <select id="f-interval-unit" class="px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                            <option value="seconds">Seconds</option>
+                            <option value="minutes" selected>Minutes</option>
+                            <option value="hours">Hours</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="trigger-cron-fields" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cron Expression (JSON)</label>
+                    <input id="f-cron" type="text" placeholder='{"hour": 9, "minute": 0, "day_of_week": "mon-fri"}' class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Keys: year, month, day, week, day_of_week, hour, minute, second</p>
+                </div>
+
+                <!-- Action Config -->
+                <div id="action-agent-fields">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Agent ID</label>
+                    <select id="f-agent-id" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                    </select>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-3">Message</label>
+                    <textarea id="f-agent-msg" rows="3" placeholder="Message to send to the agent" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none resize-none"></textarea>
+                </div>
+                <div id="action-event-fields" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Name</label>
+                    <input id="f-event-name" type="text" placeholder="e.g. health_check" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-3">Payload (JSON)</label>
+                    <textarea id="f-event-payload" rows="2" placeholder="{}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none resize-none"></textarea>
+                </div>
+                <div id="action-webhook-fields" class="hidden">
+                    <div class="grid grid-cols-4 gap-2">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Method</label>
+                            <select id="f-wh-method" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                                <option>POST</option><option>GET</option><option>PUT</option>
+                            </select>
+                        </div>
+                        <div class="col-span-3">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">URL</label>
+                            <input id="f-wh-url" type="text" placeholder="https://..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                        </div>
+                    </div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 mt-3">Body (JSON)</label>
+                    <textarea id="f-wh-body" rows="2" placeholder="{}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none resize-none"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Runs <span class="text-gray-400 font-normal">(optional, blank = unlimited)</span></label>
+                    <input id="f-max-runs" type="number" min="1" placeholder="unlimited" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none">
+                </div>
+            </div>
+        </div>
+        <div class="flex gap-3 justify-end px-6 pb-5">
+            <button onclick="closeCreateModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+            <button onclick="createSchedule()" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function fmtDate(iso) {
+    if (!iso) return '<span class="text-gray-300 dark:text-gray-500">-</span>';
+    try {
+        const d = new Date(iso);
+        return d.toLocaleString('id-ID', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    } catch { return esc(iso); }
+}
+
+function triggerLabel(s) {
+    const c = s.trigger_config;
+    if (s.trigger_type === 'date') return `Once @ ${fmtDate(c.run_date)}`;
+    if (s.trigger_type === 'interval') {
+        const parts = [];
+        if (c.hours) parts.push(c.hours + 'h');
+        if (c.minutes) parts.push(c.minutes + 'm');
+        if (c.seconds) parts.push(c.seconds + 's');
+        return `Every ${parts.join(' ') || JSON.stringify(c)}`;
+    }
+    if (s.trigger_type === 'cron') {
+        const parts = [];
+        if (c.day_of_week) parts.push(c.day_of_week);
+        if (c.hour !== undefined) parts.push(String(c.hour).padStart(2,'0') + ':' + String(c.minute||0).padStart(2,'0'));
+        return parts.length ? `Cron: ${parts.join(' ')}` : `Cron: ${JSON.stringify(c)}`;
+    }
+    return s.trigger_type;
+}
+
+function actionLabel(s) {
+    if (s.action_type === 'agent_message') return `Msg -> ${esc(s.action_config.agent_id || '?')}`;
+    if (s.action_type === 'emit_event') return `Event: ${esc(s.action_config.event_name || '?')}`;
+    if (s.action_type === 'webhook') return `${s.action_config.method||'POST'} ${esc((s.action_config.url||'').substring(0,30))}`;
+    return s.action_type;
+}
+
+function runsLabel(s) {
+    if (s.max_runs) return `${s.run_count}/${s.max_runs}`;
+    return String(s.run_count);
+}
+
+async function loadSchedules() {
+    const ownerType = document.getElementById('filter-owner').value;
+    let url = '/api/schedules';
+    if (ownerType) url += `?owner_type=${ownerType}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const items = data.schedules || [];
+    const tbody = document.getElementById('schedules-body');
+    const empty = document.getElementById('empty-state');
+
+    if (!items.length) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    tbody.innerHTML = items.map(s => `
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${!s.enabled ? 'opacity-50' : ''}">
+            <td class="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">
+                <button onclick="openLogsModal('${s.id}','${esc(s.name)}')" class="hover:text-indigo-600 hover:underline text-left">${esc(s.name)}</button>
+            </td>
+            <td class="px-4 py-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${s.owner_type==='agent'?'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300':s.owner_type==='plugin'?'bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300':'bg-gray-50 text-gray-700 dark:bg-gray-700 dark:text-gray-200'}">
+                    ${esc(s.owner_type)}:${esc(s.owner_id)}
+                </span>
+            </td>
+            <td class="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">${triggerLabel(s)}</td>
+            <td class="px-4 py-3 text-gray-600 dark:text-gray-400 text-xs">${actionLabel(s)}</td>
+            <td class="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">${fmtDate(s.next_run_at)}</td>
+            <td class="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">${fmtDate(s.last_run_at)}</td>
+            <td class="px-4 py-3 text-center text-gray-500 dark:text-gray-400 text-xs">${runsLabel(s)}</td>
+            <td class="px-4 py-3 text-center">
+                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.enabled?'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300':'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300'}">
+                    ${s.enabled ? 'Active' : 'Disabled'}
+                </span>
+            </td>
+            <td class="px-4 py-3 text-right whitespace-nowrap">
+                <button onclick="toggleSchedule('${s.id}')" class="text-gray-400 hover:text-indigo-600 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="${s.enabled?'Pause':'Resume'}">
+                    ${s.enabled ? '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'}
+                </button>
+                <button onclick="runNow('${s.id}')" class="text-gray-400 hover:text-green-600 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Run now">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </button>
+                <button onclick="cancelSchedule('${s.id}','${esc(s.name)}')" class="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition" title="Delete">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function toggleSchedule(id) {
+    await fetch(`/api/schedules/${id}/toggle`, {method:'POST'});
+    loadSchedules();
+}
+
+async function runNow(id) {
+    try {
+        const res = await fetch(`/api/schedules/${id}/run-now`, {method:'POST'});
+        const data = await res.json();
+        if (data.error) {
+            toast.show(data.error, 'error');
+        } else {
+            toast.show('Schedule triggered successfully', 'success');
+            loadSchedules();
+        }
+    } catch (e) {
+        toast.show('Failed to trigger schedule: ' + e.message, 'error');
+    }
+}
+
+async function cancelSchedule(id, name) {
+    const ok = await showConfirm({title:'Delete Schedule', message:`Delete "${name}"? This cannot be undone.`, confirmText:'Delete', danger:true});
+    if (!ok) return;
+    await fetch(`/api/schedules/${id}/cancel`, {method:'POST'});
+    loadSchedules();
+}
+
+// === Create Modal ===
+function openCreateModal() {
+    document.getElementById('create-modal').classList.remove('hidden');
+    loadAgents();
+    onTriggerTypeChange();
+    onActionTypeChange();
+}
+function closeCreateModal() { document.getElementById('create-modal').classList.add('hidden'); }
+
+function onTriggerTypeChange() {
+    const t = document.getElementById('f-trigger-type').value;
+    document.getElementById('trigger-date-fields').classList.toggle('hidden', t !== 'date');
+    document.getElementById('trigger-interval-fields').classList.toggle('hidden', t !== 'interval');
+    document.getElementById('trigger-cron-fields').classList.toggle('hidden', t !== 'cron');
+}
+
+function onActionTypeChange() {
+    const a = document.getElementById('f-action-type').value;
+    document.getElementById('action-agent-fields').classList.toggle('hidden', a !== 'agent_message');
+    document.getElementById('action-event-fields').classList.toggle('hidden', a !== 'emit_event');
+    document.getElementById('action-webhook-fields').classList.toggle('hidden', a !== 'webhook');
+}
+
+async function loadAgents() {
+    const sel = document.getElementById('f-agent-id');
+    if (sel.options.length > 1) return;
+    try {
+        const res = await fetch('/api/agents');
+        const data = await res.json();
+        sel.innerHTML = (data.agents || []).map(a =>
+            `<option value="${esc(a.id)}">${esc(a.name || a.id)}</option>`
+        ).join('');
+    } catch {}
+}
+
+async function createSchedule() {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) return alert('Name is required');
+
+    const triggerType = document.getElementById('f-trigger-type').value;
+    let triggerConfig = {};
+    if (triggerType === 'date') {
+        const v = document.getElementById('f-run-date').value;
+        if (!v) return alert('Run date is required');
+        triggerConfig = {run_date: v.replace('T', 'T')};
+    } else if (triggerType === 'interval') {
+        const val = parseInt(document.getElementById('f-interval-value').value);
+        const unit = document.getElementById('f-interval-unit').value;
+        if (!val || val < 1) return alert('Interval value must be >= 1');
+        triggerConfig = {[unit]: val};
+    } else if (triggerType === 'cron') {
+        try { triggerConfig = JSON.parse(document.getElementById('f-cron').value); }
+        catch { return alert('Invalid JSON for cron config'); }
+    }
+
+    const actionType = document.getElementById('f-action-type').value;
+    let actionConfig = {};
+    if (actionType === 'agent_message') {
+        actionConfig = {
+            agent_id: document.getElementById('f-agent-id').value,
+            message: document.getElementById('f-agent-msg').value.trim(),
+        };
+        if (!actionConfig.message) return alert('Message is required');
+    } else if (actionType === 'emit_event') {
+        actionConfig = {
+            event_name: document.getElementById('f-event-name').value.trim(),
+            payload: {},
+        };
+        try {
+            const p = document.getElementById('f-event-payload').value.trim();
+            if (p) actionConfig.payload = JSON.parse(p);
+        } catch { return alert('Invalid JSON for payload'); }
+        if (!actionConfig.event_name) return alert('Event name is required');
+    } else if (actionType === 'webhook') {
+        actionConfig = {
+            method: document.getElementById('f-wh-method').value,
+            url: document.getElementById('f-wh-url').value.trim(),
+        };
+        try {
+            const b = document.getElementById('f-wh-body').value.trim();
+            if (b) actionConfig.body = JSON.parse(b);
+        } catch { return alert('Invalid JSON for body'); }
+        if (!actionConfig.url) return alert('URL is required');
+    }
+
+    const maxRuns = document.getElementById('f-max-runs').value;
+
+    const body = {
+        name, trigger_type: triggerType, trigger_config: triggerConfig,
+        action_type: actionType, action_config: actionConfig,
+        owner_type: 'user', owner_id: 'admin',
+    };
+    if (maxRuns) body.max_runs = parseInt(maxRuns);
+
+    const res = await fetch('/api/schedules', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    closeCreateModal();
+    loadSchedules();
+}
+
+loadSchedules();
+
+// === Logs Modal ===
+let _logsScheduleId = null;
+let _logsOffset = 0;
+const _logsLimit = 50;
+
+function openLogsModal(id, name) {
+    _logsScheduleId = id;
+    _logsOffset = 0;
+    document.getElementById('logs-modal-title').textContent = name;
+    document.getElementById('logs-modal').classList.remove('hidden');
+    loadLogs(true);
+}
+
+function closeLogsModal() {
+    document.getElementById('logs-modal').classList.add('hidden');
+    _logsScheduleId = null;
+}
+
+async function loadLogs(reset) {
+    if (!_logsScheduleId) return;
+    if (reset) _logsOffset = 0;
+    const res = await fetch(`/api/schedules/${_logsScheduleId}/logs?limit=${_logsLimit}&offset=${_logsOffset}`);
+    const data = await res.json();
+    const logs = data.logs || [];
+    const tbody = document.getElementById('logs-tbody');
+    const empty = document.getElementById('logs-empty');
+    const loadMore = document.getElementById('logs-load-more');
+
+    if (reset) tbody.innerHTML = '';
+
+    if (!logs.length && reset) {
+        empty.classList.remove('hidden');
+        loadMore.classList.add('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    logs.forEach(l => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700';
+        const statusBadge = l.status === 'success'
+            ? '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300">success</span>'
+            : '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-300">error</span>';
+        const durationTxt = l.duration_ms != null ? `${l.duration_ms}ms` : '-';
+        const summaryTxt = esc(l.action_summary || '-');
+        const errorRow = l.error_message
+            ? `<tr class="bg-red-50 dark:bg-red-900/30 border-t border-red-100 dark:border-red-800"><td colspan="4" class="px-4 py-2 text-xs text-red-700 font-mono">${esc(l.error_message)}</td></tr>`
+            : '';
+        tr.innerHTML = `
+            <td class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap">${fmtDate(l.executed_at)}</td>
+            <td class="px-4 py-2 text-center">${statusBadge}</td>
+            <td class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 text-right">${durationTxt}</td>
+            <td class="px-4 py-2 text-xs text-gray-600 dark:text-gray-300">${summaryTxt}</td>
+        `;
+        tbody.appendChild(tr);
+        if (errorRow) {
+            const errTr = document.createElement('tr');
+            errTr.className = 'bg-red-50 dark:bg-red-900/30 border-t border-red-100 dark:border-red-800';
+            errTr.innerHTML = `<td colspan="4" class="px-4 py-2 text-xs text-red-700 font-mono break-all">${esc(l.error_message)}</td>`;
+            tbody.appendChild(errTr);
+        }
+    });
+
+    _logsOffset += logs.length;
+    loadMore.classList.toggle('hidden', logs.length < _logsLimit);
+}
+
+async function clearLogs() {
+    if (!_logsScheduleId) return;
+    const ok = await showConfirm({title:'Clear Logs', message:'Clear all execution logs for this schedule?', confirmText:'Clear', danger:true});
+    if (!ok) return;
+    await fetch(`/api/schedules/${_logsScheduleId}/logs`, {method:'DELETE'});
+    _logsOffset = 0;
+    document.getElementById('logs-tbody').innerHTML = '';
+    document.getElementById('logs-empty').classList.remove('hidden');
+    document.getElementById('logs-load-more').classList.add('hidden');
+}
+</script>
+
+<!-- Logs Modal -->
+<div id="logs-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" onclick="closeLogsModal()"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl w-[95%] max-w-[760px] shadow-xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <div>
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100" id="logs-modal-title">Execution Logs</h3>
+                <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">History of schedule executions</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="clearLogs()" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 transition">Clear logs</button>
+                <button onclick="closeLogsModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="overflow-y-auto flex-1">
+            <table class="w-full text-sm dark:text-gray-100">
+                <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider sticky top-0 dark:bg-gray-700 dark:text-gray-400">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Time</th>
+                        <th class="px-4 py-2 text-center">Status</th>
+                        <th class="px-4 py-2 text-right">Duration</th>
+                        <th class="px-4 py-2 text-left">Summary</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-tbody"></tbody>
+            </table>
+            <div id="logs-empty" class="hidden text-center py-12 text-gray-400 dark:text-gray-500">
+                <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <p class="text-sm font-medium">No execution logs yet</p>
+                <p class="text-xs mt-1">Logs will appear after the schedule runs</p>
+            </div>
+        </div>
+        <div class="px-6 py-3 border-t border-gray-100 dark:border-gray-700 flex justify-center">
+            <button id="logs-load-more" onclick="loadLogs(false)" class="hidden text-sm text-indigo-600 hover:text-indigo-800 font-medium">Load more</button>
+        </div>
+    </div>
+</div>
+{% endblock %}

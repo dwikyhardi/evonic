@@ -1,0 +1,589 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+<div class="p-4 md:p-6 max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-6">
+        <a href="/workplaces" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </a>
+        <div class="flex-1">
+            <h2 id="workplace-title" class="text-2xl font-bold text-gray-800 dark:text-gray-100">{{ workplace.name }}</h2>
+            <p class="text-sm text-gray-500 mt-0.5" id="workplace-subtitle">Loading...</p>
+        </div>
+        <span id="workplace-type-badge" class="text-xs font-medium px-3 py-1 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{{ workplace.type }}</span>
+        <div id="workplace-status-dot" class="w-3 h-3 rounded-full bg-gray-400"></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
+        <nav class="flex gap-6 text-sm font-medium">
+            <button onclick="showTab('config')" id="tab-config"
+                    class="pb-3 border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400">Config</button>
+            <button onclick="showTab('agents')" id="tab-agents"
+                    class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors">Agents</button>
+            <button onclick="showTab('status')" id="tab-status"
+                    class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors">Status</button>
+        </nav>
+    </div>
+
+    <!-- Config Tab -->
+    <div id="panel-config">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-4">
+            <h3 class="font-semibold text-gray-800 dark:text-gray-100 mb-4">Workplace Settings</h3>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <input id="edit-name" type="text" class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            </div>
+            <div id="config-local" class="hidden mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Workspace Path</label>
+                <input id="cfg-local-path" type="text" class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            </div>
+            <div id="config-remote" class="hidden space-y-3 mb-4">
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Host</label>
+                        <input id="cfg-remote-host" type="text" class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Port</label>
+                        <input id="cfg-remote-port" type="number" value="22" class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Username</label>
+                    <input id="cfg-remote-user" type="text" class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Auth Type</label>
+                    <select id="cfg-remote-auth" onchange="onAuthTypeChange()"
+                            class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                        <option value="key">SSH Key</option>
+                        <option value="password">Password</option>
+                    </select>
+                </div>
+                <div id="cfg-key-row">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Key Path</label>
+                    <input id="cfg-remote-key" type="text" class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div id="cfg-pass-row" class="hidden">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Password</label>
+                    <input id="cfg-remote-pass" type="password" class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Workspace Path</label>
+                    <input id="cfg-remote-workspace" type="text" class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+            </div>
+            <div id="config-cloud" class="hidden mb-4">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Workspace Path (on target device)</label>
+                <input id="cfg-cloud-workspace" type="text" class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+            <button onclick="saveConfig()" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Save</button>
+        </div>
+
+        <!-- Cloud Pairing Card -->
+        <div id="pairing-card" class="hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="font-semibold text-gray-800 dark:text-gray-100 mb-1">Evonet Pairing</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Pair a device by generating a code and running <code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs">evonet pair</code> on it.</p>
+
+            <div id="pairing-idle">
+                <button onclick="generatePairingCode()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md text-sm font-medium transition-colors">Generate Pairing Code</button>
+            </div>
+
+            <div id="pairing-active" class="hidden">
+                <div class="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg mb-4">
+                    <div class="text-4xl font-mono font-bold tracking-widest text-indigo-600 dark:text-indigo-400" id="pairing-code-display">------</div>
+                    <div class="flex-1">
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Expires in <span id="pairing-countdown" class="font-medium text-gray-700 dark:text-gray-200">5:00</span></p>
+                        <p class="text-xs text-gray-400 mt-1">Run on target device:</p>
+                        <code id="pairing-cmd" class="text-xs bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded block mt-1 break-all"></code>
+                    </div>
+                </div>
+                <button onclick="cancelPairing()" class="text-sm text-red-500 hover:underline">Cancel pairing</button>
+            </div>
+
+            <!-- Connector info (after pairing) -->
+            <div id="connector-info" class="hidden mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div class="flex items-center gap-2 mb-1">
+                    <p class="text-sm font-medium text-gray-700 dark:text-gray-200" id="connector-device"></p>
+                    <span id="connector-status-badge" class="hidden items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        Connected
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400" id="connector-platform"></p>
+                <p class="text-xs text-gray-400 dark:text-gray-500" id="connector-last-seen"></p>
+                <button onclick="unpairDevice()" class="text-xs text-red-500 hover:underline mt-2">Unpair device</button>
+            </div>
+        </div>
+
+        <!-- Download Binary Card (cloud only) -->
+        <div id="build-binary-card" class="hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-4">
+            <h3 class="font-semibold text-gray-800 dark:text-gray-100 mb-1">Download Pre-configured Binary</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Download an Evonet binary with credentials pre-embedded — just run it on the target device, no pairing step needed.</p>
+            <div id="binary-platforms-list" class="flex flex-wrap gap-2 mb-3">
+                <!-- populated by loadBinaryPlatforms() -->
+            </div>
+            <p id="build-status" class="hidden text-xs mt-1"></p>
+            <p id="binary-no-builds" class="hidden text-xs text-amber-600 dark:text-amber-400 mt-1">
+                No pre-built binaries found. Run <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">make build-all</code> in the <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">evonet/</code> directory on the server.
+            </p>
+        </div>
+
+        <!-- Connection actions (remote) -->
+        <div id="connection-actions" class="hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-4">
+            <h3 class="font-semibold text-gray-800 dark:text-gray-100 mb-3">Connection</h3>
+            <div class="flex gap-3">
+                <button onclick="connectWorkplace()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md text-sm font-medium transition-colors">Connect</button>
+                <button onclick="disconnectWorkplace()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Disconnect</button>
+            </div>
+        </div>
+
+        <!-- Danger zone -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/40 p-6 mt-4">
+            <h3 class="font-semibold text-red-600 dark:text-red-400 mb-2">Danger Zone</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Deleting a workplace is permanent. All agents must be unassigned first.</p>
+            <button onclick="deleteWorkplace()" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm font-medium transition-colors">Delete Workplace</button>
+        </div>
+    </div>
+
+    <!-- Agents Tab -->
+    <div id="panel-agents" class="hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+            <div id="agents-list"></div>
+            <div id="agents-empty-msg" class="hidden p-6 text-center text-gray-400 text-sm">No agents assigned to this workplace.</div>
+        </div>
+    </div>
+
+    <!-- Status Tab -->
+    <div id="panel-status" class="hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <pre id="status-json" class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap"></pre>
+            <button onclick="refreshStatus()" class="mt-4 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Refresh</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'px-4 py-3 rounded-lg shadow-lg text-white font-medium transition-opacity duration-500 ' +
+        (type === 'success' ? 'bg-green-600' : type === 'info' ? 'bg-blue-600' : 'bg-red-600');
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3000);
+}
+
+const HOME_ID = '{{ workplace.id }}';
+let homeData = null;
+let pairingTimer = null;
+let pairingPollTimer = null;
+let pairingExpiresAt = null;
+
+const TYPE_COLORS = {
+    local:  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+    cloud:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+};
+const STATUS_DOT_CLS = {
+    connected:    'bg-green-500',
+    disconnected: 'bg-gray-400',
+    connecting:   'bg-yellow-400',
+    error:        'bg-red-500',
+};
+
+function showTab(name) {
+    ['config', 'agents', 'status'].forEach(t => {
+        $('#panel-' + t).toggleClass('hidden', t !== name);
+        const btn = $('#tab-' + t);
+        if (t === name) {
+            btn.removeClass('border-transparent text-gray-500 dark:text-gray-400').addClass('border-indigo-500 text-indigo-600 dark:text-indigo-400');
+        } else {
+            btn.removeClass('border-indigo-500 text-indigo-600 dark:text-indigo-400').addClass('border-transparent text-gray-500 dark:text-gray-400');
+        }
+    });
+    if (name === 'agents') loadAgents();
+    if (name === 'status') refreshStatus();
+}
+
+function loadWorkplace() {
+    $.get('/api/workplaces/' + HOME_ID, function(h) {
+        homeData = h;
+        applyWorkplaceData(h);
+    });
+}
+
+function applyWorkplaceData(h) {
+    const cfg = (typeof h.config === 'string') ? JSON.parse(h.config || '{}') : (h.config || {});
+    const type = h.type;
+    const TYPE_LABELS = { local: 'Local', remote: 'Remote SSH', cloud: 'Cloud' };
+
+    $('#workplace-title').text(h.name);
+    $('#workplace-subtitle').text(TYPE_LABELS[type] || type);
+    const badge = $('#workplace-type-badge');
+    badge.attr('class', 'text-xs font-medium px-3 py-1 rounded-full ' + (TYPE_COLORS[type] || 'bg-gray-100 text-gray-600'));
+    badge.text(TYPE_LABELS[type] || type);
+
+    const dotCls = STATUS_DOT_CLS[h.status] || 'bg-gray-400';
+    $('#workplace-status-dot').attr('class', 'w-3 h-3 rounded-full ' + dotCls);
+
+    // Config form
+    $('#edit-name').val(h.name);
+    $('#config-local, #config-remote, #config-cloud').addClass('hidden');
+    if (type === 'local') {
+        $('#config-local').removeClass('hidden');
+        $('#cfg-local-path').val(cfg.workspace_path || '');
+    } else if (type === 'remote') {
+        $('#config-remote').removeClass('hidden');
+        $('#cfg-remote-host').val(cfg.host || '');
+        $('#cfg-remote-port').val(cfg.port || 22);
+        $('#cfg-remote-user').val(cfg.username || '');
+        $('#cfg-remote-auth').val(cfg.auth_type || 'key');
+        $('#cfg-remote-key').val(cfg.key_path || '');
+        $('#cfg-remote-workspace').val(cfg.workspace_path || '');
+        onAuthTypeChange();
+        $('#connection-actions').removeClass('hidden');
+    } else if (type === 'cloud') {
+        $('#config-cloud').removeClass('hidden');
+        $('#cfg-cloud-workspace').val(cfg.workspace_path || '');
+        $('#pairing-card').removeClass('hidden');
+        $('#build-binary-card').removeClass('hidden');
+        applyConnectorData(h.connector, h.status);
+        loadBinaryPlatforms();
+    }
+}
+
+function applyConnectorData(connector, homeStatus) {
+    const paired = !!(connector && connector.connector_token);
+    // Show pairing button only when NOT paired; hide when paired
+    $('#pairing-idle').toggleClass('hidden', paired);
+    $('#pairing-active').addClass('hidden');  // cancel any in-progress pairing display
+    if (!paired) {
+        $('#connector-info').addClass('hidden');
+        return;
+    }
+    $('#connector-info').removeClass('hidden');
+    $('#connector-device').text(connector.device_name || 'Unknown device');
+    $('#connector-platform').text(connector.platform || '');
+    $('#connector-last-seen').text(connector.last_seen_at ? 'Last seen: ' + new Date(connector.last_seen_at).toLocaleString() : '');
+    const isConnected = homeStatus === 'connected';
+    $('#connector-status-badge').toggleClass('hidden', !isConnected).toggleClass('flex', isConnected);
+}
+
+function onAuthTypeChange() {
+    const isKey = $('#cfg-remote-auth').val() === 'key';
+    $('#cfg-key-row').toggleClass('hidden', !isKey);
+    $('#cfg-pass-row').toggleClass('hidden', isKey);
+}
+
+function buildConfig() {
+    const type = homeData ? homeData.type : 'local';
+    if (type === 'local') return { workspace_path: $('#cfg-local-path').val().trim() };
+    if (type === 'remote') {
+        const auth = $('#cfg-remote-auth').val();
+        const cfg = {
+            host: $('#cfg-remote-host').val().trim(),
+            port: parseInt($('#cfg-remote-port').val()) || 22,
+            username: $('#cfg-remote-user').val().trim(),
+            auth_type: auth,
+            workspace_path: $('#cfg-remote-workspace').val().trim(),
+        };
+        if (auth === 'key') cfg.key_path = $('#cfg-remote-key').val().trim();
+        else cfg.password = $('#cfg-remote-pass').val();
+        return cfg;
+    }
+    if (type === 'cloud') return { workspace_path: $('#cfg-cloud-workspace').val().trim() };
+    return {};
+}
+
+function saveConfig() {
+    const updates = { name: $('#edit-name').val().trim(), config: buildConfig() };
+    $.ajax({
+        url: '/api/workplaces/' + HOME_ID,
+        method: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify(updates),
+        success: function(h) { homeData = h; applyWorkplaceData(h); showToast('Saved', 'success'); },
+        error: function(xhr) { showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Save failed', 'error'); }
+    });
+}
+
+function generatePairingCode() {
+    $.ajax({
+        url: '/api/workplaces/' + HOME_ID + '/pairing-code',
+        method: 'POST',
+        success: function(data) {
+            $('#pairing-idle').addClass('hidden');
+            $('#pairing-active').removeClass('hidden');
+            $('#pairing-code-display').text(data.code);
+            const serverUrl = window.location.origin;
+            $('#pairing-cmd').text(`evonet pair --code ${data.code} --server ${serverUrl}`);
+            pairingExpiresAt = new Date(data.expires_at);
+            startPairingCountdown(data.ttl_seconds);
+        },
+        error: function(xhr) { showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Failed', 'error'); }
+    });
+}
+
+function stopPairingPoll() {
+    if (pairingPollTimer) { clearInterval(pairingPollTimer); pairingPollTimer = null; }
+}
+
+function startPairingCountdown(seconds) {
+    if (pairingTimer) clearInterval(pairingTimer);
+    let remaining = seconds;
+    function tick() {
+        if (remaining <= 0) {
+            clearInterval(pairingTimer);
+            stopPairingPoll();
+            $('#pairing-active').addClass('hidden');
+            $('#pairing-idle').removeClass('hidden');
+            return;
+        }
+        const m = Math.floor(remaining / 60), s = remaining % 60;
+        $('#pairing-countdown').text(m + ':' + String(s).padStart(2, '0'));
+        remaining--;
+    }
+    tick();
+    pairingTimer = setInterval(tick, 1000);
+
+    // Poll every 3s to detect when Evonet completes pairing
+    stopPairingPoll();
+    pairingPollTimer = setInterval(function() {
+        $.get('/api/workplaces/' + HOME_ID, function(h) {
+            const paired = !!(h.connector && h.connector.connector_token);
+            if (paired) {
+                clearInterval(pairingTimer);
+                stopPairingPoll();
+                homeData = h;
+                applyWorkplaceData(h);
+                showToast('Device paired successfully!', 'success');
+            }
+        });
+    }, 3000);
+}
+
+function cancelPairing() {
+    clearInterval(pairingTimer);
+    stopPairingPoll();
+    $.ajax({
+        url: '/api/workplaces/' + HOME_ID + '/pairing-code',
+        method: 'DELETE',
+        success: function() {
+            $('#pairing-active').addClass('hidden');
+            $('#pairing-idle').removeClass('hidden');
+        }
+    });
+}
+
+function unpairDevice() {
+    showConfirm({
+        title: 'Unpair device',
+        message: 'The Evonet program will disconnect and need to be re-paired to reconnect.',
+        confirmText: 'Unpair',
+    }).then(confirmed => {
+        if (!confirmed) return;
+        $.ajax({
+            url: '/api/workplaces/' + HOME_ID + '/connector',
+            method: 'DELETE',
+            success: function() {
+                $('#connector-info').addClass('hidden');
+                showToast('Device unpaired', 'success');
+                loadWorkplace();
+            },
+            error: function(xhr) {
+                showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Unpair failed', 'error');
+            }
+        });
+    });
+}
+
+const PLATFORM_LABELS = {
+    'linux-amd64':   'Linux (x86_64)',
+    'darwin-arm64':  'macOS (Apple Silicon)',
+    'darwin-amd64':  'macOS (Intel)',
+    'windows-amd64': 'Windows (x86_64)',
+};
+
+function loadBinaryPlatforms() {
+    $.get('/api/workplaces/' + HOME_ID + '/binary-platforms?_=' + Date.now(), function(platforms) {
+        const container = document.getElementById('binary-platforms-list');
+        const noBuilds = document.getElementById('binary-no-builds');
+        const available = Object.entries(platforms).filter(([, ok]) => ok);
+
+        container.innerHTML = '';
+        if (available.length === 0) {
+            noBuilds.classList.remove('hidden');
+            return;
+        }
+        noBuilds.classList.add('hidden');
+
+        available.forEach(([platform]) => {
+            const btn = document.createElement('button');
+            btn.className = 'flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors';
+            btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>' +
+                            PLATFORM_LABELS[platform];
+            btn.onclick = () => downloadBinary(platform, btn);
+            container.appendChild(btn);
+        });
+    });
+}
+
+function downloadBinary(platform, btn) {
+    const status = document.getElementById('build-status');
+    btn.disabled = true;
+    status.className = 'text-xs mt-1 text-gray-500';
+    status.classList.remove('hidden');
+    status.textContent = 'Preparing download...';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/workplaces/' + HOME_ID + '/download-binary');
+    xhr.responseType = 'blob';
+    xhr.setRequestHeader('Content-Type', 'application/json');
+
+    xhr.onload = function() {
+        btn.disabled = false;
+        if (xhr.status === 200) {
+            const ext = platform === 'windows-amd64' ? '.exe' : '';
+            const filename = 'evonet-' + platform + ext;
+            const url = URL.createObjectURL(xhr.response);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            status.className = 'text-xs mt-1 text-green-600 dark:text-green-400';
+            status.textContent = 'Downloaded: ' + filename;
+        } else {
+            const reader = new FileReader();
+            reader.onload = function() {
+                let msg = 'Download failed';
+                try { msg = JSON.parse(reader.result).error || msg; } catch(e) {}
+                status.className = 'text-xs mt-1 text-red-500';
+                status.textContent = msg;
+            };
+            reader.readAsText(xhr.response);
+        }
+    };
+
+    xhr.onerror = function() {
+        btn.disabled = false;
+        status.className = 'text-xs mt-1 text-red-500';
+        status.textContent = 'Network error';
+    };
+
+    xhr.send(JSON.stringify({platform: platform}));
+}
+
+function loadAgents() {
+    if (!homeData) return;
+    const agents = homeData.agents || [];
+    const list = $('#agents-list');
+    list.empty();
+    if (!agents.length) { $('#agents-empty-msg').removeClass('hidden'); return; }
+    $('#agents-empty-msg').addClass('hidden');
+    agents.forEach(a => {
+        list.append(`
+        <a href="/agents/${a.id}" class="flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+            <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-semibold text-sm">${(a.name || '?').charAt(0).toUpperCase()}</div>
+            <div class="flex-1 min-w-0">
+                <p class="font-medium text-gray-800 dark:text-gray-100 text-sm truncate">${a.name}</p>
+                <p class="text-xs text-gray-400">${a.id}</p>
+            </div>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>`);
+    });
+}
+
+function refreshStatus() {
+    $.get('/api/workplaces/' + HOME_ID + '/status', function(data) {
+        $('#status-json').text(JSON.stringify(data, null, 2));
+        const dotCls = STATUS_DOT_CLS[data.status] || 'bg-gray-400';
+        $('#workplace-status-dot').attr('class', 'w-3 h-3 rounded-full ' + dotCls);
+    });
+}
+
+function connectWorkplace() {
+    $.ajax({
+        url: '/api/workplaces/' + HOME_ID + '/connect',
+        method: 'POST',
+        success: function(r) {
+            showToast(r.ok ? 'Connected' : (r.error || 'Failed'), r.ok ? 'success' : 'error');
+            setTimeout(refreshStatus, 500);
+        },
+        error: function(xhr) { showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Error', 'error'); }
+    });
+}
+
+function disconnectWorkplace() {
+    $.ajax({
+        url: '/api/workplaces/' + HOME_ID + '/disconnect',
+        method: 'POST',
+        success: function() { showToast('Disconnected', 'success'); setTimeout(refreshStatus, 500); },
+        error: function() { showToast('Error disconnecting', 'error'); }
+    });
+}
+
+function deleteWorkplace() {
+    showConfirm({
+        title: 'Delete workplace',
+        message: 'This workplace will be permanently deleted. All agents must be unassigned first.',
+        confirmText: 'Delete',
+    }).then(confirmed => {
+        if (!confirmed) return;
+        $.ajax({
+            url: '/api/workplaces/' + HOME_ID,
+            method: 'DELETE',
+            success: function() { window.location = '/workplaces'; },
+            error: function(xhr) { showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Delete failed', 'error'); }
+        });
+    });
+}
+
+$(document).ready(function() {
+    loadWorkplace();
+    // Poll status every 5s
+    setInterval(refreshStatus, 5000);
+    // SSE for realtime connector events
+    startWorkplaceEventStream();
+});
+
+let homeEventSource = null;
+
+function startWorkplaceEventStream() {
+    if (homeEventSource) homeEventSource.close();
+    homeEventSource = new EventSource('/api/workplaces/' + HOME_ID + '/events');
+
+    function onConnectorEvent(e) {
+        try {
+            const data = JSON.parse(e.data);
+            // Reload full workplace data to refresh connector section
+            $.get('/api/workplaces/' + HOME_ID, function(h) {
+                homeData = h;
+                applyWorkplaceData(h);
+            });
+        } catch (_) {}
+    }
+
+    homeEventSource.addEventListener('connector_connected',    onConnectorEvent);
+    homeEventSource.addEventListener('connector_disconnected', onConnectorEvent);
+    homeEventSource.addEventListener('connector_paired',       onConnectorEvent);
+    homeEventSource.addEventListener('home_status_changed',    onConnectorEvent);
+
+    homeEventSource.onerror = function() {
+        // Reconnect after 5s on error
+        homeEventSource.close();
+        setTimeout(startWorkplaceEventStream, 5000);
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% from 'partials/toggle.html' import toggle_widget %}
+{% block content %}
+<div class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex flex-wrap justify-between items-center gap-2 mb-6">
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/plugins" class="text-gray-400 hover:text-gray-600 text-sm">&larr; Plugins</a>
+            <span class="text-gray-300">/</span>
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100" id="plugin-title">Loading...</h2>
+            <span id="plugin-version" class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-mono"></span>
+        </div>
+        <div class="ml-auto flex items-center gap-3">
+            <label class="inline-flex items-center cursor-pointer gap-2">
+                {{ toggle_widget(id='plugin-enabled', onchange='toggleEnabled(this.checked)') }}
+                <span class="text-sm text-gray-600">Enabled</span>
+            </label>
+            <span id="uninstall-btn" class="hidden">
+                <button onclick="uninstallPlugin()" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors">Uninstall</button>
+            </span>
+        </div>
+    </div>
+
+    <!-- Meta -->
+    <div id="plugin-meta" class="text-sm text-gray-500 mb-6"></div>
+
+    <!-- Tabs -->
+    <div class="border-b border-gray-200 mb-6 flex gap-0 overflow-x-auto">
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600" onclick="showTab('settings')" data-tab="settings">Settings</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('logs')" data-tab="logs">Logs</button>
+    </div>
+
+    <!-- Tab: Settings -->
+    <div id="tab-settings" class="tab-content">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left: Settings -->
+            <div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+                    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-4">Settings</h3>
+                    <div id="settings-form">
+                        <p class="text-sm text-gray-400">Loading...</p>
+                    </div>
+                    <div id="settings-actions" class="hidden mt-5 flex items-center gap-3">
+                        <button onclick="saveConfig()" id="save-btn"
+                                class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">
+                            Save Settings
+                        </button>
+                        <span id="save-status" class="text-sm text-green-600 hidden">Saved</span>
+                    </div>
+                    <div id="no-variables" class="hidden">
+                        <div class="text-center py-8 text-gray-400">
+                            <svg class="w-10 h-10 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            <p class="text-sm">This plugin has no configurable settings</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Events -->
+            <div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Subscribed Events <span id="event-count" class="text-sm font-normal text-gray-400"></span></h3>
+                    </div>
+                    <div id="events-list" class="space-y-2">
+                        <p class="text-sm text-gray-400">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Logs -->
+    <div id="tab-logs" class="tab-content hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+            <!-- Logs toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-200">
+                <div class="flex items-center gap-2">
+                    <select id="log-level-filter" onchange="applyLogFilter()" class="text-sm border border-gray-300 rounded-md px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none">
+                        <option value="all">All levels</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                    <label class="flex items-center gap-1.5 text-sm text-gray-500 cursor-pointer select-none">
+                        <input type="checkbox" id="log-auto-scroll" checked class="rounded border-gray-300 text-indigo-500 focus:ring-indigo-500">
+                        Auto-scroll
+                    </label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="log-count" class="text-xs text-gray-400"></span>
+                    <button onclick="clearLogs()" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors">Clear</button>
+                </div>
+            </div>
+            <!-- Log entries -->
+            <div id="log-container" class="h-[500px] md:h-[400px] overflow-y-auto font-mono text-xs">
+                <div id="log-entries" class="p-4 space-y-1"></div>
+                <div id="log-empty" class="text-center py-16 text-gray-400">
+                    <svg class="w-10 h-10 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <p class="text-sm">No logs yet</p>
+                    <p class="text-xs mt-1">Logs will appear here when the plugin processes events</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const PLUGIN_ID = '{{ plugin_id }}';
+let pluginData = null;
+let logPollTimer = null;
+let lastLogTimestamp = null;
+let allLogs = [];
+
+const EVENT_DESCRIPTIONS = {
+    'turn_complete': 'Fires after each conversation turn (LLM response sent)',
+    'message_received': 'Fires when a new user message arrives',
+    'session_created': 'Fires when a new chat session is created',
+    'summary_updated': 'Fires when the native session summary is created or updated',
+};
+
+const LEVEL_STYLES = {
+    'info':  { bg: 'bg-gray-50',  text: 'text-gray-500',  badge: 'bg-gray-200 text-gray-600' },
+    'warn':  { bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-200 text-amber-700' },
+    'error': { bg: 'bg-red-50',   text: 'text-red-700',   badge: 'bg-red-200 text-red-700' },
+};
+
+// ==================== Tabs ====================
+
+function showTab(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-indigo-500', 'text-indigo-600');
+        btn.classList.add('border-transparent', 'text-gray-500');
+    });
+    document.getElementById('tab-' + name).classList.remove('hidden');
+    const btn = document.querySelector(`[data-tab="${name}"]`);
+    btn.classList.add('border-indigo-500', 'text-indigo-600');
+    btn.classList.remove('border-transparent', 'text-gray-500');
+
+    if (name === 'logs') {
+        loadLogs();
+        startLogPolling();
+    } else {
+        stopLogPolling();
+    }
+}
+
+// ==================== Plugin Load ====================
+
+async function loadPlugin() {
+    const res = await fetch(`/api/plugins/${PLUGIN_ID}`);
+    if (!res.ok) { window.location.href = '/plugins'; return; }
+    pluginData = await res.json();
+
+    document.getElementById('plugin-title').textContent = pluginData.name || pluginData.id;
+    document.getElementById('plugin-version').textContent = 'v' + (pluginData.version || '?');
+    document.getElementById('plugin-enabled').checked = pluginData.enabled;
+
+    const meta = [];
+    if (pluginData.author) meta.push('by ' + esc(pluginData.author));
+    if (pluginData.description) meta.push(esc(pluginData.description));
+    document.getElementById('plugin-meta').innerHTML = meta.join(' &mdash; ');
+
+    renderSettings(pluginData.variables || [], pluginData.config || {});
+    renderEvents(pluginData.events || []);
+
+    // Show uninstall button only for non-system plugins
+    if (!pluginData.is_system) {
+        document.getElementById('uninstall-btn').classList.remove('hidden');
+    }
+}
+
+// ==================== Settings ====================
+
+function renderSettings(variables, config) {
+    const form = document.getElementById('settings-form');
+    const actions = document.getElementById('settings-actions');
+    const noVars = document.getElementById('no-variables');
+
+    if (!variables.length) {
+        form.classList.add('hidden');
+        actions.classList.add('hidden');
+        noVars.classList.remove('hidden');
+        return;
+    }
+
+    noVars.classList.add('hidden');
+    actions.classList.remove('hidden');
+
+    form.innerHTML = variables.map(v => {
+        const val = config[v.name] !== undefined ? config[v.name] : (v.default || '');
+        if (v.type === 'boolean') {
+            return `
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    <span class="relative inline-flex items-center">
+                        <input type="checkbox" data-var="${esc(v.name)}" data-type="boolean"
+                               ${val ? 'checked' : ''} class="sr-only peer">
+                        <span class="dyn-toggle"></span>
+                    </span>
+                    <div>
+                        <span class="text-gray-700 text-sm font-medium">${esc(v.label || v.name)}</span>
+                        ${v.description ? `<p class="text-xs text-gray-400 mt-0.5">${esc(v.description)}</p>` : ''}
+                    </div>
+                </label>
+            </div>`;
+        }
+        if (v.type === 'textarea') {
+            return `
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-700 text-sm font-medium">${esc(v.label || v.name)}</label>
+                <textarea data-var="${esc(v.name)}" data-type="${esc(v.type)}"
+                          placeholder="${esc(String(v.default || ''))}"
+                          class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none overflow-hidden max-h-[700px] overflow-y-auto"
+                          oninput="this.style.height='';this.style.height=Math.min(this.scrollHeight,700)+'px'">${esc(String(val))}</textarea>
+                ${v.description ? `<p class="text-xs text-gray-400 mt-1">${esc(v.description)}</p>` : ''}
+            </div>`;
+        }
+        const inputType = v.type === 'number' ? 'number' : 'text';
+        return `
+        <div class="mb-4">
+            <label class="block mb-1 text-gray-700 text-sm font-medium">${esc(v.label || v.name)}</label>
+            <input type="${inputType}" data-var="${esc(v.name)}" data-type="${esc(v.type || 'string')}"
+                   value="${esc(String(val))}"
+                   placeholder="${esc(String(v.default || ''))}"
+                   class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            ${v.description ? `<p class="text-xs text-gray-400 mt-1">${esc(v.description)}</p>` : ''}
+        </div>`;
+    }).join('');
+
+    // Auto-grow textareas to fit their initial content
+    form.querySelectorAll('textarea[data-type="textarea"]').forEach(ta => {
+        ta.style.height = '';
+        ta.style.height = Math.min(ta.scrollHeight, 700) + 'px';
+    });
+}
+
+function renderEvents(events) {
+    const list = document.getElementById('events-list');
+    const count = document.getElementById('event-count');
+
+    count.textContent = `(${events.length})`;
+
+    if (events.length === 0) {
+        list.innerHTML = '<p class="text-sm text-gray-400 text-center py-6">No events subscribed</p>';
+        return;
+    }
+
+    list.innerHTML = events.map(e => `
+        <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg dark:bg-gray-600">
+            <div class="flex-shrink-0 w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center mt-0.5">
+                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-800 dark:text-gray-100 font-mono">${esc(e)}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${esc(EVENT_DESCRIPTIONS[e] || 'Custom event')}</p>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ==================== Logs ====================
+
+async function loadLogs() {
+    const url = lastLogTimestamp
+        ? `/api/plugins/${PLUGIN_ID}/logs?since=${encodeURIComponent(lastLogTimestamp)}`
+        : `/api/plugins/${PLUGIN_ID}/logs`;
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.logs && data.logs.length > 0) {
+            if (!lastLogTimestamp) allLogs = [];
+            allLogs = allLogs.concat(data.logs);
+            lastLogTimestamp = data.logs[data.logs.length - 1].timestamp;
+            renderLogs();
+        } else if (!lastLogTimestamp) {
+            renderLogs();
+        }
+    } catch (e) {
+        console.error('Failed to load logs:', e);
+    }
+}
+
+function renderLogs() {
+    const container = document.getElementById('log-entries');
+    const empty = document.getElementById('log-empty');
+    const countEl = document.getElementById('log-count');
+    const filter = document.getElementById('log-level-filter').value;
+
+    const filtered = filter === 'all' ? allLogs : allLogs.filter(l => l.level === filter);
+
+    countEl.textContent = `${filtered.length} entries`;
+
+    if (filtered.length === 0) {
+        container.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+
+    empty.classList.add('hidden');
+    container.innerHTML = filtered.map(entry => {
+        const style = LEVEL_STYLES[entry.level] || LEVEL_STYLES.info;
+        const ts = formatTimestamp(entry.timestamp);
+        return `<div class="flex items-start gap-2 py-1.5 px-2 rounded ${style.bg}">
+            <!-- Desktop: horizontal layout with timestamp column -->
+            <div class="hidden md:block flex-shrink-0 text-gray-400 w-[140px]">${ts}</div>
+            <span class="hidden md:flex flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${style.badge} w-[46px] text-center">${esc(entry.level)}</span>
+            <span class="hidden md:inline ${style.text} break-all flex-1 min-w-0">${esc(entry.message)}</span>
+            <!-- Mobile: single column, timestamp+level on top, message below -->
+            <div class="hidden md:hidden flex-1 min-w-0 flex flex-col gap-1">
+                <span class="flex items-center gap-1.5 text-[10px] tabular-nums text-gray-400">
+                    ${ts}
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${style.badge}">${esc(entry.level)}</span>
+                </span>
+                <span class="${style.text} break-words text-xs leading-relaxed">${esc(entry.message)}</span>
+            </div>
+        </div>`;
+    }).join('');
+
+    if (document.getElementById('log-auto-scroll').checked) {
+        const logContainer = document.getElementById('log-container');
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+}
+
+function applyLogFilter() {
+    renderLogs();
+}
+
+async function clearLogs() {
+    try {
+        await fetch(`/api/plugins/${PLUGIN_ID}/logs`, { method: 'DELETE' });
+        allLogs = [];
+        lastLogTimestamp = null;
+        renderLogs();
+    } catch (e) {
+        console.error('Failed to clear logs:', e);
+    }
+}
+
+function startLogPolling() {
+    stopLogPolling();
+    logPollTimer = setInterval(loadLogs, 3000);
+}
+
+function stopLogPolling() {
+    if (logPollTimer) {
+        clearInterval(logPollTimer);
+        logPollTimer = null;
+    }
+}
+
+function formatTimestamp(isoStr) {
+    const d = new Date(isoStr);
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+}
+
+// ==================== Actions ====================
+
+async function saveConfig() {
+    const btn = document.getElementById('save-btn');
+    const status = document.getElementById('save-status');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    status.classList.add('hidden');
+
+    const values = {};
+    document.querySelectorAll('[data-var]').forEach(el => {
+        const name = el.dataset.var;
+        const type = el.dataset.type;
+        if (type === 'boolean') {
+            values[name] = el.checked;
+        } else {
+            values[name] = el.value;
+        }
+    });
+
+    try {
+        const res = await fetch(`/api/plugins/${PLUGIN_ID}/config`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(values)
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            alert(data.error || 'Failed to save');
+            return;
+        }
+        status.textContent = 'Saved';
+        status.classList.remove('hidden');
+        setTimeout(() => status.classList.add('hidden'), 3000);
+    } catch (e) {
+        alert('Failed to save: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Settings';
+    }
+}
+
+async function toggleEnabled(enabled) {
+    const res = await fetch(`/api/plugins/${PLUGIN_ID}/toggle`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled})
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to toggle');
+        document.getElementById('plugin-enabled').checked = !enabled;
+    }
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
+async function uninstallPlugin() {
+    const confirmed = await showConfirm({
+        title: `Uninstall "${pluginData.name || PLUGIN_ID}"?`,
+        message: 'This will uninstall the plugin and remove all its files. This cannot be undone.',
+        confirmText: 'Uninstall',
+        danger: true
+    });
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/plugins/${PLUGIN_ID}`, {method: 'DELETE'});
+    if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to uninstall plugin');
+        return;
+    }
+    window.location.href = '/plugins';
+}
+
+loadPlugin();
+</script>
+{% endblock %}

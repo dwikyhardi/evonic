@@ -1,0 +1,566 @@
+{% extends "base.html" %}
+{% from 'partials/toggle.html' import toggle_widget %}
+{% block content %}
+<div class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex flex-wrap justify-between items-center gap-2 mb-6">
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/skills" class="text-gray-400 hover:text-gray-600 text-sm">&larr; Skills</a>
+            <span class="text-gray-300">/</span>
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100" id="skill-title">Loading...</h2>
+            <span id="skill-version" class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-mono"></span>
+        </div>
+        <div class="flex items-center gap-3">
+            <label class="inline-flex items-center cursor-pointer gap-2">
+                {{ toggle_widget(id='skill-enabled', onchange='toggleEnabled(this.checked)') }}
+                <span class="text-sm text-gray-600">Enabled</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Meta -->
+    <div id="skill-meta" class="text-sm text-gray-500 mb-6"></div>
+
+    <!-- Two-column layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left: Settings -->
+        <div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-4">Settings</h3>
+                <div id="settings-form">
+                    <p class="text-sm text-gray-400">Loading...</p>
+                </div>
+                <div id="settings-actions" class="hidden mt-5 flex items-center gap-3">
+                    <button onclick="saveConfig()" id="save-btn"
+                            class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">
+                        Save Settings
+                    </button>
+                    <span id="save-status" class="text-sm text-green-600 hidden">Saved</span>
+                </div>
+                <div id="no-variables" class="hidden">
+                    <div class="text-center py-8 text-gray-400">
+                        <svg class="w-10 h-10 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        <p class="text-sm">This skill has no configurable settings</p>
+                    </div>
+                </div>
+                <!-- SYSTEM.md Editor -->
+                <div id="system-md-editor" class="hidden mt-6 pt-6 border-t border-gray-200">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2">System Prompt (SYSTEM.md)</h4>
+                    <textarea id="system-md-content" rows="12"
+                              class="w-full p-2.5 border border-gray-300 rounded-md text-xs font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+                              placeholder="Loading SYSTEM.md..."></textarea>
+                    <p class="text-xs text-gray-400 mt-1.5">Defines the skill's persona and behavior. Saved directly to the skill's SYSTEM.md file.</p>
+                    <div class="flex justify-between items-center mt-3">
+                        <span id="system-md-status" class="text-xs text-green-600 hidden">Saved</span>
+                        <button onclick="saveSystemPrompt()" id="save-system-prompt-btn"
+                                class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Tools -->
+        <div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Tools <span id="tool-count" class="text-sm font-normal text-gray-400"></span></h3>
+                </div>
+                <div class="mb-3">
+                    <input type="text" id="tool-filter" placeholder="Filter tools..."
+                           oninput="filterTools()"
+                           class="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                </div>
+                <div id="tools-list" class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                    <p class="text-sm text-gray-400">Loading...</p>
+                </div>
+                <div id="tools-empty-filter" class="hidden text-center py-6 text-gray-400">
+                    <p class="text-sm">No tools match your filter</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Tool Detail Modal -->
+<div id="tool-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeToolModal()"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <!-- Header -->
+        <div class="flex items-start justify-between p-5 border-b border-gray-100 gap-4">
+            <div class="min-w-0">
+                <h3 id="tool-modal-name" class="text-base font-semibold font-mono text-gray-900 break-all"></h3>
+                <p id="tool-modal-desc" class="text-sm text-gray-500 mt-1"></p>
+            </div>
+            <button onclick="closeToolModal()" class="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <!-- Tabs -->
+        <div class="flex gap-1 px-5 pt-3 border-b border-gray-100">
+            <button onclick="switchToolTab('info')" id="tool-tab-info"
+                    class="px-3 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px transition-colors">Info</button>
+            <button onclick="switchToolTab('test')" id="tool-tab-test"
+                    class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px transition-colors">Test</button>
+        </div>
+        <!-- Panels -->
+        <div class="flex-1 overflow-y-auto">
+            <!-- Info panel -->
+            <div id="tool-panel-info" class="p-5 space-y-5">
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Parameters</h4>
+                    <div id="tool-modal-params"></div>
+                </div>
+                <div>
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Return Format</h4>
+                    <pre id="tool-modal-returns" class="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 font-mono text-gray-700 overflow-x-auto whitespace-pre-wrap"></pre>
+                </div>
+            </div>
+            <!-- Test panel -->
+            <div id="tool-panel-test" class="hidden p-5 space-y-4">
+                <div id="tool-test-form" class="space-y-3"></div>
+                <button onclick="runToolTest()" id="tool-test-btn"
+                        class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">
+                    Run
+                </button>
+                <div id="tool-test-result" class="hidden">
+                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Result</h4>
+                    <pre id="tool-test-output" class="text-xs bg-gray-900 text-green-400 rounded-lg p-3 font-mono overflow-x-auto whitespace-pre-wrap max-h-64"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const SKILL_ID = '{{ skill_id }}';
+let skillData = null;
+let allTools = [];
+let toolDefsMap = {};   // tool_name -> full OpenAI schema object
+let _activeToolName = null;
+
+async function loadSkill() {
+    const res = await fetch(`/api/skills/${SKILL_ID}`);
+    if (!res.ok) { window.location.href = '/skills'; return; }
+    skillData = await res.json();
+
+    document.getElementById('skill-title').textContent = skillData.name || skillData.id;
+    document.getElementById('skill-version').textContent = 'v' + (skillData.version || '?');
+    document.getElementById('skill-enabled').checked = skillData.enabled;
+
+    const meta = [];
+    if (skillData.author) meta.push('by ' + esc(skillData.author));
+    if (skillData.description) meta.push(esc(skillData.description));
+    document.getElementById('skill-meta').innerHTML = meta.join(' &mdash; ');
+
+    renderSettings(skillData.variables || [], skillData.config || {});
+    allTools = skillData.tools || [];
+    renderTools(allTools);
+    loadToolDefs();
+}
+
+async function loadToolDefs() {
+    try {
+        const res = await fetch(`/api/skills/${SKILL_ID}/tools`);
+        const data = await res.json();
+        toolDefsMap = {};
+        for (const def of (data.tools || [])) {
+            const name = def.function?.name || def.name;
+            if (name) toolDefsMap[name] = def;
+        }
+    } catch (e) {
+        console.error('Failed to load full tool defs:', e);
+    }
+}
+
+function renderSettings(variables, config) {
+    const form = document.getElementById('settings-form');
+    const actions = document.getElementById('settings-actions');
+    const noVars = document.getElementById('no-variables');
+
+    if (!variables.length) {
+        form.classList.add('hidden');
+        actions.classList.add('hidden');
+        noVars.classList.remove('hidden');
+        return;
+    }
+
+    noVars.classList.add('hidden');
+    actions.classList.remove('hidden');
+
+    form.innerHTML = variables.map(v => {
+        const val = config[v.name] !== undefined ? config[v.name] : (v.default || '');
+        if (v.type === 'boolean') {
+            return `
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    <span class="relative inline-flex items-center">
+                        <input type="checkbox" data-var="${esc(v.name)}" data-type="boolean"
+                               ${val ? 'checked' : ''} class="sr-only peer">
+                        <span class="dyn-toggle"></span>
+                    </span>
+                    <div>
+                        <span class="text-gray-700 text-sm font-medium">${esc(v.label || v.name)}</span>
+                        ${v.description ? `<p class="text-xs text-gray-400 mt-0.5">${esc(v.description)}</p>` : ''}
+                    </div>
+                </label>
+            </div>`;
+        }
+        const inputType = v.type === 'number' ? 'number' : 'text';
+        return `
+        <div class="mb-4">
+            <label class="block mb-1 text-gray-700 text-sm font-medium">${esc(v.label || v.name)}</label>
+            <input type="${inputType}" data-var="${esc(v.name)}" data-type="${esc(v.type || 'string')}"
+                   value="${esc(String(val))}"
+                   placeholder="${esc(String(v.default || ''))}"
+                   class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            ${v.description ? `<p class="text-xs text-gray-400 mt-1">${esc(v.description)}</p>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function renderTools(tools) {
+    const list = document.getElementById('tools-list');
+    const count = document.getElementById('tool-count');
+    const emptyFilter = document.getElementById('tools-empty-filter');
+
+    count.textContent = `(${tools.length})`;
+
+    if (tools.length === 0) {
+        list.innerHTML = '';
+        emptyFilter.classList.remove('hidden');
+        return;
+    }
+
+    emptyFilter.classList.add('hidden');
+    list.innerHTML = tools.map(t => `
+        <div class="tool-item flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-600 hover:bg-indigo-50 rounded-lg cursor-pointer transition-colors group"
+             data-name="${esc(t.name)}" data-desc="${esc(t.description || '')}"
+             onclick="openToolModal('${esc(t.name)}')">
+            <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 group-hover:bg-indigo-200 rounded-lg flex items-center justify-center mt-0.5 transition-colors">
+                <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-800 font-mono group-hover:text-indigo-700 transition-colors">${esc(t.name)}</p>
+                <p class="text-xs text-gray-500 mt-0.5">${esc(t.description || '')}</p>
+            </div>
+            <svg class="w-4 h-4 text-gray-300 group-hover:text-indigo-400 flex-shrink-0 mt-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+    `).join('');
+}
+
+function filterTools() {
+    const q = document.getElementById('tool-filter').value.toLowerCase().trim();
+    const items = document.querySelectorAll('.tool-item');
+    const emptyFilter = document.getElementById('tools-empty-filter');
+    let visible = 0;
+
+    items.forEach(el => {
+        const name = (el.dataset.name || '').toLowerCase();
+        const desc = (el.dataset.desc || '').toLowerCase();
+        const match = !q || name.includes(q) || desc.includes(q);
+        el.style.display = match ? '' : 'none';
+        if (match) visible++;
+    });
+
+    emptyFilter.classList.toggle('hidden', visible > 0);
+}
+
+async function saveConfig() {
+    const btn = document.getElementById('save-btn');
+    const status = document.getElementById('save-status');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    status.classList.add('hidden');
+
+    const values = {};
+    document.querySelectorAll('[data-var]').forEach(el => {
+        const name = el.dataset.var;
+        const type = el.dataset.type;
+        if (type === 'boolean') {
+            values[name] = el.checked;
+        } else if (type === 'number') {
+            values[name] = el.value;
+        } else {
+            values[name] = el.value;
+        }
+    });
+
+    try {
+        const res = await fetch(`/api/skills/${SKILL_ID}/config`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(values)
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+            toast.show(data.error || 'Failed to save settings', 'error');
+            return;
+        }
+        toast.show('Settings saved successfully', 'success');
+    } catch (e) {
+        toast.show('Failed to save: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Settings';
+    }
+}
+
+async function toggleEnabled(enabled) {
+    const res = await fetch(`/api/skills/${SKILL_ID}/toggle`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled})
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        toast.show(err.error || 'Failed to toggle', 'error');
+        document.getElementById('skill-enabled').checked = !enabled;
+    }
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
+async function loadSystemPrompt() {
+    const section = document.getElementById('system-md-editor');
+    const status = document.getElementById('system-md-status');
+    const textarea = document.getElementById('system-md-content');
+    const btn = document.getElementById('save-system-prompt-btn');
+
+    try {
+        const res = await fetch(`/api/skills/${SKILL_ID}/system-prompt`);
+        const data = await res.json();
+        if (!data.has_system_md) {
+            section.classList.add('hidden');
+            return;
+        }
+        section.classList.remove('hidden');
+        textarea.value = data.content || '';
+    } catch(e) {
+        console.error('Failed to load SYSTEM.md:', e);
+        section.classList.add('hidden');
+    }
+}
+
+async function saveSystemPrompt() {
+    const status = document.getElementById('system-md-status');
+    const btn = document.getElementById('save-system-prompt-btn');
+    const textarea = document.getElementById('system-md-content');
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    status.classList.add('hidden');
+
+    try {
+        const res = await fetch(`/api/skills/${SKILL_ID}/system-prompt`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content: textarea.value})
+        });
+        const data = await res.json();
+        if (data.error) {
+            toast.show(data.error, 'error');
+        } else {
+            toast.show("System prompt saved successfully", "success");
+        }
+    } catch(e) {
+        toast.show('Failed to save SYSTEM.md', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+    }
+}
+
+loadSkill();
+loadSystemPrompt();
+
+// ==================== Tool Modal ====================
+
+async function openToolModal(toolName) {
+    _activeToolName = toolName;
+
+    // Show modal immediately with basic info + loading state
+    const basicTool = allTools.find(t => t.name === toolName) || {};
+    document.getElementById('tool-modal-name').textContent = toolName;
+    document.getElementById('tool-modal-desc').textContent = basicTool.description || '';
+    document.getElementById('tool-modal-params').innerHTML = '<p class="text-sm text-gray-400 italic">Loading...</p>';
+    document.getElementById('tool-modal-returns').textContent = '';
+    document.getElementById('tool-test-form').innerHTML = '';
+    document.getElementById('tool-test-result').classList.add('hidden');
+    document.getElementById('tool-test-output').textContent = '';
+    switchToolTab('info');
+    document.getElementById('tool-modal').classList.remove('hidden');
+
+    // Ensure full defs are loaded (handles race condition and disabled skills)
+    if (!toolDefsMap[toolName]) {
+        await loadToolDefs();
+    }
+
+    // If still missing after fetch, it means the skill has no tools file or the tool isn't there
+    const def = toolDefsMap[toolName];
+    const fn = def?.function || {};
+    const params = fn.parameters?.properties || {};
+    const required = fn.parameters?.required || [];
+
+    // Update description from full def (may be richer than the summary)
+    if (fn.description) document.getElementById('tool-modal-desc').textContent = fn.description;
+
+    // Parameters table
+    const paramEl = document.getElementById('tool-modal-params');
+    const paramKeys = Object.keys(params);
+    if (paramKeys.length === 0) {
+        paramEl.innerHTML = '<p class="text-sm text-gray-400 italic">No parameters</p>';
+    } else {
+        paramEl.innerHTML = `
+        <div class="border border-gray-200 rounded-lg overflow-x-auto">
+            <table class="w-full text-sm min-w-[540px]">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500 whitespace-nowrap">Name</th>
+                        <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500 whitespace-nowrap">Type</th>
+                        <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500 whitespace-nowrap">Required</th>
+                        <th class="text-left px-3 py-2 text-xs font-semibold text-gray-500">Description</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    ${paramKeys.map(k => {
+                        const p = params[k];
+                        const isReq = required.includes(k);
+                        const typeLabel = p.enum ? 'enum' : (p.type || '—');
+                        const enumHint = p.enum ? `<span class="block text-xs text-gray-400 mt-0.5">${p.enum.map(v => esc(String(v))).join(', ')}</span>` : '';
+                        return `<tr class="hover:bg-gray-50">
+                            <td class="px-3 py-2 font-mono text-xs text-gray-800 font-medium align-top whitespace-nowrap">${esc(k)}</td>
+                            <td class="px-3 py-2 align-top"><span class="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-mono whitespace-nowrap">${esc(typeLabel)}</span>${enumHint}</td>
+                            <td class="px-3 py-2 align-top whitespace-nowrap">${isReq
+                                ? '<span class="text-xs bg-red-50 text-red-600 px-1.5 py-0.5 rounded">yes</span>'
+                                : '<span class="text-xs text-gray-400">no</span>'}</td>
+                            <td class="px-3 py-2 text-xs text-gray-600 align-top">${esc(p.description || '')}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    }
+
+    // Return format
+    const returnsEl = document.getElementById('tool-modal-returns');
+    const returnSchema = fn.returns || fn.return_schema || def?.returns;
+    if (returnSchema) {
+        returnsEl.textContent = typeof returnSchema === 'string'
+            ? returnSchema
+            : JSON.stringify(returnSchema, null, 2);
+    } else {
+        returnsEl.textContent = 'No formal return schema defined.\nUse the Test tab to inspect actual output.';
+    }
+
+    // Build test form
+    buildTestForm(params, required);
+}
+
+function closeToolModal() {
+    document.getElementById('tool-modal').classList.add('hidden');
+    _activeToolName = null;
+}
+
+function switchToolTab(tab) {
+    document.getElementById('tool-panel-info').classList.toggle('hidden', tab !== 'info');
+    document.getElementById('tool-panel-test').classList.toggle('hidden', tab !== 'test');
+    const infoBtn = document.getElementById('tool-tab-info');
+    const testBtn = document.getElementById('tool-tab-test');
+    const active = 'px-3 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px transition-colors';
+    const inactive = 'px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px transition-colors';
+    infoBtn.className = tab === 'info' ? active : inactive;
+    testBtn.className = tab === 'test' ? active : inactive;
+}
+
+function buildTestForm(params, required) {
+    const form = document.getElementById('tool-test-form');
+    const keys = Object.keys(params);
+    if (keys.length === 0) {
+        form.innerHTML = '<p class="text-sm text-gray-400 italic">This tool takes no parameters.</p>';
+        return;
+    }
+    form.innerHTML = keys.map(k => {
+        const p = params[k];
+        const isReq = required.includes(k);
+        const label = `<label class="block text-xs font-medium text-gray-700 mb-1">${esc(k)}${isReq ? ' <span class="text-red-500">*</span>' : ''}<span class="font-normal text-gray-400 ml-1">(${esc(p.type || 'string')})</span></label>`;
+        let input;
+        if (p.enum) {
+            input = `<select data-param="${esc(k)}" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                ${p.enum.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('')}
+            </select>`;
+        } else if (p.type === 'boolean') {
+            input = `<label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" data-param="${esc(k)}" data-type="boolean" class="w-4 h-4 accent-indigo-500">
+                <span class="text-sm text-gray-600">true</span>
+            </label>`;
+        } else if (p.type === 'object' || p.type === 'array') {
+            input = `<textarea data-param="${esc(k)}" data-type="json" rows="3"
+                placeholder='${p.type === 'array' ? '[]' : '{}'}'
+                class="w-full p-2 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"></textarea>`;
+        } else if (p.type === 'integer' || p.type === 'number') {
+            input = `<input type="number" data-param="${esc(k)}" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">`;
+        } else {
+            input = `<input type="text" data-param="${esc(k)}" placeholder="${esc(p.description || '')}"
+                class="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">`;
+        }
+        return `<div>${label}${input}</div>`;
+    }).join('');
+}
+
+async function runToolTest() {
+    if (!_activeToolName) return;
+    const btn = document.getElementById('tool-test-btn');
+    const resultEl = document.getElementById('tool-test-result');
+    const outputEl = document.getElementById('tool-test-output');
+
+    const args = {};
+    document.querySelectorAll('#tool-test-form [data-param]').forEach(el => {
+        const name = el.dataset.param;
+        const type = el.dataset.type;
+        if (type === 'boolean') {
+            args[name] = el.checked;
+        } else if (type === 'json') {
+            try { args[name] = JSON.parse(el.value || (el.placeholder || 'null')); }
+            catch { args[name] = el.value; }
+        } else if (el.type === 'number') {
+            if (el.value !== '') args[name] = Number(el.value);
+        } else {
+            if (el.value !== '') args[name] = el.value;
+        }
+    });
+
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    resultEl.classList.add('hidden');
+
+    try {
+        const res = await fetch(`/api/skills/${SKILL_ID}/tools/test`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tool_name: _activeToolName, args})
+        });
+        const data = await res.json();
+        outputEl.textContent = JSON.stringify(data.result ?? data, null, 2);
+        outputEl.className = outputEl.className.replace(/text-\w+-\d+/, res.ok && !data.error ? 'text-green-400' : 'text-red-400');
+        resultEl.classList.remove('hidden');
+    } catch (e) {
+        outputEl.textContent = 'Error: ' + e.message;
+        resultEl.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run';
+    }
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeToolModal();
+});
+</script>
+{% endblock %}

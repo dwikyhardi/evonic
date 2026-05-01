@@ -1,0 +1,1462 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+/* Markdown rendering in comments */
+.kb-markdown > :first-child { margin-top: 0; }
+.kb-markdown > :last-child { margin-bottom: 0; }
+.kb-markdown p { margin: 0.25rem 0; }
+.kb-markdown code { background: #e5e7eb; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.875em; }
+.kb-markdown pre { background: #1f2937; color: #f3f4f6; padding: 0.75rem; border-radius: 0.5rem; overflow-x: auto; margin: 0.5rem 0; }
+.kb-markdown pre code { background: none; padding: 0; color: inherit; }
+.kb-markdown blockquote { border-left: 3px solid #d1d5db; padding-left: 0.75rem; color: #6b7280; margin: 0.25rem 0; }
+.kb-markdown a { color: #6366f1; text-decoration: underline; }
+.kb-markdown ul, .kb-markdown ol { padding-left: 1.5rem; margin: 0.25rem 0; }
+.kb-markdown ul { list-style-type: disc; }
+.kb-markdown ol { list-style-type: decimal; }
+.kb-markdown li { margin: 0.25rem 0; }
+
+/* Larger, more readable font for detail modal description */
+#detail-desc { font-size: 0.8rem; }
+#detail-desc ul { list-style-type: disc !important; padding-left: 1.25rem; }
+#detail-desc ol { list-style-type: decimal !important; padding-left: 1.25rem; }
+#detail-desc li { margin: 0.25rem 0; }
+.kb-markdown hr { border: none; border-top: 1px solid #e5e7eb; margin: 0.5rem 0; }
+.kb-markdown table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; font-size: 0.8125rem; }
+.kb-markdown th, .kb-markdown td { border: 1px solid #d1d5db; padding: 6px 10px; text-align: left; }
+.kb-markdown th { background: #f3f4f6; font-weight: 600; color: #1f2937; }
+.kb-markdown tr:nth-child(even) { background: #f9fafb; }
+.kb-markdown tr:hover { background: #f3f4f6; }
+
+/* Dark mode overrides for kb-markdown */
+html.dark .kb-markdown code { background: #1e293b; color: #e2e8f0; font-size: 0.7rem; }
+html.dark .kb-markdown pre { background: #1e293b; color: #e2e8f0; }
+html.dark .kb-markdown pre code { background: none; color: inherit; }
+html.dark .kb-markdown blockquote { border-left-color: #475569; color: #94a3b8; }
+html.dark .kb-markdown hr { border-top-color: #334155; }
+html.dark .kb-markdown table { border-color: #334155; }
+html.dark .kb-markdown th, html.dark .kb-markdown td { border-color: #334155; }
+html.dark .kb-markdown th { background: #1e293b; color: #f1f5f9; }
+html.dark .kb-markdown td { color: #cbd5e1; }
+html.dark .kb-markdown tr:nth-child(even) { background: #0f172a; }
+html.dark .kb-markdown tr:hover { background: #334155; }
+
+/* Enhance button disabled state */
+#enhance-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Assign Auto button — dark mode border color (subtle, not too bright) */
+html.dark #assign-auto-btn {
+    border-color: #92400e !important;
+}
+
+/* Drag & Drop styles */
+.dragging { opacity: 0.5; }
+.drag-over { --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000); --tw-ring-color: rgb(129 140 248); background-color: rgb(238 242 255); }
+html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(49 46 129 / 0.2); }
+
+/* Scrollable tabs — hide scrollbar */
+#detailTabs::-webkit-scrollbar { display: none; }
+#detailTabs { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+
+<!-- Board header -->
+<div class="px-6 pt-5 pb-4">
+    <div class="flex items-center justify-between gap-2 sm:gap-3">
+        <h1 class="text-lg sm:text-xl font-semibold text-gray-900 flex-shrink-0">Kanban Board</h1>
+        <button id="auto-refresh-toggle" onclick="toggleAutoRefresh()" class="shrink-0 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-1 sm:gap-1.5 transition relative group" title="Auto-refresh board every 5 seconds">
+          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 refresh-icon transition-transform duration-1000 ease-in-out group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        </button>
+    </div>
+    <div class="flex flex-col md:flex-row gap-2 items-center mt-3">
+        <!-- Desktop search bar (left of buttons) -->
+        <div class="hidden md:flex gap-2 items-center">
+            <input type="text" id="search-input-desktop" placeholder="Search tasks..." class="w-64 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400" onkeydown="if(event.key==='Enter')applySearch()" oninput="syncSearch(this)">
+            <button id="clear-search-link" onclick="clearSearch()" type="button" class="hidden text-sm text-gray-400 hover:text-red-500 cursor-pointer font-medium whitespace-nowrap" title="Clear search"><i data-lucide="x"></i></button>
+        </div>
+
+        <!-- Buttons group -->
+        <div class="flex gap-2 md:ml-auto">
+            <button id="assign-btn" onclick="openAssignModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 bg-gray-300 dark:bg-gray-600 transition">Assign Agents</button>
+            <button id="trigger-btn" onclick="triggerAgents()" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">Trigger Agents</button>
+
+<button onclick="openCreateModal()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition">+ Add Task</button>
+        </div>
+
+        <!-- Mobile search bar (below buttons, full width) -->
+        <div class="md:hidden w-full">
+            <input type="text" id="search-input-mobile" placeholder="Search tasks..." class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400" onkeydown="if(event.key==='Enter')applySearch()" oninput="syncSearch(this)">
+            <button id="clear-search-link-mobile" onclick="clearSearch()" type="button" class="hidden text-sm text-gray-400 hover:text-red-500 cursor-pointer font-medium whitespace-nowrap" title="Clear search"><i data-lucide="x"></i></button>
+        </div>
+    </div>
+</div>
+
+<!-- Board columns -->
+<div class="flex gap-4 px-6 pb-6 overflow-x-auto" style="min-height: calc(100vh - 140px);">
+    <div class="flex-1 min-w-[280px] dark:bg-gray-800 bg-gray-200 rounded-xl p-4 flex flex-col border border-gray-500" data-status="todo">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="font-semibold text-gray-700 dark:text-gray-200">Todo</span>
+            <span id="count-todo" class="text-xs bg-gray-100 text-gray-500 dark:bg-gray-600 dark:text-gray-100 rounded-full px-2 py-0.5">0</span>
+        </div>
+        <div class="task-list flex flex-col gap-2 flex-1 min-h-[60px]" id="list-todo"></div>
+    </div>
+    <div class="flex-1 min-w-[280px]  dark:bg-gray-800 bg-gray-200 rounded-xl p-4 flex flex-col border border-gray-500" data-status="in-progress">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="font-semibold text-gray-700 dark:text-gray-200">In Progress</span>
+            <span id="count-in-progress" class="text-xs bg-gray-100 text-gray-500 dark:bg-gray-600 dark:text-gray-100 rounded-full px-2 py-0.5">0</span>
+        </div>
+        <div class="task-list flex flex-col gap-2 flex-1 min-h-[60px]" id="list-in-progress"></div>
+    </div>
+    <div class="flex-1 min-w-[280px] bg-gray-200 dark:bg-gray-800 rounded-xl p-4 flex flex-col border border-gray-500" data-status="done">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="font-semibold text-gray-700 dark:text-gray-200">Done</span>
+            <span id="count-done" class="text-xs bg-gray-100 text-gray-500 dark:bg-gray-600 dark:text-gray-100 rounded-full px-2 py-0.5">0</span>
+        </div>
+        <div class="task-list flex flex-col gap-2 flex-1 min-h-[60px]" id="list-done"></div>
+    </div>
+    <div class="flex-1 min-w-[280px] dark:bg-gray-800 bg-gray-200 rounded-xl p-4 flex flex-col border border-gray-500" data-status="archived">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                </svg>
+                <span class="font-semibold text-gray-700 dark:text-gray-200">Archived</span>
+                <span id="count-archived" class="text-xs bg-gray-100 text-gray-500 dark:bg-gray-600 dark:text-gray-100 rounded-full px-2 py-0.5">0</span>
+            </div>
+            <button onclick="clearAllArchived()" class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 font-medium underline">Clear All</button>
+        </div>
+        <div class="task-list flex flex-col gap-2 flex-1 min-h-[60px]" id="list-archived"></div>
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" id="kb-modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <h2 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100" id="modal-title">Add Task</h2>
+        <form id="task-form" onsubmit="handleSubmit(event)">
+            <input type="hidden" id="task-id">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="task-title">Title *</label>
+                <input class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" type="text" id="task-title" required placeholder="Enter task title">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="task-desc">Description</label>
+                <textarea class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm resize-y bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="task-desc" rows="3" placeholder="Enter task description"></textarea>
+                <button type="button" onclick="enhanceDescription()" id="enhance-btn" class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg px-3 py-1.5 transition" title="Use AI to enhance description & generate title">
+                    <svg class="w-3.5 h-3.5 enhance-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143z"></path></svg>
+                    <span class="enhance-label">Enhance</span>
+                    <svg class="w-3.5 h-3.5 enhance-spinner hidden animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                </button>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="task-priority">Priority</label>
+                <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="task-priority">
+                    <option value="low" selected>Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="task-assignee">Assign to Agent (optional)</label>
+                <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="task-assignee">
+                    <option value="">-- None --</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition" id="modal-submit">Create Task</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" id="kb-detail-modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col" style="max-height:85vh;">
+        <!-- Header -->
+        <div class="px-6 pt-5 pb-0 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+            <div class="flex items-start justify-between mb-3">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100 pr-6 break-words" id="detail-title"></h2>
+                <button onclick="closeDetailModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">&times;</button>
+            </div>
+            <!-- Tabs -->
+            <div id="detailTabs" class="flex overflow-x-auto">
+                <button class="kb-tab flex-shrink-0 whitespace-nowrap px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-indigo-600 border-b-2 border-indigo-500 -mb-px transition" data-tab="details" onclick="switchTab('details')">Details</button>
+                <button class="kb-tab flex-shrink-0 whitespace-nowrap px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 border-b-2 border-transparent -mb-px hover:text-gray-700 dark:hover:text-gray-300 transition" data-tab="activity" onclick="switchTab('activity')">Activity</button>
+                <button class="kb-tab flex-shrink-0 whitespace-nowrap px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 border-b-2 border-transparent -mb-px hover:text-gray-700 dark:hover:text-gray-300 transition" data-tab="comments" onclick="switchTab('comments')">Comments <span id="comment-count" class="hidden"></span></button>
+                <button class="kb-tab flex-shrink-0 whitespace-nowrap px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 border-b-2 border-transparent -mb-px hover:text-gray-700 dark:hover:text-gray-300 transition" data-tab="process" onclick="switchTab('process')">Process</button>
+            </div>
+        </div>
+        <!-- Body -->
+        <div class="flex-1 overflow-y-auto p-6">
+            <!-- Details panel -->
+            <div class="kb-panel" id="panel-details">
+                <div class="mb-3">
+                    <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Description</div>
+                    <div class="kb-markdown break-words text-gray-700 dark:text-gray-300" id="detail-desc"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                        <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Status</div>
+                        <div class="text-sm text-gray-800 dark:text-gray-200" id="detail-status"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Priority</div>
+                        <div class="text-sm text-gray-800 dark:text-gray-200" id="detail-priority"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Assignee</div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400" id="detail-assignee"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Created</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400" id="detail-created"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Updated</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400" id="detail-updated"></div>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Duration</div>
+                        <div class="text-sm text-gray-700 dark:text-gray-300 font-medium" id="detail-durasi"></div>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center mb-3 mt-10">
+                    <button onclick="openEditFromDetail()" class="px-3 w-[100px] py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition">Edit</button>
+                </div>
+            </div>
+            <!-- Activity panel -->
+            <div class="kb-panel hidden" id="panel-activity">
+                <div id="activity-list" class="flex flex-col gap-0">
+                    <div class="text-sm text-gray-400 text-center py-8">Loading...</div>
+                </div>
+            </div>
+            <!-- Comments panel -->
+            <div class="kb-panel hidden" id="panel-comments">
+                <div id="comment-list" class="flex flex-col gap-3 mb-5"></div>
+                <div class="border-t border-gray-100 dark:border-gray-700 pt-4">
+                    <textarea id="comment-input" rows="3" placeholder="Add a comment..."
+                        class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm resize-y bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500"></textarea>
+                    <div class="flex justify-end mt-2">
+                        <button onclick="submitComment()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition">Post Comment</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Process panel -->
+            <div class="kb-panel hidden" id="panel-process">
+                <div id="process-list" class="flex flex-col gap-3"></div>
+            </div>
+            <!-- Edit panel -->
+            <div class="kb-panel hidden" id="panel-edit">
+                <form id="detail-edit-form" onsubmit="saveFromDetail(event)">
+                    <input type="hidden" id="detail-task-id">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="detail-task-title">Title *</label>
+                        <input class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" type="text" id="detail-task-title" required placeholder="Enter task title">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="detail-task-desc">Description</label>
+                        <textarea class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm resize-y bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="detail-task-desc" rows="3" placeholder="Enter task description"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="detail-task-priority">Priority</label>
+                        <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="detail-task-priority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="detail-task-assignee">Assign to Agent (optional)</label>
+                        <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="detail-task-assignee">
+                            <option value="">-- None --</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="cancelEditFromDetail()">Cancel</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Agents Modal -->
+<div class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" id="kb-assign-modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 p-6 flex flex-col" style="max-height:85vh;">
+        <div class="flex items-center justify-between mb-4 flex-shrink-0">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Assign Agents</h2>
+            <button onclick="closeAssignModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+            <div id="assign-loading" class="text-sm text-gray-400 dark:text-gray-500 text-center py-8">Loading proposal...</div>
+            <div id="assign-empty" class="hidden text-sm text-gray-500 dark:text-gray-400 text-center py-8">No unassigned todo tasks found.</div>
+            <div id="assign-no-agents" class="hidden text-sm text-gray-500 dark:text-gray-400 text-center py-8">No eligible agents configured. Add agents to <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">ELIGIBLE_AGENTS</code> in kanban config.</div>
+            <table id="assign-table" class="hidden w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-700">
+                        <th class="text-left py-2 px-2 text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Task</th>
+                        <th class="text-left py-2 px-2 text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 w-44">Agent</th>
+                    </tr>
+                </thead>
+                <tbody id="assign-tbody"></tbody>
+            </table>
+        </div>
+        <div id="assign-actions" class="hidden flex justify-between items-stretch gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+            <button onclick="autoAssign()" id="assign-auto-btn" class="px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/50 transition flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Auto
+            </button>
+            <div class="flex gap-2">
+                <button onclick="closeAssignModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancel</button>
+                <button onclick="confirmAssign()" id="assign-confirm-btn" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition">Confirm Assignment</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trigger Agent Selection Modal (Task #36) -->
+<div class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" id="kb-trigger-modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Agent</h2>
+            <button onclick="closeTriggerModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">&times;</button>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Choose an agent to trigger for this task:</p>
+        <div id="trigger-loading" class="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Loading agents...</div>
+        <div id="trigger-no-agents" class="hidden text-sm text-gray-500 dark:text-gray-400 text-center py-4">No agents available.</div>
+        <div id="trigger-agent-list" class="hidden flex flex-col gap-2 max-h-60 overflow-y-auto"></div>
+        <div id="trigger-actions" class="hidden flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+            <button onclick="closeTriggerModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancel</button>
+            <button onclick="confirmTrigger()" id="trigger-confirm-btn" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">Trigger</button>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.0/dist/purify.min.js"></script>
+<script>
+    const API = '/api/kanban';
+    const SUPER_AGENT_ID = '{{ super_agent_id }}';
+    let tasks = [];
+    let currentDetailId = null;
+
+    const PRIORITY_BADGE = {
+        high: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400',
+        medium: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-400',
+        low: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400',
+    };
+
+    const ACTION_DOT = {
+        created: 'bg-indigo-500',
+        status_changed: 'bg-blue-400',
+        updated: 'bg-gray-400',
+        released: 'bg-gray-400',
+        commented: 'bg-purple-500',
+    };
+
+    function esc(text) {
+        return $('<div>').text(text || '').html();
+    }
+
+    function stripMarkdown(text) {
+        if (!text) return '';
+        return text
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/`[^`]*`/g, '')
+            .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
+            .replace(/_{1,3}([^_]+)_{1,3}/g, '$1')
+            .replace(/~{1,2}([^~]+)~{1,2}/g, '$1')
+            .replace(/^#{1,6}\s*/gm, '')
+            .replace(/^[-*+]\s+/gm, '')
+            .replace(/^\d+\.\s+/gm, '')
+            .replace(/\n+/g, ' ')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+    }
+
+    function renderMarkdown(text) {
+        if (!text) return '';
+        try {
+            const rawHtml = marked.parse(text);
+            return DOMPurify.sanitize(rawHtml);
+        } catch (e) {
+            return esc(text);
+        }
+    }
+
+    function fmt(dateStr) {
+        if (!dateStr) return '—';
+        const d = new Date(dateStr);
+        return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtShort(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function fmtDuration(task) {
+        if (!task.started_at) return '';
+        const start = new Date(task.started_at);
+        const end = task.status === 'done' && task.completed_at ? new Date(task.completed_at) : new Date();
+        const diffMs = end - start;
+        if (diffMs < 0) return '';
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+
+        if (hours > 0 && mins > 0) return hours + ' jam ' + mins + ' menit';
+        if (hours > 0) return hours + ' jam';
+        if (mins > 0) return mins + ' menit';
+        return '< 1 menit';
+    }
+
+    // ── Board ─────────────────────────────────────────────────────────────────
+
+    let searchKeyword = '';
+    let previousTasksFingerprint = '';
+    let loadTasksInFlight = false;
+
+    // Compute a stable fingerprint from task fields that affect the UI.
+    // Ignores created_at/updated_at to avoid re-renders on timestamp-only changes.
+    function computeTasksFingerprint(taskList) {
+        const keys = ['id','title','description','status','priority','assignee','archived_at','completed_at','paused_at','started_at'];
+        // Build a compact, sorted representation for reliable comparison
+        const norm = taskList.map(t => keys.map(k => String(t[k] ?? '')).join('|')).sort().join('~');
+        // Simple hash to keep fingerprint short
+        let hash = 0;
+        for (let i = 0; i < norm.length; i++) {
+            const ch = norm.charCodeAt(i);
+            hash = ((hash << 5) - hash) + ch;
+            hash |= 0;
+        }
+        return String(hash);
+    }
+
+    function syncSearch(el) {
+        const val = el.value;
+        const desktop = document.getElementById('search-input-desktop');
+        const mobile = document.getElementById('search-input-mobile');
+        if (desktop && desktop !== el) desktop.value = val;
+        if (mobile && mobile !== el) mobile.value = val;
+    }
+
+    function applySearch() {
+        const desktop = document.getElementById('search-input-desktop');
+        const mobile = document.getElementById('search-input-mobile');
+        searchKeyword = (desktop?.value || mobile?.value || '').trim();
+        renderBoard();
+        updateSearchUI();
+    }
+
+    function clearSearch() {
+        searchKeyword = '';
+        const desktop = document.getElementById('search-input-desktop');
+        const mobile = document.getElementById('search-input-mobile');
+        if (desktop) desktop.value = '';
+        if (mobile) mobile.value = '';
+        renderBoard();
+        updateSearchUI();
+    }
+
+    function updateSearchUI() {
+        const link = document.getElementById('clear-search-link');
+        const linkMobile = document.getElementById('clear-search-link-mobile');
+        if (searchKeyword) {
+            if (link) link.classList.remove('hidden');
+            if (linkMobile) linkMobile.classList.remove('hidden');
+            if (typeof refreshLucide === 'function') refreshLucide();
+        } else {
+            if (link) link.classList.add('hidden');
+            if (linkMobile) linkMobile.classList.add('hidden');
+        }
+    }
+
+    function loadTasks() {
+        if (loadTasksInFlight) return;
+        loadTasksInFlight = true;
+        $.get(`${API}/tasks`, function(data) {
+            loadTasksInFlight = false;
+            const newTasks = data.tasks || [];
+            const newFP = computeTasksFingerprint(newTasks);
+            tasks = newTasks;
+            if (newFP !== previousTasksFingerprint) {
+                previousTasksFingerprint = newFP;
+                renderBoard();
+            }
+        }).fail(function() {
+            loadTasksInFlight = false;
+            console.error('Failed to load tasks');
+        });
+    }
+
+    function renderBoard() {
+        const MAX_VISIBLE = 10;
+        const kw = searchKeyword.toLowerCase();
+
+        function matchesSearch(task) {
+            if (!kw) return true;
+            return (task.title || '').toLowerCase().includes(kw) ||
+                   (task.description || '').toLowerCase().includes(kw) ||
+                   String(task.id).includes(kw);
+        }
+
+        ['todo', 'in-progress', 'done'].forEach(status => {
+            const all = tasks.filter(t => t.status === status && !t.archived_at && matchesSearch(t))
+                .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+            $(`#count-${status}`).text(all.length);
+            const $list = $(`#list-${status}`);
+            if (all.length === 0) {
+                $list.html('<div class="text-center text-gray-400 text-sm py-4">No tasks</div>');
+                return;
+            }
+            const visible = all.slice(0, MAX_VISIBLE);
+            const extra = all.length - MAX_VISIBLE;
+            let html = visible.map(renderCard).join('');
+            if (extra > 0) {
+                html += `<div class="text-center text-gray-400 dark:text-gray-500 text-xs py-2 italic">${extra} more...</div>`;
+            }
+            $list.html(html);
+        });
+
+        // Attach drop-zone handlers to non-archived columns
+        setupDropZones();
+
+        // Render archived column (also limited)
+        const allArchived = tasks.filter(t => t.archived_at && matchesSearch(t))
+            .sort((a, b) => new Date(b.archived_at) - new Date(a.archived_at));
+        $('#count-archived').text(allArchived.length);
+        const $archivedList = $('#list-archived');
+        if (allArchived.length === 0) {
+            $archivedList.html('<div class="text-center text-gray-400 text-sm py-4">No archived tasks</div>');
+        } else {
+            const visArchived = allArchived.slice(0, MAX_VISIBLE);
+            const extraArchived = allArchived.length - MAX_VISIBLE;
+            let html = visArchived.map(renderArchivedCard).join('');
+            if (extraArchived > 0) {
+                html += `<div class="text-center text-gray-400 dark:text-gray-500 text-xs py-2 italic">${extraArchived} more...</div>`;
+            }
+            $archivedList.html(html);
+        }
+
+        // Check for auto-archive (done tasks > 3 days without archived_at)
+        checkAutoArchive();
+    }
+
+    function fmtDate(dateStr) {
+        if (!dateStr) return '';
+        const d = new Date(dateStr);
+        const m = d.toLocaleString('en-US', { month: 'short' });
+        const day = d.getDate();
+        return `${m} ${day}`;
+    }
+
+    function renderCard(task) {
+        const pBadge = PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.medium;
+        const moveButtons = getMoveButtons(task);
+        const initials = task.assignee ? esc(task.assignee).split(/[\s._-]+/).filter(Boolean).map(s => s[0].toUpperCase()).slice(0, 2).join('') : '';
+        const hasAssignee = !!(task.assignee);
+        const nUrl = task.assignee ? `/api/agents/${esc(task.assignee)}/avatar` : '';
+        const agentTitle = task.assignee ? esc(getAgentName(task.assignee)) : '';
+        const rocketBtn = task.status === 'todo' ? `<button class="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition" title="Trigger agent" onclick="handleTrigger(${task.id}, ${hasAssignee}, event)">🚀</button>` : '';
+        return `
+        <div class="bg-white dark:bg-gray-700 rounded-lg p-3 shadow-sm hover:shadow-md dark:shadow-gray-900/30 transition border border-gray-200 dark:border-gray-700 cursor-grab active:cursor-grabbing" data-id="${task.id}" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)">
+            <div class="text-xs font-semibold text-gray-800 dark:text-gray-100 mb-1 break-words cursor-pointer" onclick="openDetailModal(${task.id})"><span class="text-gray-500 dark:text-gray-400 font-semibold">#${task.id} &bull;</span> ${esc(decodeHtmlEntities(task.title))}</div>
+            ${task.description ? `<div class="text-[11px] text-gray-500 dark:text-gray-400 mb-2 line-clamp-2 break-words cursor-pointer" onclick="openDetailModal(${task.id})">${esc(decodeHtmlEntities(stripMarkdown(task.description)))}</div>` : ''}
+            <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                <span class="text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 ${pBadge}">${esc(task.priority || 'low')}</span>
+                ${rocketBtn}
+                ${(task.status === 'in-progress' || (task.status === 'done' && task.started_at)) ? `<span class="flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400 mx-auto"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${fmtDuration(task)}</span>` : ''}
+                ${task.assignee ? `<span class="ml-auto inline-flex items-center gap-0"><img src="${nUrl}" alt="" class="w-5 h-5 rounded-full object-cover" title="${agentTitle}" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="hidden inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-semibold ${task.assignee === SUPER_AGENT_ID ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}" title="${agentTitle}">${initials}</span></span>` : ''}
+            </div>
+            <div class="flex gap-1 pt-1.5 border-t border-gray-100 dark:border-gray-700 flex-wrap">
+                ${moveButtons}
+                <button class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition cursor-pointer" onclick="deleteTask(${task.id})" title="Delete"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+            </div>
+        </div>`;
+    }
+
+    function getMoveButtons(task) {
+        const prev = { 'in-progress': 'todo', 'done': 'in-progress' }[task.status];
+        const next = { 'todo': 'in-progress', 'in-progress': 'done' }[task.status];
+        let btns = '';
+        if (prev) btns += `<button class="flex-1 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="moveTask(${task.id},'${prev}')">&#8592; ${prev.replace('-', ' ')}</button>`;
+        if (next) btns += `<button class="flex-1 text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="moveTask(${task.id},'${next}')">&#8594; ${next.replace('-', ' ')}</button>`;
+        return btns;
+    }
+
+    function renderArchivedCard(task) {
+        const pBadge = PRIORITY_BADGE[task.priority] || PRIORITY_BADGE.medium;
+        return `
+        <div class="bg-white dark:bg-gray-700 rounded-lg p-3 shadow-sm dark:shadow-gray-900/30 border border-gray-200 dark:border-gray-700" data-id="${task.id}">
+            <div class="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 break-words" onclick="openDetailModal(${task.id})"><span class="text-gray-500 dark:text-gray-400 font-semibold">#${task.id} •</span> ${esc(decodeHtmlEntities(task.title))}</div>
+            <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                <span class="text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 ${pBadge}">${esc(task.priority || 'low')}</span>
+                <span class="text-[10px] text-gray-400 dark:text-gray-500">Status: ${esc(task.status)}</span>
+                <span class="text-[10px] text-gray-400 dark:text-gray-500 ml-auto">${fmtShort(task.archived_at)}</span>
+            </div>
+            <div class="flex gap-1 pt-1.5 border-t border-gray-100 dark:border-gray-700 flex-wrap">
+                <button class="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition text-xs font-medium" onclick="unarchiveTask(${task.id})" title="Unarchive"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 015 5v2M3 10l4-4m-4 4l4 4"/></svg>Unarchive</button>
+                <button class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition cursor-pointer ml-auto" onclick="deleteTask(${task.id})" title="Delete"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+            </div>
+        </div>`;
+    }
+
+    function checkAutoArchive() {
+        const now = new Date();
+        const threshold = new Date(now.getTime() - 72 * 60 * 60 * 1000);
+        const toArchive = tasks.filter(t =>
+            t.status === 'done' &&
+            !t.archived_at &&
+            t.updated_at &&
+            new Date(t.updated_at) < threshold
+        );
+
+        if (toArchive.length === 0) return;
+
+        toArchive.forEach(task => {
+            $.post(`${API}/tasks/${task.id}/archive`, loadTasks);
+        });
+    }
+
+    function archiveTask(taskId) {
+        $.ajax({
+            url: `${API}/tasks/${taskId}/archive`,
+            method: 'POST',
+            success: loadTasks,
+            error: function(xhr) {
+                alert(xhr.responseJSON?.error || 'Failed to archive task');
+            }
+        });
+    }
+
+    function unarchiveTask(taskId) {
+        $.ajax({
+            url: `${API}/tasks/${taskId}/unarchive`,
+            method: 'POST',
+            success: loadTasks,
+            error: function(xhr) {
+                alert(xhr.responseJSON?.error || 'Failed to unarchive task');
+            }
+        });
+    }
+
+    function clearAllArchived() {
+        showConfirm({
+            title: 'Clear All Archived',
+            message: 'Are you sure you want to delete all archived tasks? This action cannot be undone.',
+            confirmText: 'Clear All',
+            cancelText: 'Cancel',
+            danger: true,
+            onConfirm: function() {
+                $.ajax({
+                    url: `${API}/archived/clear`,
+                    method: 'DELETE',
+                    success: loadTasks,
+                    error: function(xhr) {
+                        alert(xhr.responseJSON?.error || 'Failed to clear archived tasks');
+                    }
+                });
+            }
+        });
+    }
+
+    // ── Drag & Drop ──────────────────────────────────────────────────
+
+    function handleDragStart(e) {
+        const card = e.target.closest('[data-id]');
+        if (!card) return;
+        e.dataTransfer.setData('text/plain', card.dataset.id);
+        e.dataTransfer.effectAllowed = 'move';
+        card.classList.add('dragging');
+    }
+
+    function handleDragEnd(e) {
+        const card = e.target.closest('[data-id]');
+        if (card) card.classList.remove('dragging');
+        $('.task-list').removeClass('drag-over');
+    }
+
+    function setupDropZones() {
+        $('#list-todo, #list-in-progress, #list-done').off('dragover dragenter dragleave drop').on({
+            dragover: function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            },
+            dragenter: function(e) {
+                e.preventDefault();
+                $(this).addClass('drag-over');
+            },
+            dragleave: function(e) {
+                $(this).removeClass('drag-over');
+            },
+            drop: function(e) {
+                e.preventDefault();
+                $(this).removeClass('drag-over');
+                const taskId = parseInt(e.dataTransfer.getData('text/plain'));
+                if (!taskId) return;
+                const col = $(this).closest('[data-status]');
+                const newStatus = col.data('status');
+                if (newStatus) moveTask(taskId, newStatus);
+            }
+        });
+    }
+
+    // ── CRUD ──────────────────────────────────────────────────────────
+
+    function moveTask(taskId, status) {
+        const task = tasks.find(t => t.id === taskId);
+        if (task && task.status === status) return;
+        $.ajax({ url: `${API}/tasks/${taskId}`, method: 'PUT',
+            contentType: 'application/json', data: JSON.stringify({ status }),
+            success: loadTasks,
+            error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to move task'); }
+        });
+    }
+
+    async function deleteTask(taskId) {
+        const confirmed = await showConfirm({
+            title: 'Delete Task',
+            message: 'Are you sure you want to delete this task? This action cannot be undone.',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            danger: true
+        });
+        if (!confirmed) return;
+        $.ajax({ url: `${API}/tasks/${taskId}`, method: 'DELETE',
+            success: loadTasks,
+            error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to delete task'); }
+        });
+    }
+
+    // ── Create/Edit Modal ─────────────────────────────────────────────────────
+
+    function openCreateModal() {
+        $('#task-id').val('');
+        $('#task-form')[0].reset();
+        $('#task-assignee').val('');
+        $('#modal-title').text('Add Task');
+        $('#modal-submit').text('Create Task');
+        populateAgentSelect('#task-assignee');
+        $('#kb-modal').removeClass('hidden').addClass('flex');
+    }
+
+    function editTask(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        $('#task-id').val(task.id);
+        $('#task-title').val(task.title);
+        $('#task-desc').val(task.description || '');
+        $('#task-priority').val(task.priority || 'low');
+        populateAgentSelect('#task-assignee', task.assignee || '');
+        $('#modal-title').text('Edit Task');
+        $('#modal-submit').text('Save Changes');
+        $('#kb-modal').removeClass('hidden').addClass('flex');
+    }
+
+    function closeModal() {
+        $('#kb-modal').removeClass('flex').addClass('hidden');
+    }
+
+    function handleSubmit(e) {
+        e.preventDefault();
+        const taskId = $('#task-id').val();
+        const payload = {
+            title: $('#task-title').val().trim(),
+            description: $('#task-desc').val().trim(),
+            priority: $('#task-priority').val(),
+            assignee: $('#task-assignee').val().trim() || null,
+        };
+        if (!payload.title) return;
+        if (taskId) {
+            $.ajax({ url: `${API}/tasks/${taskId}`, method: 'PUT',
+                contentType: 'application/json', data: JSON.stringify(payload),
+                success: function() { closeModal(); loadTasks(); },
+                error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to update'); }
+            });
+        } else {
+            $.ajax({ url: `${API}/tasks`, method: 'POST',
+                contentType: 'application/json', data: JSON.stringify(payload),
+                success: function() { closeModal(); loadTasks(); },
+                error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to create'); }
+            });
+        }
+    }
+
+    // ── Enhance with AI ─────────────────────────────────────────────────────
+
+    function enhanceDescription() {
+        const desc = $('#task-desc').val().trim();
+        if (!desc) {
+            alert('Please enter a description first.');
+            return;
+        }
+        const $btn = $('#enhance-btn');
+        $btn.find('.enhance-icon').addClass('hidden');
+        $btn.find('.enhance-label').text('Enhancing...');
+        $btn.find('.enhance-spinner').removeClass('hidden');
+        $btn.prop('disabled', true);
+
+        $.ajax({
+            url: `${API}/enhance`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                title: $('#task-title').val().trim(),
+                description: desc,
+            }),
+            success: function(data) {
+                if (data.title) $('#task-title').val(data.title);
+                if (data.description) $('#task-desc').val(data.description);
+            },
+            error: function(xhr) {
+                alert(xhr.responseJSON?.error || 'Enhance failed');
+            },
+            complete: function() {
+                $btn.find('.enhance-icon').removeClass('hidden');
+                $btn.find('.enhance-label').text('Enhance');
+                $btn.find('.enhance-spinner').addClass('hidden');
+                $btn.prop('disabled', false);
+            },
+        });
+    }
+
+    // ── Detail Modal ──────────────────────────────────────────────────────────
+
+    function decodeHtmlEntities(str) {
+        const txt = document.createElement('textarea');
+        txt.innerHTML = str;
+        return txt.value;
+    }
+
+    function openDetailModal(taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return;
+        currentDetailId = taskId;
+
+        $('#detail-title').text(`#${task.id} • ${decodeHtmlEntities(task.title)}`);
+        $('#detail-desc').html(renderMarkdown(task.description) || '—');
+        $('#detail-status').text(task.status);
+        $('#detail-priority').text(task.priority || 'low');
+        $('#detail-assignee').html(renderAssigneeWithAvatar(task.assignee));
+        if (task.assignee === SUPER_AGENT_ID) {
+            $('#detail-assignee').addClass('text-red-500 font-semibold').removeClass('text-gray-600');
+        } else {
+            $('#detail-assignee').removeClass('text-red-500 font-semibold').addClass('text-gray-600');
+        }
+        $('#detail-created').text(fmt(task.created_at));
+        $('#detail-updated').text(fmt(task.updated_at));
+        $('#detail-durasi').text(fmtDuration(task));
+
+        switchTab('details');
+        $('#kb-detail-modal').removeClass('hidden').addClass('flex');
+
+        loadActivity(taskId);
+        loadComments(taskId);
+        loadProcess(taskId);
+    }
+
+    function closeDetailModal() {
+        $('#kb-detail-modal').removeClass('flex').addClass('hidden');
+        currentDetailId = null;
+    }
+
+    function switchTab(tab) {
+        $('.kb-tab').each(function() {
+            const active = $(this).data('tab') === tab;
+            $(this).toggleClass('text-indigo-600 border-indigo-500', active);
+            $(this).toggleClass('text-gray-500 border-transparent', !active);
+        });
+        $('.kb-panel').addClass('hidden');
+        $(`#panel-${tab}`).removeClass('hidden');
+    }
+
+    function loadActivity(taskId) {
+        $('#activity-list').html('<div class="text-sm text-gray-400 text-center py-8">Loading...</div>');
+        $.get(`${API}/tasks/${taskId}/activity`, function(data) {
+            const items = data.activity || [];
+            if (!items.length) {
+                $('#activity-list').html('<div class="text-sm text-gray-400 text-center py-8">No activity yet</div>');
+                return;
+            }
+            function getDotColor(action, details) {
+                if (action === 'status_changed' && details) {
+                    const parts = details.split(' → ');
+                    const toStatus = parts[1]?.trim();
+                    if (toStatus === 'done') return 'bg-green-500';
+                    if (toStatus === 'in-progress') return 'bg-blue-400';
+                }
+                return ACTION_DOT[action] || 'bg-gray-400';
+            }
+            const html = items.map((item, i) => {
+                const dot = getDotColor(item.action, item.details);
+                const isLast = i === items.length - 1;
+                return `
+                <div class="flex gap-3 pb-3 relative ml-2 pl-0 ${isLast ? '' : 'border-l-2 border-gray-100'}">
+                    <div class="w-4 h-4 rounded-full ${dot} flex-shrink-0 mt-0.5 ring-2 ring-white shadow-sm -ml-2" style="position:relative;left:0"></div>
+                    <div class="flex-1 pb-0">
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-200 capitalize">${esc(item.action.replace('_', ' '))}</div>
+                        ${item.details ? `<div class="text-xs text-gray-500 dark:text-gray-400">${esc(item.details)}</div>` : ''}
+                        <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">${fmtShort(item.created_at)}</div>
+                    </div>
+                </div>`;
+            }).join('');
+            $('#activity-list').html(html);
+        }).fail(function() {
+            $('#activity-list').html('<div class="text-sm text-red-400 text-center py-4">Failed to load activity</div>');
+        });
+    }
+
+    function loadComments(taskId) {
+        $('#comment-list').html('<div class="text-sm text-gray-400 text-center py-4">Loading...</div>');
+        $.get(`${API}/tasks/${taskId}/comments`, function(data) {
+            const items = data.comments || [];
+            if (items.length) {
+                $('#comment-count').text(`(${items.length})`).removeClass('hidden');
+            } else {
+                $('#comment-count').addClass('hidden');
+            }
+            if (!items.length) {
+                $('#comment-list').html('<div class="text-sm text-gray-400 text-center py-4">No comments yet</div>');
+                return;
+            }
+            const html = items.map(c => `
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                    <div class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1">${esc(c.author || 'Anonymous')}</div>
+                    <div class="text-sm text-gray-700 dark:text-gray-300 break-words kb-markdown">${DOMPurify.sanitize(marked.parse(c.content))}</div>
+                    <div class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">${fmtShort(c.created_at)}</div>
+                </div>`).join('');
+            $('#comment-list').html(html);
+        }).fail(function() {
+            $('#comment-list').html('<div class="text-sm text-red-400 text-center py-4">Failed to load comments</div>');
+        });
+    }
+
+    function loadProcess(taskId) {
+        $('#process-list').html('<div class="text-sm text-gray-400 text-center py-4">Loading...</div>');
+        $.get(`${API}/tasks/${taskId}/process`, function(data) {
+            if (!data.enabled) {
+                $('#process-list').html(`
+                    <div class="text-center py-8">
+                        <div class="text-gray-400 dark:text-gray-500 mb-2">⚙️ Process Recorder is disabled</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">${esc(data.message)}</div>
+                        <a href="${esc(data.settings_url)}" class="inline-block mt-3 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">→ Open Plugin Settings</a>
+                    </div>`);
+                return;
+            }
+            const messages = data.messages;
+            if (!messages || !messages.length) {
+                $('#process-list').html('<div class="text-sm text-gray-400 text-center py-8">No process log available for this task</div>');
+                return;
+            }
+            const ROLE_ICONS = {
+                'user': '👤',
+                'assistant': '🤖',
+                'tool': '🔧',
+                'system': '⚙️',
+            };
+            const ROLE_COLORS = {
+                'user': 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+                'assistant': 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800',
+                'tool': 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+                'system': 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600',
+            };
+            const html = messages.map((m, i) => {
+                const role = m.role || 'unknown';
+                const icon = ROLE_ICONS[role] || '📄';
+                const color = ROLE_COLORS[role] || 'bg-gray-50 dark:bg-gray-700/30 border-gray-200';
+                const content = m.content || '';
+                const isTool = role === 'tool';
+                const isAssistant = role === 'assistant';
+                const isCollapsible = isTool || (isAssistant && content.length > 200);
+                const shortContent = content.length > 300 ? content.substring(0, 300) + '...' : content;
+                const msgId = `proc-msg-${taskId}-${i}`;
+                let bodyHtml = '';
+                if (isCollapsible) {
+                    bodyHtml = `
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300" onclick="$('#${msgId}-body').toggle();$(this).find('.expand-arrow').toggleClass('rotate-90')">
+                            <span class="expand-arrow inline-block transition-transform mr-1">▶</span>
+                            <span class="font-mono">${esc((m.name || role).substring(0, 40))}</span>
+                            <span class="text-gray-400 ml-2">${content.length} chars</span>
+                        </div>
+                        <div id="${msgId}-body" class="hidden">
+                            <div class="text-xs font-mono whitespace-pre-wrap break-all text-gray-600 dark:text-gray-300 max-h-96 overflow-y-auto bg-gray-100 dark:bg-gray-800 rounded p-2">${esc(content)}</div>
+                        </div>`;
+                } else {
+                    bodyHtml = `<div class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">${esc(shortContent)}</div>`;
+                    if (isAssistant && content.length > 200) {
+                        bodyHtml += `<button class="text-xs text-indigo-500 mt-1 hover:underline" onclick="$(this).prev().text(esc(\`${esc(content)}\`));$(this).remove()">Show more</button>`;
+                    }
+                }
+                return `
+                    <div class="rounded-lg border p-3 ${color}">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-xs">${icon}</span>
+                            <span class="text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">${esc(role)}</span>
+                            ${m.name ? `<span class="text-xs text-amber-600 dark:text-amber-400 font-mono">${esc(m.name)}</span>` : ''}
+                        </div>
+                        ${bodyHtml}
+                    </div>`;
+            }).join('');
+            $('#process-list').html(html);
+        }).fail(function() {
+            $('#process-list').html('<div class="text-sm text-red-400 text-center py-4">Failed to load process log</div>');
+        });
+    }
+
+    function submitComment() {
+        if (!currentDetailId) return;
+        const content = $('#comment-input').val().trim();
+        if (!content) return;
+        $.ajax({
+            url: `${API}/tasks/${currentDetailId}/comments`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ content }),
+            success: function() {
+                $('#comment-input').val('');
+                loadComments(currentDetailId);
+                loadActivity(currentDetailId);
+            },
+            error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to post comment'); }
+        });
+    }
+
+    // ── Cmd+Enter / Ctrl+Enter to submit comment ──────────────────────────────────────────────
+
+    $(document).on('keydown', '#comment-input', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            submitComment();
+        }
+    });
+
+    // ── Edit from Detail Modal ─────────────────────────────────────────────────────────────────
+
+    function openEditFromDetail() {
+        const task = tasks.find(t => t.id === currentDetailId);
+        if (!task) return;
+
+        $('#detail-task-id').val(task.id);
+        $('#detail-task-title').val(decodeHtmlEntities(task.title));
+        $('#detail-task-desc').val(task.description || '');
+        $('#detail-task-priority').val(task.priority || 'low');
+        populateAgentSelect('#detail-task-assignee', task.assignee || '');
+
+        $('#panel-details').addClass('hidden');
+        $('#panel-edit').removeClass('hidden');
+    }
+
+    function saveFromDetail(e) {
+        e.preventDefault();
+        const taskId = $('#detail-task-id').val();
+        if (!taskId) return;
+
+        const payload = {
+            title: $('#detail-task-title').val().trim(),
+            description: $('#detail-task-desc').val().trim(),
+            priority: $('#detail-task-priority').val(),
+            assignee: $('#detail-task-assignee').val().trim() || null,
+        };
+        if (!payload.title) return;
+
+        $.ajax({
+            url: `${API}/tasks/${taskId}`,
+            method: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            success: function() {
+                // Cast to number to match API response types (t.id is a number)
+                const taskIdNum = Number(taskId);
+                const task = tasks.find(t => t.id === taskIdNum);
+                if (task) {
+                    Object.assign(task, payload);
+                }
+                $('#panel-edit').addClass('hidden');
+                $('#panel-details').removeClass('hidden');
+                openDetailModal(taskIdNum);
+            },
+            error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to update'); }
+        });
+    }
+
+    function cancelEditFromDetail() {
+        $('#panel-edit').addClass('hidden');
+        $('#panel-details').removeClass('hidden');
+    }
+
+    // ── Assign Agents Modal ───────────────────────────────────────────────────
+
+    let _assignProposals = [];
+    let _assignAgents = [];
+
+    function openAssignModal() {
+        $('#kb-assign-modal').removeClass('hidden').addClass('flex');
+        $('#assign-loading').show();
+        $('#assign-table, #assign-actions, #assign-empty, #assign-no-agents').addClass('hidden');
+
+        $.get('/api/kanban/agent/propose', function(data) {
+            $('#assign-loading').hide();
+            _assignProposals = data.proposals || [];
+            _assignAgents = data.eligible_agents || [];
+
+            if (!_assignAgents.length) {
+                $('#assign-no-agents').removeClass('hidden');
+                return;
+            }
+            if (!_assignProposals.length) {
+                $('#assign-empty').removeClass('hidden');
+                return;
+            }
+
+            const rows = _assignProposals.map(function(p, i) {
+                const options = '<option value="">Select agent...</option>' + _assignAgents.map(function(a) {
+                    return `<option value="${esc(a)}">${esc(a)}</option>`;
+                }).join('');
+                const pBadge = { high: 'bg-red-100 text-red-600', medium: 'bg-yellow-100 text-yellow-700', low: 'bg-green-100 text-green-700' }[p.priority] || 'bg-yellow-100 text-yellow-700';
+                return `<tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/10">
+                    <td class="py-2.5 px-2">
+                        <span class="text-gray-400 dark:text-gray-500 text-xs">#${p.task_id}</span>
+                        <span class="ml-1 text-gray-800 dark:text-gray-100">${esc(p.title)}</span>
+                        <span class="ml-1.5 text-xs font-semibold uppercase rounded px-1.5 py-0.5 ${pBadge}">${esc(p.priority)}</span>
+                    </td>
+                    <td class="py-2.5 px-2">
+                        <select class="assign-agent-select w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500" data-index="${i}">${options}</select>
+                    </td>
+                </tr>`;
+            }).join('');
+
+            $('#assign-tbody').html(rows);
+            $('#assign-table, #assign-actions').removeClass('hidden');
+        }).fail(function() {
+            $('#assign-loading').hide();
+            alert('Failed to load assignment proposal');
+            closeAssignModal();
+        });
+    }
+
+    function closeAssignModal() {
+        $('#kb-assign-modal').removeClass('flex').addClass('hidden');
+    }
+
+    // ── Trigger Agents ────────────────────────────────────────────────────────
+
+    function triggerAgents() {
+        const $btn = $('#trigger-btn');
+        $btn.prop('disabled', true);
+        $.post('/api/kanban/agent/check', function() {
+            toast.show('Agents triggered successfully', 'success');
+            setTimeout(loadTasks, 800);
+        }).fail(function() {
+            toast.show('Failed to trigger agents', 'error');
+        }).always(function() {
+            setTimeout(function() { $btn.prop('disabled', false); }, 2000);
+        });
+    }
+
+    // ─── Trigger Per-Task ───
+
+    let _triggerTaskId = null;
+    let _triggerAgent = null;
+    let _triggerAgents = [];
+
+    function handleTrigger(taskId, hasAssignee, event) {
+        if (hasAssignee) {
+            // Already has assignee, trigger directly
+            triggerTask(taskId, null, event);
+        } else {
+            // No assignee, show modal to select agent
+            _triggerTaskId = taskId;
+            _triggerAgent = null;
+            openTriggerModal();
+        }
+    }
+
+    function openTriggerModal() {
+        $('#kb-trigger-modal').removeClass('hidden').addClass('flex');
+        $('#trigger-loading').show();
+        $('#trigger-agent-list, #trigger-actions, #trigger-no-agents').addClass('hidden');
+
+        const now = Date.now();
+        if (!_agentCache || (now - _agentCacheTime) > 60000) {
+            $.get('/api/agents', function(data) {
+                _agentCache = (data.agents || []).map(a => ({id: a.id, name: a.name || a.id}));
+                _agentCacheTime = now;
+                _renderTriggerAgents();
+            }).fail(function() {
+                _agentCache = [];
+                _agentCacheTime = now;
+                _renderTriggerAgents();
+            });
+        } else {
+            _renderTriggerAgents();
+        }
+    }
+
+    function _renderTriggerAgents() {
+        $('#trigger-loading').hide();
+        if (!_agentCache || !_agentCache.length) {
+            $('#trigger-no-agents').removeClass('hidden');
+            return;
+        }
+
+        _triggerAgents = _agentCache;
+        const html = _triggerAgents.map(function(agent) {
+            return `<button onclick="selectTriggerAgent('${esc(agent.id)}')" class="w-full text-left px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 hover:bg-orange-50 hover:border-orange-200 dark:hover:bg-gray-600 dark:hover:border-orange-400 transition ${_triggerAgent === agent.id ? 'bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400' : ''}">${esc(agent.name)}</button>`;
+        }).join('');
+
+        $('#trigger-agent-list').html(html);
+        $('#trigger-agent-list, #trigger-actions').removeClass('hidden');
+    }
+
+    function selectTriggerAgent(agentId) {
+        _triggerAgent = agentId;
+        $('#trigger-agent-list button').each(function() {
+            const $btn = $(this);
+            const onclickId = ($btn.attr('onclick') || '').match(/selectTriggerAgent\('([^']+)'\)/);
+            if (onclickId && onclickId[1] === agentId) {
+                $btn.addClass('bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400');
+            } else {
+                $btn.removeClass('bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400');
+            }
+        });
+    }
+
+    function closeTriggerModal() {
+        $('#kb-trigger-modal').removeClass('flex').addClass('hidden');
+        _triggerTaskId = null;
+        _triggerAgent = null;
+    }
+
+    function confirmTrigger() {
+        if (!_triggerAgent) {
+            alert('Please select an agent');
+            return;
+        }
+        triggerTask(_triggerTaskId, _triggerAgent);
+        closeTriggerModal();
+    }
+
+    function triggerTask(taskId, agentId, event) {
+        // Determine which button to show loading state on
+        let $btn = null;
+        let origText = null;
+        let isRocketBtn = false;
+
+        if (event && event.target) {
+            // Direct rocket button click
+            $btn = $(event.target);
+            origText = $btn.text();
+            isRocketBtn = true;
+        } else {
+            // Modal confirm button click
+            $btn = $('#trigger-confirm-btn');
+            origText = $btn.text();
+        }
+
+        if ($btn.length) {
+            if (isRocketBtn) {
+                $btn.html('<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>').prop('disabled', true);
+            } else {
+                $btn.text('Triggering...').prop('disabled', true);
+            }
+        }
+
+        $.ajax({
+            url: `${API}/tasks/${taskId}/trigger`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ agent_id: agentId }),
+            success: function(res) {
+                toast.show('Agent triggered successfully', 'success', 3000);
+                setTimeout(loadTasks, 800);
+            },
+            error: function(xhr) {
+                const errorMsg = xhr.responseJSON?.error || 'Failed to trigger agent. Please try again.';
+                toast.show(errorMsg, 'error', 3000);
+            },
+            complete: function() {
+                if ($btn && $btn.length) {
+                    if (isRocketBtn) {
+                        $btn.text(origText || '🚀').prop('disabled', false);
+                    } else {
+                        $btn.text(origText || 'Trigger').prop('disabled', false);
+                    }
+                }
+            }
+        });
+    }
+
+    function confirmAssign() {
+        const assignments = [];
+        for (let i = 0; i < _assignProposals.length; i++) {
+            const agentId = $(`.assign-agent-select[data-index="${i}"]`).val();
+            if (!agentId) {
+                alert('Please select an agent for task #' + _assignProposals[i].task_id);
+                return;
+            }
+            assignments.push({ task_id: _assignProposals[i].task_id, agent_id: agentId });
+        }
+
+        const $btn = $('#assign-confirm-btn');
+        $btn.text('Assigning...').prop('disabled', true);
+
+        $.ajax({
+            url: '/api/kanban/agent/assign',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ assignments: assignments }),
+            success: function() {
+                closeAssignModal();
+                loadTasks();
+            },
+            error: function(xhr) {
+                alert(xhr.responseJSON?.error || 'Failed to assign tasks');
+            },
+            complete: function() {
+                $btn.text('Confirm Assignment').prop('disabled', false);
+            }
+        });
+    }
+
+    function autoAssign() {
+        const $btn = $('#assign-auto-btn');
+        $btn.prop('disabled', true).html(
+            '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Thinking...'
+        );
+
+        const tasks = _assignProposals.map(function(p) {
+            return {
+                task_id: p.task_id,
+                title: p.title,
+                description: p.description || '',
+                priority: p.priority,
+            };
+        });
+
+        $.ajax({
+            url: '/api/kanban/agent/auto_assign',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ tasks: tasks }),
+            success: function(data) {
+                const map = data.assignments || {};
+                _assignProposals.forEach(function(p, i) {
+                    const agentId = map[String(p.task_id)];
+                    if (agentId) {
+                        $('.assign-agent-select[data-index="' + i + '"]').val(agentId);
+                    }
+                });
+                toast.show('Auto-assignment applied. Review and confirm.', 'success');
+            },
+            error: function(xhr) {
+                alert(xhr.responseJSON?.error || 'Auto-assign failed');
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html(
+                    '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Auto'
+                );
+            }
+        });
+    }
+
+    // ── Agent Select Population ──
+
+    let _agentCache = null;
+    let _agentCacheTime = 0;
+
+    function populateAgentSelect(selector, selectedValue) {
+        const now = Date.now();
+        if (!_agentCache || (now - _agentCacheTime) > 60000) {
+            $.get('/api/agents', function(data) {
+                _agentCache = (data.agents || []).map(a => ({id: a.id, name: a.name || a.id}));
+                _agentCacheTime = now;
+                _doPopulateAgentSelect(selector, selectedValue);
+            }).fail(function() {
+                _agentCache = [];
+                _agentCacheTime = now;
+                _doPopulateAgentSelect(selector, selectedValue);
+            });
+        } else {
+            _doPopulateAgentSelect(selector, selectedValue);
+        }
+    }
+
+    function getAgentName(agentId) {
+        if (!agentId || !_agentCache) return agentId || '';
+        const agent = _agentCache.find(a => a.id === agentId);
+        return agent ? agent.name : agentId;
+    }
+
+    function renderAssigneeWithAvatar(assignee) {
+        if (!assignee) return '—';
+        const agentName = getAgentName(assignee);
+        const avatarUrl = `/api/agents/${esc(assignee)}/avatar`;
+        const initials = esc(assignee).split(/[\s._-]+/).filter(Boolean).map(s => s[0].toUpperCase()).slice(0, 2).join('');
+        const isSuper = assignee === SUPER_AGENT_ID;
+        return `<div class="flex flex-col items-start gap-1">
+            <div class="relative inline-flex">
+                <img src="${avatarUrl}" alt="" class="w-10 h-10 rounded-full object-cover" title="${esc(assignee)}" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
+                <span class="hidden inline-flex items-center justify-center w-10 h-10 rounded-full text-xs font-semibold ${isSuper ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}" title="${esc(assignee)}">${initials}</span>
+            </div>
+            <span class="text-xs ${isSuper ? 'text-red-500 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-400'}">${esc(agentName)}</span>
+        </div>`;
+    }
+
+    function _doPopulateAgentSelect(selector, selectedValue) {
+        const $sel = $(selector);
+        const currentVal = $sel.val();
+        $sel.find('option:not(:first)').remove();
+        (_agentCache || []).forEach(function(agent) {
+            const opt = $('<option>').val(agent.id).text(agent.name);
+            if (agent.id === selectedValue || agent.id === currentVal) {
+                opt.prop('selected', true);
+            }
+            $sel.append(opt);
+        });
+    }
+
+        // ── Close on backdrop click ───────────────────────────────────────────────
+
+    $('#kb-modal').on('click', function(e) { if (e.target === this) closeModal(); });
+    $('#kb-detail-modal').on('click', function(e) { if (e.target === this) closeDetailModal(); });
+    $('#kb-assign-modal').on('click', function(e) { if (e.target === this) closeAssignModal(); });
+    $('#kb-trigger-modal').on('click', function(e) { if (e.target === this) closeTriggerModal(); });
+
+    let autoRefreshInterval = null;
+    let isAutoRefreshing = false;
+
+    function toggleAutoRefresh() {
+      isAutoRefreshing = !isAutoRefreshing;
+      const $btn = $("#auto-refresh-toggle");
+      const $icon = $btn.find(".refresh-icon");
+      if (isAutoRefreshing) {
+        loadTasks();
+        autoRefreshInterval = setInterval(loadTasks, 5000);
+        $btn
+          .removeClass("bg-gray-100 text-gray-700 hover:bg-gray-200")
+          .addClass("bg-green-500 text-white hover:bg-green-600 shadow-md");
+        $icon.addClass("animate-spin");
+      } else {
+        clearInterval(autoRefreshInterval);
+        $btn
+          .removeClass("bg-green-500 text-white hover:bg-green-600 shadow-md")
+          .addClass("bg-gray-100 text-gray-700 hover:bg-gray-200");
+        $icon.removeClass("animate-spin");
+      }
+    }
+
+    loadTasks();
+</script>
+{% endblock %}

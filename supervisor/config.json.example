@@ -1,0 +1,14 @@
+{
+    "app_root": "/path/to/evonic",
+    "poll_interval": 300,
+    "git_remote": "origin",
+    "health_port": 8080,
+    "health_temp_port": 18080,
+    "health_timeout": 10,
+    "monitor_duration": 60,
+    "keep_releases": 3,
+    "python_bin": "python3",
+    "uv_bin": null,
+    "telegram_bot_token": "",
+    "telegram_chat_id": ""
+}

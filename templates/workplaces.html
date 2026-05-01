@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+<div class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Workplaces</h2>
+            <p class="text-sm text-gray-500 mt-1">Execution environments where agents operate — local, remote SSH, or cloud via Evonet</p>
+        </div>
+        <button onclick="showCreateModal()"
+                class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            New Workplace
+        </button>
+    </div>
+
+    <!-- Grid -->
+    <div id="workplaces-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    <div id="workplaces-empty" class="hidden text-center py-16 text-gray-400">
+        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        <p class="text-lg font-medium">No workplaces yet</p>
+        <p class="text-sm mt-1">Create a workplace to assign execution environments to your agents.</p>
+    </div>
+</div>
+
+<!-- Create Modal -->
+<div id="create-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" onclick="closeCreateModal()"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-md shadow-xl p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">New Workplace</h3>
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name *</label>
+            <input id="new-workplace-name" type="text" placeholder="e.g., My Server"
+                   class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+        </div>
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type *</label>
+            <select id="new-workplace-type" onchange="onTypeChange()"
+                    class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none">
+                <option value="local">Local — local directory</option>
+                <option value="remote">Remote — SSH server</option>
+                <option value="cloud">Cloud — Evonet connector</option>
+            </select>
+        </div>
+
+        <!-- Local config -->
+        <div id="cfg-local" class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Workspace Path</label>
+            <input id="cfg-local-path" type="text" placeholder="/workplace/user/workspace"
+                   class="w-full p-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md text-sm focus:border-indigo-500 focus:outline-none">
+        </div>
+
+        <!-- Remote config -->
+        <div id="cfg-remote" class="hidden space-y-3 mb-4">
+            <div class="grid grid-cols-3 gap-2">
+                <div class="col-span-2">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Host *</label>
+                    <input id="cfg-remote-host" type="text" placeholder="192.168.1.10"
+                           class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Port</label>
+                    <input id="cfg-remote-port" type="number" value="22" min="1" max="65535"
+                           class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Username *</label>
+                <input id="cfg-remote-user" type="text" placeholder="ubuntu"
+                       class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Auth Type</label>
+                <select id="cfg-remote-auth" onchange="onAuthTypeChange()"
+                        class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+                    <option value="key">SSH Key</option>
+                    <option value="password">Password</option>
+                </select>
+            </div>
+            <div id="cfg-remote-key-row">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Key Path</label>
+                <input id="cfg-remote-key" type="text" placeholder="/shared/.ssh/id_rsa"
+                       class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div id="cfg-remote-pass-row" class="hidden">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Password</label>
+                <input id="cfg-remote-pass" type="password" placeholder="SSH password"
+                       class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Remote Workspace Path</label>
+                <input id="cfg-remote-workspace" type="text" placeholder="/workplace/ubuntu/agent"
+                       class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+        </div>
+
+        <!-- Cloud config -->
+        <div id="cfg-cloud" class="hidden mb-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400">After creation, generate a pairing code and run <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded text-xs">evonet pair</code> on the target device.</p>
+            <div class="mt-3">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Workspace Path (on target device)</label>
+                <input id="cfg-cloud-workspace" type="text" placeholder="/workplace/user/evonic-agent"
+                       class="w-full p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+        </div>
+
+        <div class="flex gap-3 justify-end mt-4">
+            <button onclick="closeCreateModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+            <button onclick="createWorkplace()" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Create</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = 'px-4 py-3 rounded-lg shadow-lg text-white font-medium transition-opacity duration-500 ' +
+        (type === 'success' ? 'bg-green-600' : type === 'info' ? 'bg-blue-600' : 'bg-red-600');
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 500); }, 3000);
+}
+
+const TYPE_LABELS = { local: 'Local', remote: 'Remote SSH', cloud: 'Cloud' };
+const TYPE_COLORS = {
+    local:  'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    remote: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+    cloud:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+};
+const STATUS_DOT = {
+    connected:    'bg-green-500',
+    disconnected: 'bg-gray-400',
+    connecting:   'bg-yellow-400 animate-pulse',
+    error:        'bg-red-500',
+};
+
+function statusDot(status) {
+    return `<span class="inline-block w-2 h-2 rounded-full ${STATUS_DOT[status] || 'bg-gray-400'}"></span>`;
+}
+
+function renderCard(h) {
+    const typeLabel = TYPE_LABELS[h.type] || h.type;
+    const typeCls = TYPE_COLORS[h.type] || 'bg-gray-100 text-gray-700';
+    const status = h.status || 'disconnected';
+    const agentCount = h.agent_count || 0;
+    const connectorInfo = h.connector ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${h.connector.device_name || ''} · ${h.connector.platform || ''}</p>` : '';
+    return `
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-5 cursor-pointer" onclick="window.location='/workplaces/${h.id}'">
+        <div class="flex items-start justify-between gap-2 mb-3">
+            <div class="flex-1 min-w-0">
+                <h3 class="font-semibold text-gray-900 dark:text-gray-100 truncate">${h.name}</h3>
+                ${connectorInfo}
+            </div>
+            <span class="flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${typeCls}">${typeLabel}</span>
+        </div>
+        <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <span class="flex items-center gap-1.5">${statusDot(status)} ${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+            <span>${agentCount} agent${agentCount !== 1 ? 's' : ''}</span>
+        </div>
+    </div>`;
+}
+
+function loadWorkplaces() {
+    $.get('/api/workplaces', function(workplaces) {
+        const grid = $('#workplaces-grid');
+        const empty = $('#workplaces-empty');
+        grid.empty();
+        if (!workplaces.length) { grid.addClass('hidden'); empty.removeClass('hidden'); return; }
+        grid.removeClass('hidden'); empty.addClass('hidden');
+        workplaces.forEach(h => grid.append(renderCard(h)));
+    });
+}
+
+function showCreateModal() { $('#create-modal').removeClass('hidden'); onTypeChange(); }
+function closeCreateModal() { $('#create-modal').addClass('hidden'); }
+
+function onTypeChange() {
+    const t = $('#new-workplace-type').val();
+    $('#cfg-local').toggleClass('hidden', t !== 'local');
+    $('#cfg-remote').toggleClass('hidden', t !== 'remote');
+    $('#cfg-cloud').toggleClass('hidden', t !== 'cloud');
+}
+
+function onAuthTypeChange() {
+    const isKey = $('#cfg-remote-auth').val() === 'key';
+    $('#cfg-remote-key-row').toggleClass('hidden', !isKey);
+    $('#cfg-remote-pass-row').toggleClass('hidden', isKey);
+}
+
+function buildConfig() {
+    const t = $('#new-workplace-type').val();
+    if (t === 'local') return { workspace_path: $('#cfg-local-path').val().trim() };
+    if (t === 'remote') {
+        const auth = $('#cfg-remote-auth').val();
+        const cfg = {
+            host: $('#cfg-remote-host').val().trim(),
+            port: parseInt($('#cfg-remote-port').val()) || 22,
+            username: $('#cfg-remote-user').val().trim(),
+            auth_type: auth,
+            workspace_path: $('#cfg-remote-workspace').val().trim(),
+        };
+        if (auth === 'key') cfg.key_path = $('#cfg-remote-key').val().trim();
+        else cfg.password = $('#cfg-remote-pass').val();
+        return cfg;
+    }
+    if (t === 'cloud') return { workspace_path: $('#cfg-cloud-workspace').val().trim() };
+    return {};
+}
+
+function createWorkplace() {
+    const name = $('#new-workplace-name').val().trim();
+    const type = $('#new-workplace-type').val();
+    if (!name) { showToast('Name is required', 'error'); return; }
+    if (type === 'remote' && !$('#cfg-remote-host').val().trim()) {
+        showToast('Host is required for remote workplaces', 'error'); return;
+    }
+    $.ajax({
+        url: '/api/workplaces',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ name, type, config: buildConfig() }),
+        success: function(workplace) {
+            closeCreateModal();
+            window.location = '/workplaces/' + workplace.id;
+        },
+        error: function(xhr) {
+            showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Failed to create workplace', 'error');
+        }
+    });
+}
+
+$(document).ready(loadWorkplaces);
+</script>
+{% endblock %}

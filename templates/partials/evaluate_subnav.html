@@ -1,0 +1,43 @@
+<div class="evaluate-subnav">
+    <a href="/evaluate" class="subnav-link {{ 'subnav-active' if request.path == '/evaluate' else '' }}">Runner</a>
+    <a href="/evaluate/domains" class="subnav-link {{ 'subnav-active' if request.path == '/evaluate/domains' else '' }}">Domains</a>
+    <a href="/evaluate/evaluators" class="subnav-link {{ 'subnav-active' if request.path == '/evaluate/evaluators' else '' }}">Evaluators</a>
+    <a href="/history" class="subnav-link {{ 'subnav-active' if request.path == '/history' else '' }}">History</a>
+</div>
+
+<style>
+.evaluate-subnav {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e5e7eb;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.subnav-link {
+    color: #6b7280;
+    padding: 10px 20px;
+    font-size: 15px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.subnav-link:hover {
+    color: #3B82F6;
+}
+
+.subnav-link.subnav-active {
+    color: #3B82F6;
+    border-bottom-color: #3B82F6;
+    font-weight: 500;
+}
+
+html.dark .evaluate-subnav { border-bottom-color: #334155; }
+html.dark .subnav-link { color: #94a3b8; }
+html.dark .subnav-link:hover { color: #60a5fa; }
+html.dark .subnav-link.subnav-active { color: #60a5fa; border-bottom-color: #60a5fa; }
+</style>

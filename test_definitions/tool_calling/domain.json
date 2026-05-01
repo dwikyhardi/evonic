@@ -1,0 +1,19 @@
+{
+  "id": "tool_calling",
+  "name": "Tool Calling",
+  "description": "Function/tool calling tests - tests ability to use tools and APIs correctly",
+  "icon": "wrench",
+  "color": "#f59e0b",
+  "evaluator_id": "tool_call",
+  "system_prompt": null,
+  "system_prompt_mode": "overwrite",
+  "tool_ids": [
+    "api_call",
+    "calculator",
+    "get_order",
+    "get_weather",
+    "search_hotels",
+    "search_restaurants",
+    "send_notification"
+  ]
+}

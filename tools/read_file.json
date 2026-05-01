@@ -1,0 +1,29 @@
+{
+  "id": "read_file",
+  "name": "Read file",
+  "description": "Reads the entire content of a text file.",
+  "function": {
+    "name": "read_file",
+    "description": "Read a text file and return its content as plain text with 1-based line numbers (e.g. '10: line content'). Large files are paginated automatically — the response header shows total lines and the range shown; if there are remaining lines, a footer tells you the next offset to call. Use the `offset` parameter to read subsequent pages. Use this for source code, logs, configs, and any workspace file — NOT for agent KB files (use the read tool for those). Accepts /workspace/... absolute paths from the runpy sandbox, which are automatically mapped to the real project root. Constraints: file must be a text file (not binary) and must be 100KB or smaller.",
+    "parameters": {
+      "properties": {
+        "file_path": {
+          "description": "Path to the file. Use /workspace/... for project files (e.g. '/workspace/app.py').",
+          "type": "string"
+        },
+        "offset": {
+          "description": "1-based line number to start reading from (default: 1). Use this to paginate through large files — the footer in each response tells you the next offset to use.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    }
+  },
+  "mock_response": "/**\n * Mock File System\n */\nconst mockFileSystem = {\n  \"example.txt\": [\n    \"This is the first line of the file.\",\n    \"This is the second line.\",\n    \"It demonstrates the requested format.\",\n    \"Each line is prefixed by its number.\",\n    \"A colon separates the number from the content.\",\n    \"This makes it easy to identify lines.\",\n    \"It is much faster to read than a JSON array.\",\n    \"You can use these numbers for patching.\",\n    \"Almost at the end of the example.\",\n    \"This is the tenth line.\"\n  ]\n};\n\n/**\n * Mock read_file function\n * \n * @param {string} file_path - The path to the file.\n * @returns {string} - The plain text content with line numbers.\n */\nfunction read_file(file_path) {\n  const lines = mockFileSystem[file_path];\n\n  if (!lines) {\n    throw new Error('File not found.');\n  }\n\n  const formattedOutput = lines\n    .map((content, index) => `${index + 1}: ${content}`)\n    .join('\\n');\n\n  return formattedOutput;\n}\n\nvar args = ARGS;\nvar result = read_file(args.file_path);\nconsole.log(JSON.stringify({\"result\":result}))",
+  "mock_response_type": "javascript",
+  "created_at": "2026-04-12T14:28:48.414484",
+  "updated_at": "2026-04-21T00:00:00.000000"
+}

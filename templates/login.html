@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Login - Evonic</title>
+    <script>
+    // Anti-flash: apply theme before first paint
+    (function() {
+        var t = localStorage.getItem('evonic-theme') || 'system';
+        if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    })();
+    </script>
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}?v=1"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    {% if turnstile_site_key %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% endif %}
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-sm flex flex-col justify-center text-center items-center">
+        <div id="loginMascot" class="text-center mb-6">
+            <img src="{{ url_for('static', filename='img/mascot.png') }}" alt="Evonic Mascot"
+                 class="inline-block max-w-[180px] w-full h-auto">
+        </div>
+
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500 bg-clip-text text-transparent">EVONIC</h1>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/50 p-6 w-3/4 margin-auto">
+            {% if error %}
+            <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-md text-sm text-red-600 dark:text-red-400">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" action="/login">
+                <input type="hidden" name="next" value="{{ request.args.get('next', '/') }}">
+
+                <div class="mb-4">
+                    <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">Password</label>
+                    <input type="password" name="password" required autocomplete="current-password"
+                           class="w-full p-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 rounded-md text-sm focus:border-indigo-500 dark:focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:focus:ring-indigo-400/20">
+                </div>
+
+                {% if turnstile_site_key %}
+                <div class="mb-4 flex justify-center">
+                    <div class="cf-turnstile" id="turnstile-widget" data-sitekey="{{ turnstile_site_key }}" data-theme="light"></div>
+                </div>
+                <script>
+                // Set Turnstile theme based on current mode
+                (function() {
+                    var isDark = document.documentElement.classList.contains('dark');
+                    var widget = document.getElementById('turnstile-widget');
+                    if (widget && isDark) {
+                        widget.setAttribute('data-theme', 'dark');
+                    }
+                })();
+                </script>
+                {% endif %}
+
+                <button type="submit"
+                        class="w-full bg-indigo-500 hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white py-2.5 rounded-md text-sm font-medium transition-colors">
+                    Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

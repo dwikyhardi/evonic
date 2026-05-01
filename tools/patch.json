@@ -1,0 +1,29 @@
+{
+  "id": "patch",
+  "name": "Patch File",
+  "description": "Apply a unified diff patch to a file, enabling precise surgical edits.",
+  "function": {
+    "name": "patch",
+    "description": "Apply a unified diff (unidiff) patch to a file. The patch must contain one or more @@ hunk headers followed by context lines (space-prefixed), removal lines (- prefix), and addition lines (+ prefix). Optional --- / +++ file headers and git diff headers are accepted and ignored. IMPORTANT: Always read_file immediately before constructing a patch — never use line numbers or content from memory or a previous read, as prior patches shift line numbers. After each patch, re-read the file before applying the next one. Include 2-3 context lines copied verbatim from the file (correct indentation matters for + and - lines, but context lines are indent-tolerant).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Absolute or relative path to the file to be patched."
+        },
+        "patch": {
+          "type": "string",
+          "description": "The unified diff patch content. Must contain @@ hunk headers. Example:\n@@ -3,4 +3,4 @@\n context line\n-old line\n+new line\n context line",
+          "view": "diff"
+        }
+      },
+      "required": ["file_path", "patch"]
+    }
+  },
+  "mock_response": "var result;\nvar args = ARGS;\nvar patch = args.patch || '';\nvar filePath = args.file_path || 'unknown';\n\n// Count hunks applied\nvar hunkCount = (patch.match(/^@@/gm) || []).length;\n\nif (!patch) {\n  result = { error: \"Missing required argument: 'patch'\" };\n} else if (hunkCount === 0) {\n  result = { error: 'No valid hunks found in patch. Make sure it contains @@ hunk headers.' };\n} else {\n  result = {\n    result: 'success',\n    file_path: filePath,\n    hunks_applied: hunkCount\n  };\n}\n\nconsole.log(JSON.stringify(result));",
+  "mock_response_type": "javascript",
+  "system_prompt": "## patch — Usage Rules\n\n**ALWAYS read the file immediately before constructing a patch.** Never rely on line numbers or content from memory or a previous read — each patch you apply shifts line numbers in the file.\n\n### Workflow\n1. `read_file` the target file\n2. Construct the patch from the *current* file content\n3. Apply with `patch`\n4. If you need to patch the same file again, go back to step 1\n\n",
+  "created_at": "2026-04-12T00:00:00.000000",
+  "updated_at": "2026-04-17T00:00:00.000000"
+}

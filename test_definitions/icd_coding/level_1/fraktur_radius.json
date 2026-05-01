@@ -1,0 +1,16 @@
+{
+  "id": "icd_fraktur_radius_1",
+  "name": "ICD Coding — Fraktur Distal Radius",
+  "description": "Level 1 — fraktur sederhana dengan lateralitas, satu kode ICD-10",
+  "prompt": "Seorang ibu rumah tangga berusia 62 tahun dibawa ke UGD setelah terjatuh di kamar mandi dan menahan badan dengan tangan kanan. Keluhan utama nyeri hebat dan bengkak pada pergelangan tangan kanan. Rontgen: fraktur distal radius kanan, tidak displaced. Tidak ada riwayat patah tulang sebelumnya. Dipasang gips dan dijadwalkan kontrol 1 minggu. Diagnosis: Fraktur distal radius kanan, episode perawatan awal. Tetapkan kode ICD-10-CM yang sesuai.",
+  "expected": {
+    "codes": [
+      {"code": "S52.501A", "description": "Unspecified fracture of the lower end of right radius, initial encounter", "type": "PRIMARY"}
+    ]
+  },
+  "evaluator_id": "icd_code_judge",
+  "difficulty": "easy",
+  "timeout_ms": 60000,
+  "weight": 1.0,
+  "enabled": true
+}

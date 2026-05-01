@@ -1,0 +1,40 @@
+{#
+  Reusable toggle switch component — two Jinja2 macros.
+  All visual behaviour is driven by `.dyn-toggle` in style.css.
+
+  toggle(...)        — standalone: renders a complete <label> wrapping the
+                       toggle. Use when the toggle is the only clickable
+                       element (e.g. a settings row).
+
+  toggle_widget(...) — inline widget: renders a <span> containing input +
+                       track. Use inside an existing <label> that also
+                       contains a text description, to avoid invalid nested
+                       <label> elements.
+
+  Shared parameters:
+    id          str   — id attribute on the <input>
+    checked     bool  — initial checked state
+    onchange    str   — JS expression for the onchange handler
+    disabled    bool  — disabled state
+
+  toggle-only parameters:
+    extra_class str   — additional classes appended to the <label>
+    title       str   — title attribute on the <label>
+
+  Import:
+    from 'partials/toggle.html' import toggle, toggle_widget
+#}
+
+{% macro toggle(id='', checked=False, onchange='', disabled=False, extra_class='', title='') %}
+<label class="relative inline-flex items-center cursor-pointer{{ ' ' + extra_class if extra_class else '' }}"{% if title %} title="{{ title }}"{% endif %}>
+    <input type="checkbox"{% if id %} id="{{ id }}"{% endif %}{% if checked %} checked{% endif %}{% if disabled %} disabled{% endif %}{% if onchange %} onchange="{{ onchange }}"{% endif %} class="sr-only peer">
+    <span class="dyn-toggle"></span>
+</label>
+{% endmacro %}
+
+{% macro toggle_widget(id='', checked=False, onchange='', disabled=False) %}
+<span class="relative inline-flex items-center">
+    <input type="checkbox"{% if id %} id="{{ id }}"{% endif %}{% if checked %} checked{% endif %}{% if disabled %} disabled{% endif %}{% if onchange %} onchange="{{ onchange }}"{% endif %} class="sr-only peer">
+    <span class="dyn-toggle"></span>
+</span>
+{% endmacro %}

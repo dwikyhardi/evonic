@@ -1,0 +1,63 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "create_plugin",
+      "description": "Scaffold a new Evonic plugin with the proper directory structure, manifest, handler, routes, and templates. The plugin is immediately hot-loaded after creation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique plugin identifier (alphanumeric, dashes, underscores only). Must match the directory name. Example: 'my_plugin' or 'weather-widget'."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable plugin name. Example: 'Weather Widget'."
+          },
+          "description": {
+            "type": "string",
+            "description": "What the plugin does. Example: 'Shows current weather on the dashboard'."
+          },
+          "plugin_type": {
+            "type": "string",
+            "enum": ["event_only", "routes_only", "full"],
+            "description": "Plugin type: 'event_only' for event handlers only (no HTTP routes), 'routes_only' for HTTP endpoints only (no event handlers), 'full' for both."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["turn_complete", "message_received", "session_created", "summary_updated", "processing_started", "llm_thinking", "llm_response_chunk", "tool_executed", "final_answer", "message_sent"]
+            },
+            "description": "Events to subscribe to. Required for event_only and full types. Each event maps to an on_<event> handler function in handler.py."
+          },
+          "nav_label": {
+            "type": "string",
+            "description": "If provided, adds a navbar link to the plugin's main page. Example: 'Weather'. Only applicable when plugin_type is 'routes_only' or 'full'."
+          },
+          "nav_path": {
+            "type": "string",
+            "description": "URL path for the navbar link. Defaults to '/<plugin_id>' if not specified. Example: '/weather/dashboard'."
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {"type": "string"},
+                "label": {"type": "string"},
+                "type": {"type": "string", "enum": ["string", "number", "boolean"]},
+                "default": {},
+                "description": {"type": "string"}
+              },
+              "required": ["name", "label", "type"]
+            },
+            "description": "Configurable plugin variables shown in the plugin settings UI."
+          }
+        },
+        "required": ["id", "name", "description", "plugin_type"]
+      }
+    }
+  }
+]

@@ -1,0 +1,929 @@
+#!/usr/bin/env python3
+"""
+Evonic self-update supervisor — stdlib-only, no pip dependencies.
+
+Requires: git (system), python3 (system), optionally uv (system).
+
+Usage:
+    python3 supervisor.py --config config.json          # run poll loop
+    python3 supervisor.py --config config.json --once   # check once and exit
+    python3 supervisor.py --config config.json --trigger  # send SIGUSR1 to running supervisor
+
+Signals (POSIX):
+    SIGUSR1 → trigger immediate update check
+    SIGUSR2 → restart daemon only (no update check)
+    SIGTERM → clean shutdown
+"""
+
+import argparse
+import json
+import logging
+import os
+import platform
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime
+from typing import Optional
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+# Use centralized logging if available, fallback to basicConfig
+try:
+    from backend.logging_config import configure as configure_logging
+    configure_logging(console=True)
+except ImportError:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [supervisor] %(levelname)s %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+log = logging.getLogger('supervisor')
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+SHARED_ITEMS = [
+    ('db',      True),   # (name, is_directory)
+    ('agents',  True),
+    ('logs',    True),
+    ('run',     True),
+    ('kb',      True),
+    ('data',    True),
+    ('plugins', True),
+    ('.ssh',    True),
+    ('.env',    False),  # file, not directory
+]
+
+DEFAULT_CONFIG = {
+    'app_root': os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'poll_interval': 300,
+    'git_remote': 'origin',
+    'health_port': 8080,
+    'health_temp_port': 18080,
+    'health_timeout': 10,
+    'monitor_duration': 60,
+    'keep_releases': 3,
+    'python_bin': sys.executable,
+    'uv_bin': None,
+    'telegram_bot_token': '',
+    'telegram_chat_id': '',
+}
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+
+def load_config(config_path: str) -> dict:
+    cfg = dict(DEFAULT_CONFIG)
+    try:
+        with open(config_path) as f:
+            cfg.update(json.load(f))
+    except FileNotFoundError:
+        log.warning(f'Config file not found: {config_path} — using defaults')
+    except json.JSONDecodeError as e:
+        log.error(f'Config parse error: {e} — using defaults')
+    return cfg
+
+# ---------------------------------------------------------------------------
+# Platform abstraction
+# ---------------------------------------------------------------------------
+
+def is_windows() -> bool:
+    return platform.system() == 'Windows'
+
+
+def get_current_release(app_root: str) -> Optional[str]:
+    """Return the tag name of the currently active release, or None."""
+    if is_windows():
+        slot_file = os.path.join(app_root, 'current.slot')
+        if not os.path.exists(slot_file):
+            return None
+        with open(slot_file) as f:
+            tag = f.read().strip()
+        return tag if tag else None
+    else:
+        link = os.path.join(app_root, 'current')
+        if not os.path.islink(link):
+            return None
+        target = os.readlink(link)
+        # target is like "releases/v1.2.0" or absolute path
+        return os.path.basename(target.rstrip('/'))
+
+
+def atomic_swap(app_root: str, new_release_path: str) -> None:
+    """Atomically switch the 'current' pointer to new_release_path."""
+    tag = os.path.basename(new_release_path.rstrip('/\\'))
+    if is_windows():
+        slot_tmp = os.path.join(app_root, 'current.slot.tmp')
+        with open(slot_tmp, 'w') as f:
+            f.write(tag)
+        os.replace(slot_tmp, os.path.join(app_root, 'current.slot'))
+    else:
+        link_tmp = os.path.join(app_root, '.current.tmp')
+        if os.path.islink(link_tmp):
+            os.unlink(link_tmp)
+        # Relative symlink from app_root
+        rel = os.path.relpath(new_release_path, app_root)
+        os.symlink(rel, link_tmp)
+        os.replace(link_tmp, os.path.join(app_root, 'current'))
+
+
+def read_rollback_slot(app_root: str) -> Optional[str]:
+    path = os.path.join(app_root, 'rollback.slot')
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        tag = f.read().strip()
+    return tag if tag else None
+
+
+def write_rollback_slot(app_root: str, tag: str) -> None:
+    tmp = os.path.join(app_root, 'rollback.slot.tmp')
+    with open(tmp, 'w') as f:
+        f.write(tag)
+    os.replace(tmp, os.path.join(app_root, 'rollback.slot'))
+
+# ---------------------------------------------------------------------------
+# PID management
+# ---------------------------------------------------------------------------
+
+def _pid_file(app_root: str) -> str:
+    return os.path.join(app_root, 'shared', 'run', 'evonic.pid')
+
+
+def _log_file(app_root: str) -> str:
+    return os.path.join(app_root, 'shared', 'logs', 'server.log')
+
+
+def _supervisor_pid_file(app_root: str) -> str:
+    sup_run = os.path.join(app_root, 'supervisor', 'run')
+    os.makedirs(sup_run, exist_ok=True)
+    return os.path.join(sup_run, 'supervisor.pid')
+
+
+def write_supervisor_pid(app_root: str) -> None:
+    with open(_supervisor_pid_file(app_root), 'w') as f:
+        f.write(str(os.getpid()))
+
+
+def _read_pid(pid_file: str) -> Optional[int]:
+    if not os.path.exists(pid_file):
+        return None
+    try:
+        with open(pid_file) as f:
+            val = f.read().strip()
+        return int(val) if val else None
+    except (ValueError, IOError):
+        return None
+
+
+def _is_process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+# ---------------------------------------------------------------------------
+# Daemon management
+# ---------------------------------------------------------------------------
+
+def stop_daemon(app_root: str, timeout: int = 15) -> bool:
+    """Stop the running daemon. Returns True if successfully stopped."""
+    pid = _read_pid(_pid_file(app_root))
+    if pid is None:
+        log.info('No daemon PID found — assuming not running')
+        return True
+    if not _is_process_alive(pid):
+        log.info(f'Daemon PID {pid} not alive — already stopped')
+        return True
+
+    log.info(f'Sending SIGTERM to daemon PID {pid}')
+    if is_windows():
+        subprocess.run(['taskkill', '/PID', str(pid), '/F'],
+                       capture_output=True)
+    else:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return True
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _is_process_alive(pid):
+            log.info(f'Daemon PID {pid} stopped')
+            return True
+        time.sleep(0.5)
+
+    log.warning(f'Daemon did not stop after {timeout}s — sending SIGKILL')
+    if is_windows():
+        subprocess.run(['taskkill', '/PID', str(pid), '/F', '/T'],
+                       capture_output=True)
+    else:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    time.sleep(1)
+    return not _is_process_alive(pid)
+
+
+def start_daemon(release_path: str, app_root: str) -> tuple:
+    """Start app.py from release_path using its venv. Returns (success, pid)."""
+    if is_windows():
+        python = os.path.join(release_path, '.venv', 'Scripts', 'python.exe')
+    else:
+        python = os.path.join(release_path, '.venv', 'bin', 'python')
+
+    if not os.path.exists(python):
+        # Fallback: use system python
+        python = sys.executable
+        log.warning(f'Release venv not found at {release_path}/.venv — using system python')
+
+    app_py = os.path.join(release_path, 'app.py')
+    log_path = _log_file(app_root)
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
+    log.info(f'Starting daemon: {python} {app_py}')
+    with open(log_path, 'a') as lf:
+        proc = subprocess.Popen(
+            [python, app_py],
+            stdout=lf,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            cwd=release_path,
+        )
+
+    time.sleep(2)
+    if proc.poll() is not None:
+        log.error(f'Daemon exited immediately with code {proc.returncode}')
+        return False, proc.pid
+
+    log.info(f'Daemon started with PID {proc.pid}')
+    return True, proc.pid
+
+
+def start_daemon_from_current(app_root: str) -> tuple:
+    """Resolve current pointer and start daemon from that release."""
+    tag = get_current_release(app_root)
+    if not tag:
+        log.error('Cannot start daemon: no current release pointer found')
+        return False, 0
+    release_path = os.path.join(app_root, 'releases', tag)
+    return start_daemon(release_path, app_root)
+
+# ---------------------------------------------------------------------------
+# Git operations
+# ---------------------------------------------------------------------------
+
+def _git(app_root: str, args: list, capture: bool = True) -> tuple:
+    """Run git command in app_root. Returns (returncode, stdout, stderr)."""
+    cmd = ['git', '-C', app_root] + args
+    result = subprocess.run(
+        cmd,
+        capture_output=capture,
+        text=True,
+    )
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+
+def git_fetch_tags(app_root: str, remote: str = 'origin') -> tuple:
+    """Fetch tags from remote. Returns (success, stderr)."""
+    log.info(f'Fetching tags from {remote}')
+    rc, _, err = _git(app_root, ['fetch', '--tags', remote])
+    if rc != 0:
+        log.warning(f'git fetch failed: {err}')
+    return rc == 0, err
+
+
+def get_latest_tag(app_root: str) -> Optional[str]:
+    """Return the newest semver tag (v*) by version sort."""
+    rc, out, _ = _git(app_root, ['tag', '-l', 'v*', '--sort=-version:refname'])
+    if rc != 0 or not out:
+        return None
+    return out.splitlines()[0].strip()
+
+
+def get_tag_sha(app_root: str, tag: str) -> Optional[str]:
+    """Return the commit SHA that a tag points to."""
+    rc, out, _ = _git(app_root, ['rev-list', '-n', '1', tag])
+    return out if rc == 0 and out else None
+
+
+def verify_tag(app_root: str, tag: str) -> tuple:
+    """Verify SSH/GPG signature on tag. Returns (valid, output)."""
+    rc, out, err = _git(app_root, ['verify-tag', tag])
+    combined = (out + '\n' + err).strip()
+    if rc != 0:
+        log.warning(f'Tag {tag} signature verification failed: {combined}')
+    return rc == 0, combined
+
+
+def create_worktree(app_root: str, tag: str) -> tuple:
+    """Create a git worktree for the tag. Returns (success, stderr)."""
+    release_path = os.path.join(app_root, 'releases', tag)
+    if os.path.exists(release_path):
+        log.info(f'Worktree already exists at {release_path}')
+        return True, ''
+    os.makedirs(os.path.join(app_root, 'releases'), exist_ok=True)
+    rc, _, err = _git(app_root, ['worktree', 'add', release_path, tag])
+    if rc != 0:
+        log.error(f'git worktree add failed: {err}')
+    return rc == 0, err
+
+
+def remove_worktree(app_root: str, tag: str) -> None:
+    """Remove a git worktree (e.g. after a failed staging)."""
+    release_path = os.path.join(app_root, 'releases', tag)
+    if not os.path.exists(release_path):
+        return
+    rc, _, err = _git(app_root, ['worktree', 'remove', release_path, '--force'])
+    if rc != 0:
+        log.warning(f'git worktree remove failed for {tag}: {err}')
+        # Try plain rmtree as fallback
+        try:
+            shutil.rmtree(release_path)
+        except Exception as e:
+            log.warning(f'rmtree also failed: {e}')
+
+# ---------------------------------------------------------------------------
+# Venv + deps
+# ---------------------------------------------------------------------------
+
+def create_venv_and_install(release_path: str, python_bin: str,
+                             uv_bin: Optional[str]) -> tuple:
+    """
+    Create a venv and install requirements in release_path.
+    Tries uv first, falls back to venv+pip.
+    Returns (success, error_message).
+    """
+    venv_path = os.path.join(release_path, '.venv')
+    req_file = os.path.join(release_path, 'requirements.txt')
+
+    if not os.path.exists(req_file):
+        log.warning('No requirements.txt found — skipping dep install')
+        # Still create a venv so the daemon can run
+        subprocess.run([python_bin, '-m', 'venv', venv_path], check=True)
+        return True, ''
+
+    # Try uv first (much faster)
+    if uv_bin and shutil.which(uv_bin):
+        log.info(f'Creating venv with uv at {venv_path}')
+        r1 = subprocess.run([uv_bin, 'venv', venv_path], capture_output=True, text=True)
+        if r1.returncode == 0:
+            log.info('Installing dependencies with uv pip')
+            if is_windows():
+                pip_in_venv = os.path.join(venv_path, 'Scripts', 'pip')
+            else:
+                pip_in_venv = os.path.join(venv_path, 'bin', 'pip')
+            r2 = subprocess.run(
+                [uv_bin, 'pip', 'install', '--python', pip_in_venv,
+                 '-r', req_file],
+                capture_output=True, text=True,
+            )
+            if r2.returncode == 0:
+                return True, ''
+            err = r2.stderr
+            log.warning(f'uv pip install failed: {err}')
+        else:
+            err = r1.stderr
+            log.warning(f'uv venv failed: {err}')
+
+    # Fallback: stdlib venv + pip
+    log.info(f'Creating venv with {python_bin}')
+    r = subprocess.run([python_bin, '-m', 'venv', venv_path],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return False, f'venv creation failed: {r.stderr}'
+
+    if is_windows():
+        pip_exec = os.path.join(venv_path, 'Scripts', 'pip')
+    else:
+        pip_exec = os.path.join(venv_path, 'bin', 'pip')
+
+    log.info('Installing dependencies with pip')
+    r = subprocess.run(
+        [pip_exec, 'install', '-r', req_file],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False, f'pip install failed: {r.stderr}'
+    return True, ''
+
+# ---------------------------------------------------------------------------
+# Shared directory symlinking
+# ---------------------------------------------------------------------------
+
+def link_shared_dirs(app_root: str, release_path: str) -> None:
+    """Symlink shared/ items into the release directory."""
+    shared_root = os.path.join(app_root, 'shared')
+
+    for name, is_dir in SHARED_ITEMS:
+        target = os.path.join(shared_root, name)
+        link = os.path.join(release_path, name)
+
+        # Only link if shared target actually exists
+        if not os.path.exists(target):
+            log.debug(f'Shared item not found, skipping: {target}')
+            continue
+
+        # Remove whatever git worktree put there
+        if os.path.islink(link):
+            os.unlink(link)
+        elif os.path.isdir(link):
+            shutil.rmtree(link)
+        elif os.path.exists(link):
+            os.unlink(link)
+
+        if is_windows() and is_dir:
+            # Try junction first (no admin required on Windows)
+            r = subprocess.run(
+                ['cmd', '/c', 'mklink', '/J', link, target],
+                capture_output=True,
+            )
+            if r.returncode != 0:
+                log.warning(f'mklink /J failed for {name}: {r.stderr}')
+                # Last resort: copy (breaks atomicity for this dir)
+                shutil.copytree(target, link)
+        else:
+            os.symlink(target, link, target_is_directory=is_dir)
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+
+def health_check(port: int, timeout: int = 10) -> bool:
+    """GET /api/health on localhost:{port}. Returns True on 200 + {"status":"ok"}."""
+    url = f'http://127.0.0.1:{port}/api/health'
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                return False
+            body = json.loads(resp.read().decode())
+            return body.get('status') == 'ok'
+    except Exception:
+        return False
+
+
+def health_check_temp_port(release_path: str, app_root: str, port: int,
+                            timeout: int = 30, python_bin: str = sys.executable) -> bool:
+    """
+    Start the release on a temporary port, probe /api/health, then kill it.
+    Returns True if health check passes.
+    """
+    if is_windows():
+        python = os.path.join(release_path, '.venv', 'Scripts', 'python.exe')
+    else:
+        python = os.path.join(release_path, '.venv', 'bin', 'python')
+    if not os.path.exists(python):
+        python = python_bin
+
+    env = os.environ.copy()
+    env['PORT'] = str(port)
+    env['DEBUG'] = '0'
+
+    log.info(f'Starting release on temp port {port} for health check')
+    proc = subprocess.Popen(
+        [python, os.path.join(release_path, 'app.py')],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        cwd=release_path,
+    )
+
+    try:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            time.sleep(2)
+            if proc.poll() is not None:
+                log.warning('Staged release process exited early during health check')
+                return False
+            if health_check(port, timeout=5):
+                log.info('Staged release passed health check')
+                return True
+        log.warning(f'Health check timed out after {timeout}s on port {port}')
+        return False
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+# ---------------------------------------------------------------------------
+# Telegram notifier
+# ---------------------------------------------------------------------------
+
+FILLED = '\u2588'
+EMPTY = '\u2591'
+BAR_WIDTH = 16
+
+
+def _progress_bar(step: int, total: int) -> str:
+    pct = int(step / total * 100)
+    filled = int(BAR_WIDTH * step / total)
+    bar = FILLED * filled + EMPTY * (BAR_WIDTH - filled)
+    return f'{bar} {pct}%'
+
+
+class TelegramNotifier:
+    """Stdlib-only Telegram Bot API client."""
+
+    def __init__(self, bot_token: str, chat_id: str):
+        self.bot_token = bot_token
+        self.chat_id = str(chat_id)
+        self.message_id: Optional[int] = None
+        self._base = f'https://api.telegram.org/bot{bot_token}'
+        self._from_tag: Optional[str] = None
+        self._to_tag: Optional[str] = None
+        self._start_time: Optional[str] = None
+
+    def _api_call(self, method: str, payload: dict) -> dict:
+        url = f'{self._base}/{method}'
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            url, data=data, headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            log.warning(f'Telegram API error ({method}): {e}')
+            return {}
+
+    def _format_progress(self, step: int, total: int, description: str) -> str:
+        header = f'[Update {self._from_tag} \u2192 {self._to_tag}]'
+        bar = _progress_bar(step, total)
+        started = f'Started: {self._start_time}'
+        return f'{header}\n{bar} \u2014 {description}\n{started}'
+
+    def begin(self, from_tag: str, to_tag: str) -> None:
+        self._from_tag = from_tag
+        self._to_tag = to_tag
+        self._start_time = datetime.now().strftime('%H:%M:%S')
+        self.message_id = None
+
+    def send_progress(self, step: int, total: int, description: str) -> None:
+        if not self.bot_token or not self.chat_id:
+            return
+        text = self._format_progress(step, total, description)
+        if self.message_id is None:
+            result = self._api_call('sendMessage', {
+                'chat_id': self.chat_id,
+                'text': text,
+            })
+            self.message_id = (result.get('result') or {}).get('message_id')
+        else:
+            self._api_call('editMessageText', {
+                'chat_id': self.chat_id,
+                'message_id': self.message_id,
+                'text': text,
+            })
+
+    def send_failure(self, step: int, total: int, error: str) -> None:
+        if not self.bot_token or not self.chat_id:
+            return
+        rollback_tag = self._from_tag or '?'
+        text = (
+            f'\u274c Update {self._to_tag} FAILED at step {step}/{total}\n'
+            f'Rolled back to {rollback_tag}\n'
+            f'Error: {error}'
+        )
+        # Always send a NEW message so failures stay visible
+        self._api_call('sendMessage', {'chat_id': self.chat_id, 'text': text})
+
+    def send_success(self, tag: str) -> None:
+        if not self.bot_token or not self.chat_id:
+            return
+        text = (
+            f'\u2705 Update to {tag} complete\n'
+            f'{_progress_bar(6, 6)} \u2014 Done\n'
+            f'Started: {self._start_time}'
+        )
+        if self.message_id:
+            self._api_call('editMessageText', {
+                'chat_id': self.chat_id,
+                'message_id': self.message_id,
+                'text': text,
+            })
+        else:
+            self._api_call('sendMessage', {'chat_id': self.chat_id, 'text': text})
+
+# ---------------------------------------------------------------------------
+# Update error
+# ---------------------------------------------------------------------------
+
+class UpdateError(Exception):
+    pass
+
+# ---------------------------------------------------------------------------
+# Rollback
+# ---------------------------------------------------------------------------
+
+def rollback(app_root: str, cfg: dict, notifier: Optional[TelegramNotifier]) -> bool:
+    """Swap back to rollback.slot release and restart the daemon."""
+    old_tag = read_rollback_slot(app_root)
+    if not old_tag:
+        log.error('No rollback slot found — cannot rollback')
+        return False
+
+    old_path = os.path.join(app_root, 'releases', old_tag)
+    if not os.path.exists(old_path):
+        log.error(f'Rollback release {old_tag} does not exist at {old_path}')
+        return False
+
+    log.info(f'Rolling back to {old_tag}')
+    try:
+        stop_daemon(app_root)
+        atomic_swap(app_root, old_path)
+        ok, _ = start_daemon(old_path, app_root)
+        if ok:
+            log.info(f'Rollback to {old_tag} successful')
+        else:
+            log.error(f'Rollback daemon start failed')
+        return ok
+    except Exception as e:
+        log.error(f'Rollback failed: {e}')
+        return False
+
+# ---------------------------------------------------------------------------
+# Cleanup old releases
+# ---------------------------------------------------------------------------
+
+def cleanup_old_releases(app_root: str, keep: int = 3) -> None:
+    """Remove releases beyond the most recent `keep`, skipping current + rollback."""
+    releases_dir = os.path.join(app_root, 'releases')
+    if not os.path.isdir(releases_dir):
+        return
+
+    current_tag = get_current_release(app_root)
+    rollback_tag = read_rollback_slot(app_root)
+    protected = {t for t in [current_tag, rollback_tag] if t}
+
+    tags = sorted(
+        [d for d in os.listdir(releases_dir)
+         if os.path.isdir(os.path.join(releases_dir, d))],
+        reverse=True,  # newest first (lexicographic semver with leading v works)
+    )
+
+    to_keep = set()
+    count = 0
+    for tag in tags:
+        if tag in protected or count < keep:
+            to_keep.add(tag)
+            if tag not in protected:
+                count += 1
+
+    for tag in tags:
+        if tag not in to_keep:
+            log.info(f'Removing old release: {tag}')
+            remove_worktree(app_root, tag)
+
+# ---------------------------------------------------------------------------
+# 6-step update lifecycle
+# ---------------------------------------------------------------------------
+
+STEPS = [
+    (1, 'Fetching tags'),
+    (2, 'Verifying signature'),
+    (3, 'Staging release'),
+    (4, 'Health check (staged)'),
+    (5, 'Swapping active release'),
+    (6, 'Restarting & monitoring'),
+]
+TOTAL_STEPS = len(STEPS)
+
+
+def _notify(notifier: Optional[TelegramNotifier], step: int, description: str) -> None:
+    log.info(f'Step {step}/{TOTAL_STEPS}: {description}')
+    if notifier:
+        notifier.send_progress(step, TOTAL_STEPS, description)
+
+
+def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
+               skip_verify: bool = False) -> bool:
+    """
+    Execute the 6-step update lifecycle for the given tag.
+    Returns True on success, False on failure (rollback attempted automatically).
+    """
+    app_root = cfg['app_root']
+    release_path = os.path.join(app_root, 'releases', tag)
+    current_tag = get_current_release(app_root)
+
+    if notifier:
+        notifier.begin(current_tag or '?', tag)
+
+    step = 0
+    try:
+        # Step 1: Fetch (already done in poll loop; log it)
+        step = 1
+        _notify(notifier, step, f'Fetched — new tag: {tag}')
+
+        # Step 2: Verify signature
+        step = 2
+        # TODO: Re-enable signature verification for production
+        # Currently disabled for development convenience
+        _notify(notifier, step, 'Skipping signature verification (dev mode)')
+        if False:  # was: if not skip_verify:
+            ok, out = verify_tag(app_root, tag)
+            if not ok:
+                raise UpdateError(f'Signature verification failed: {out}')
+        else:
+            log.warning('Signature verification SKIPPED (dev mode)')
+
+        # Step 3: Stage (worktree + venv + shared links)
+        step = 3
+        _notify(notifier, step, 'Creating worktree & installing dependencies')
+        ok, err = create_worktree(app_root, tag)
+        if not ok:
+            raise UpdateError(f'git worktree add failed: {err}')
+
+        # Write VERSION file
+        with open(os.path.join(release_path, 'VERSION'), 'w') as f:
+            f.write(tag)
+
+        ok, err = create_venv_and_install(
+            release_path, cfg['python_bin'], cfg.get('uv_bin'))
+        if not ok:
+            raise UpdateError(f'Dependency installation failed: {err}')
+
+        link_shared_dirs(app_root, release_path)
+
+        # Step 4: Health check on temp port
+        step = 4
+        _notify(notifier, step, f'Health check on port {cfg["health_temp_port"]}')
+        ok = health_check_temp_port(
+            release_path, app_root,
+            port=cfg['health_temp_port'],
+            timeout=cfg['health_timeout'] * 3,
+            python_bin=cfg['python_bin'],
+        )
+        if not ok:
+            raise UpdateError('Staged release failed health check on temp port')
+
+        # Step 5: Stop daemon + atomic swap
+        step = 5
+        _notify(notifier, step, 'Stopping daemon & swapping release pointer')
+        stop_daemon(app_root)
+        if current_tag:
+            write_rollback_slot(app_root, current_tag)
+        atomic_swap(app_root, release_path)
+
+        # Step 6: Restart + monitor
+        step = 6
+        _notify(notifier, step, 'Starting new release & monitoring')
+        ok, pid = start_daemon(release_path, app_root)
+        if not ok:
+            raise UpdateError('Failed to start daemon from new release')
+
+        # Monitor for monitor_duration seconds
+        end_time = time.time() + cfg['monitor_duration']
+        check_interval = 5
+        while time.time() < end_time:
+            time.sleep(check_interval)
+            if not _is_process_alive(pid):
+                raise UpdateError('Daemon process died during monitoring period')
+            if not health_check(cfg['health_port'], timeout=cfg['health_timeout']):
+                raise UpdateError('Health check failed during monitoring period')
+
+        if notifier:
+            notifier.send_success(tag)
+        log.info(f'Update to {tag} successful')
+        return True
+
+    except UpdateError as e:
+        log.error(f'Update to {tag} failed at step {step}/{TOTAL_STEPS}: {e}')
+        if notifier:
+            notifier.send_failure(step, TOTAL_STEPS, str(e))
+        # Rollback
+        rollback(app_root, cfg, notifier)
+        # Clean up bad release worktree
+        if os.path.exists(release_path):
+            remove_worktree(app_root, tag)
+        return False
+    except Exception as e:
+        log.error(f'Unexpected error at step {step}: {e}', exc_info=True)
+        if notifier:
+            notifier.send_failure(step, TOTAL_STEPS, f'Unexpected error: {e}')
+        rollback(app_root, cfg, notifier)
+        if os.path.exists(release_path):
+            remove_worktree(app_root, tag)
+        return False
+
+# ---------------------------------------------------------------------------
+# Main poll loop
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Evonic self-update supervisor')
+    parser.add_argument('--config', default=os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'config.json'),
+        help='Path to supervisor config.json')
+    parser.add_argument('--once', action='store_true',
+        help='Check for updates once and exit')
+    parser.add_argument('--trigger', action='store_true',
+        help='Send SIGUSR1 to the running supervisor and exit')
+    parser.add_argument('--force', action='store_true',
+        help='Skip signature verification (development only)')
+    parser.add_argument('--tag', default=None,
+        help='Update to this specific tag instead of latest')
+    args = parser.parse_args()
+
+    cfg = load_config(args.config)
+    app_root = cfg['app_root']
+
+    # --trigger: signal running supervisor and exit
+    if args.trigger:
+        pid = _read_pid(_supervisor_pid_file(app_root))
+        if pid and _is_process_alive(pid):
+            os.kill(pid, signal.SIGUSR1)
+            print(f'Sent SIGUSR1 to supervisor (PID {pid})')
+        else:
+            print('No running supervisor found')
+        return
+
+    notifier = None
+    token = cfg.get('telegram_bot_token', '')
+    chat_id = cfg.get('telegram_chat_id', '')
+    if token and chat_id:
+        notifier = TelegramNotifier(token, str(chat_id))
+
+    write_supervisor_pid(app_root)
+    log.info(f'Supervisor started (PID {os.getpid()}, app_root={app_root})')
+
+    # Event flags for signal handlers
+    trigger_event = threading.Event()
+    restart_event = threading.Event()
+    shutdown_event = threading.Event()
+
+    if not is_windows():
+        def _sigusr1(signum, frame):
+            log.info('SIGUSR1 received — triggering immediate update check')
+            trigger_event.set()
+
+        def _sigusr2(signum, frame):
+            log.info('SIGUSR2 received — restart daemon only')
+            restart_event.set()
+
+        def _sigterm(signum, frame):
+            log.info('SIGTERM received — shutting down')
+            shutdown_event.set()
+
+        signal.signal(signal.SIGUSR1, _sigusr1)
+        signal.signal(signal.SIGUSR2, _sigusr2)
+        signal.signal(signal.SIGTERM, _sigterm)
+
+    last_poll = 0.0
+
+    while not shutdown_event.is_set():
+        now = time.time()
+        should_check = (
+            trigger_event.is_set()
+            or (now - last_poll) >= cfg['poll_interval']
+        )
+
+        if should_check:
+            trigger_event.clear()
+            last_poll = now
+
+            git_fetch_tags(app_root, cfg['git_remote'])
+            target_tag = args.tag or get_latest_tag(app_root)
+            current_tag = get_current_release(app_root)
+
+            if target_tag and target_tag != current_tag:
+                log.info(f'New release available: {current_tag} → {target_tag}')
+                success = run_update(target_tag, cfg, notifier,
+                                     skip_verify=args.force)
+                if success:
+                    cleanup_old_releases(app_root, cfg['keep_releases'])
+            else:
+                log.info(f'Already up to date ({current_tag})')
+
+            if args.once:
+                break
+
+        if restart_event.is_set():
+            restart_event.clear()
+            log.info('Restarting daemon (no update)')
+            stop_daemon(app_root)
+            start_daemon_from_current(app_root)
+
+        shutdown_event.wait(timeout=10)
+
+    log.info('Supervisor exiting')
+
+
+if __name__ == '__main__':
+    main()

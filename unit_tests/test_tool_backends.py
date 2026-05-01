@@ -1,0 +1,43 @@
+"""
+Auto-discovery test runner for backend tool functions.
+
+Scans backend/tools/*.py for tool modules that define a `test_execute()` function
+and runs them. Tools without `test_execute()` are skipped.
+"""
+
+import os
+import importlib.util
+import pytest
+
+TOOLS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', 'tools')
+SKIP_FILES = {'__init__.py', 'registry.py'}
+
+
+def _discover_tool_modules():
+    """Find all tool .py files and load them, yielding (name, module) pairs."""
+    for fname in sorted(os.listdir(TOOLS_DIR)):
+        if not fname.endswith('.py') or fname in SKIP_FILES:
+            continue
+        name = fname[:-3]
+        path = os.path.join(TOOLS_DIR, fname)
+        spec = importlib.util.spec_from_file_location(f'backend.tools.{name}', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        yield name, module
+
+
+def _build_params():
+    """Build pytest parametrize list from discovered tools."""
+    params = []
+    for name, module in _discover_tool_modules():
+        if hasattr(module, 'test_execute'):
+            params.append(pytest.param(module, id=name))
+        else:
+            params.append(pytest.param(module, id=name, marks=pytest.mark.skip(
+                reason=f'{name} has no test_execute()')))
+    return params
+
+
+@pytest.mark.parametrize('module', _build_params())
+def test_tool_backend(module):
+    module.test_execute()

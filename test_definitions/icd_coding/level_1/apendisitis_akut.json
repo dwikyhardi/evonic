@@ -1,0 +1,16 @@
+{
+  "id": "icd_apendisitis_1",
+  "name": "ICD Coding — Apendisitis Akut",
+  "description": "Level 1 — diagnosis tunggal bedah, satu kode ICD-10",
+  "prompt": "Pasien laki-laki, 25 tahun, datang ke IGD dengan keluhan nyeri perut kanan bawah sejak 2 hari lalu, disertai mual dan demam 38.5°C. Pemeriksaan fisik: nyeri tekan titik McBurney positif, tanda Rovsing positif. Laboratorium: leukosit 14.200/μL. USG abdomen: apendiks membesar diameter 9 mm dengan cairan periapendiks. Dilakukan apendektomi laparoskopi. Diagnosis: Apendisitis akut tanpa komplikasi. Tetapkan kode ICD-10-CM yang sesuai.",
+  "expected": {
+    "codes": [
+      {"code": "K35.80", "description": "Unspecified acute appendicitis without abscess", "type": "PRIMARY"}
+    ]
+  },
+  "evaluator_id": "icd_code_judge",
+  "difficulty": "easy",
+  "timeout_ms": 60000,
+  "weight": 1.0,
+  "enabled": true
+}

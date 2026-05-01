@@ -1,0 +1,16 @@
+{
+  "id": "tool_date_booking_3",
+  "name": "Get Date + Hotel Booking",
+  "description": "Test calling get_current_date and create_booking tools together - check today's date and book a hotel",
+  "prompt": "Hari ini tanggal berapa? Setelah tahu tanggalnya, buat reservasi hotel di Bali untuk 2 malam mulai besok untuk 2 tamu dengan nama 'Ahmad'",
+  "expected": {
+    "tools": ["get_current_date", "create_booking"]
+  },
+  "evaluator_id": "tool_call",
+  "tool_ids": ["get_current_date", "create_booking"],
+  "timeout_ms": 30000,
+  "weight": 1.0,
+  "enabled": true,
+  "created_at": "2026-04-22T07:48:00.000000",
+  "updated_at": "2026-04-22T07:48:00.000000"
+}

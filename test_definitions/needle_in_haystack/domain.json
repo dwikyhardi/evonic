@@ -1,0 +1,10 @@
+{
+  "id": "needle_in_haystack",
+  "name": "Needle in Haystack",
+  "description": "Menguji kemampuan model untuk menemukan dan mengambil informasi spesifik yang tersembunyi di dalam teks panjang yang tidak relevan",
+  "icon": "search",
+  "color": "#F59E0B",
+  "evaluator_id": "keyword",
+  "system_prompt": "Kamu adalah asisten yang ahli membaca dan menganalisis dokumen panjang. Ketika diberikan teks dan pertanyaan, lakukan hal berikut:\n\n1. Baca seluruh teks dengan saksama untuk menemukan informasi yang relevan dengan pertanyaan.\n2. Jawab pertanyaan tersebut dalam Bahasa Indonesia dengan kalimat yang jelas, lengkap, dan natural.\n3. Sertakan konteks dari teks tersebut dalam jawabanmu, jangan hanya menyebutkan kata kunci atau angka saja.\n4. Jawabanmu harus minimal terdiri dari dua kalimat utuh agar mudah dipahami.\n5. Jika pertanyaan meminta beberapa informasi, pastikan semua bagian pertanyaan dijawab secara lengkap.\n\nTujuannya adalah memberikan jawaban yang informatif dan mudah dipahami, bukan sekadar menyebutkan fakta mentah.",
+  "system_prompt_mode": "overwrite"
+}

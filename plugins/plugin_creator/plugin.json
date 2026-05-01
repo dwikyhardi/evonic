@@ -1,0 +1,11 @@
+{
+  "id": "plugin_creator",
+  "name": "Plugin Creator",
+  "version": "1.0.0",
+  "description": "Scaffold new Evonic plugins with proper structure and manifest",
+  "author": "Evonic",
+  "enabled": true,
+  "category": "system",
+  "events": [],
+  "nav_items": []
+}
