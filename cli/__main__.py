@@ -50,7 +50,7 @@ EVONIC_BANNER = _DAY_COLORS[datetime.now().weekday()] + r"""
 
 from cli.commands import (
     start_server, stop_server, status_server,
-    plugin_list, plugin_install, plugin_uninstall,
+    plugin_list, plugin_install, plugin_uninstall, plugin_new,
     skill_list, skill_add, skill_get, skill_rm,
     skillset_list, skillset_get, skillset_apply,
     agent_list, agent_get, agent_add, agent_enable, agent_disable, agent_remove,
@@ -177,6 +177,13 @@ def main():
     uninstall_parser.add_argument(
         "name",
         help="Plugin ID to uninstall",
+    )
+
+    # plugin new
+    plugin_subparsers.add_parser(
+        "new",
+        help="Scaffold a new plugin project",
+        description="Interactive wizard to create a new plugin scaffold in plugins/ directory. Prompts for name, description, and author.",
     )
 
     # --- skill ---
@@ -527,6 +534,8 @@ def main():
             plugin_install(args.source)
         elif args.plugin_command == "uninstall":
             plugin_uninstall(args.name)
+        elif args.plugin_command == "new":
+            plugin_new()
     elif args.command == "skill":
         if args.skill_command is None:
             skill_parser.print_help()

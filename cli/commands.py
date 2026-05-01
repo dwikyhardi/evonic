@@ -374,6 +374,129 @@ def plugin_uninstall(name):
 
     print(f"Plugin uninstalled: {name}")
 
+def plugin_new():
+    """Interactive wizard to scaffold a new plugin project."""
+    import re
+
+    PLUGINS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "plugins")
+
+    print("")
+    print("  \u26a1 Evonic Plugin Scaffolder")
+    print("  \u2500" * 28)
+    print("")
+
+    name = ""
+    while not name.strip():
+        name = input("  Plugin name (e.g. My Cool Plugin): ").strip()
+    plugin_id = re.sub(r"[^a-z0-9_]", "_", name.lower().replace(" ", "_"))
+    plugin_id = re.sub(r"_+", "_", plugin_id).strip("_")
+    if not plugin_id:
+        plugin_id = "unnamed_plugin"
+
+    print(f"  Plugin ID:  {plugin_id}")
+    print("")
+
+    description = input("  Description: ").strip() or f"A simple {name} plugin for Evonic"
+    author = input("  Author / contact email: ").strip() or "you@example.com"
+
+    dest = os.path.join(PLUGINS_DIR, plugin_id)
+    if os.path.exists(dest):
+        print(f"\n  Error: Directory already exists: {dest}")
+        sys.exit(1)
+
+    os.makedirs(dest)
+
+    manifest = {
+        "id": plugin_id,
+        "name": name.strip(),
+        "version": "1.0.0",
+        "description": description,
+        "author": author,
+        "enabled": True,
+        "events": [],
+        "nav_items": [],
+    }
+    import json
+    with open(os.path.join(dest, "plugin.json"), "w") as f:
+        json.dump(manifest, f, indent=2)
+        f.write("\n")
+
+    handler_py = (
+        '"""Handler for the ' + name + ' plugin."""\n\n\n'
+        'def on_load(sdk):\n'
+        '    """Called when the plugin is loaded. Use sdk.log() for logging."""\n'
+        '    sdk.log("' + name + ' plugin loaded (v1.0.0)")\n\n\n'
+        'def on_unload(sdk):\n'
+        '    """Called when the plugin is unloaded."""\n'
+        '    sdk.log("' + name + ' plugin unloaded")\n\n\n'
+        'def on_tool_call(tool_name, args, sdk):\n'
+        '    """Handle a tool call from an agent.\n\n'
+        '    Args:\n'
+        '        tool_name: Name of the tool being called.\n'
+        '        args: Dictionary of arguments passed to the tool.\n'
+        '        sdk: Plugin SDK instance for logging, config access, etc.\n\n'
+        '    Returns:\n'
+        '        A string response to send back to the agent.\n'
+        '    """\n'
+        '    sdk.log(f"Tool called: {tool_name} with args={args}")\n'
+        '    return f"Executed {tool_name} with {len(args)} argument(s)"\n'
+    )
+    with open(os.path.join(dest, "handler.py"), "w") as f:
+        f.write(handler_py)
+
+    readme = f"""# {name}
+
+**Plugin ID:** `{plugin_id}`  
+**Version:** 1.0.0  
+**Author:** {author}
+
+## Description
+
+{description}
+
+## Installation
+
+```bash
+evonic plugin install plugins/{plugin_id}
+```
+
+## Development
+
+### Structure
+
+```
+plugins/{plugin_id}/
+\u251c\u2500\u2500 plugin.json      # Plugin manifest
+\u251c\u2500\u2500 handler.py       # Event and tool handlers
+\u2514\u2500\u2500 README.md        # This file
+```
+
+### Adding tools
+
+Add tool definitions to the `tools` key in `plugin.json` and implement
+the handler logic in `handler.py`.
+"""
+    with open(os.path.join(dest, "README.md"), "w") as f:
+        f.write(readme.lstrip("\n"))
+
+    with open(os.path.join(dest, ".gitignore"), "w") as f:
+        f.write("__pycache__/\n*.pyc\n")
+
+    print(f"\n  \u2705 Plugin scaffold created: plugins/{plugin_id}/")
+    print(f"     \u251c\u2500\u2500 plugin.json")
+    print(f"     \u251c\u2500\u2500 handler.py")
+    print(f"     \u251c\u2500\u2500 README.md")
+    print(f"     \u2514\u2500\u2500 .gitignore")
+    print("")
+    print(f"  Next steps:")
+    print(f"    1. cd plugins/{plugin_id}")
+    print(f"    2. Edit plugin.json to add tools, events, routes, etc.")
+    print(f"    3. Implement handlers in handler.py")
+    print(f"    4. Install the plugin: evonic plugin install plugins/{plugin_id}")
+    print("")
+
+
+
 
 # ─── Skill Management ──────────────────────────────────────────────────────────
 
