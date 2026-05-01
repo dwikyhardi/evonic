@@ -72,7 +72,7 @@
                         <div id="provider-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {% for pid, p in providers.items() %}
                             <label class="provider-card flex items-start gap-3 border-2 rounded-xl p-3 cursor-pointer transition-all
-                                {% if pid == 'openrouter' %}border-indigo-500 bg-indigo-50{% else %}border-gray-200 hover:border-indigo-300{% endif %}">
+                                {% if pid == 'openrouter' %}border-indigo-500 bg-indigo-50 dark:bg-indigo-950{% else %}border-gray-200 dark:border-gray-600 hover:border-indigo-300 dark:hover:border-indigo-500{% endif %}">
                                 <input type="radio" name="provider" value="{{ pid }}" {% if pid == 'openrouter' %}checked{% endif %} class="mt-0.5 accent-indigo-600">
                                 <div>
                                     <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ p.label }}</div>
@@ -108,7 +108,7 @@
                     <!-- Test connection -->
                     <div class="flex items-center gap-3">
                         <button id="test-btn" type="button"
-                            class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
                             <span id="test-btn-text">Test Connection</span>
                             <span id="test-spinner" class="hidden">
                                 <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -320,14 +320,14 @@ $(document).on('change', 'input[name="provider"]', function() {
 
 // ---- Language card highlight ----
 $(document).on('change', 'input[name="language"]', function() {
-    $('.lang-card').removeClass('border-indigo-500 bg-indigo-50').addClass('border-gray-200');
-    $(this).closest('.lang-card').addClass('border-indigo-500 bg-indigo-50').removeClass('border-gray-200');
+    $('.lang-card').removeClass('border-indigo-500 bg-indigo-50 dark:bg-indigo-950').addClass('border-gray-200 dark:border-gray-600');
+    $(this).closest('.lang-card').addClass('border-indigo-500 bg-indigo-50 dark:bg-indigo-950').removeClass('border-gray-200 dark:border-gray-600');
 });
 
 // ---- Tone card highlight ----
 $(document).on('change', 'input[name="tone"]', function() {
-    $('.tone-card').removeClass('border-indigo-500 bg-indigo-50').addClass('border-gray-200');
-    $(this).closest('.tone-card').addClass('border-indigo-500 bg-indigo-50').removeClass('border-gray-200');
+    $('.tone-card').removeClass('border-indigo-500 bg-indigo-50 dark:bg-indigo-950').addClass('border-gray-200 dark:border-gray-600');
+    $(this).closest('.tone-card').addClass('border-indigo-500 bg-indigo-50 dark:bg-indigo-950').removeClass('border-gray-200 dark:border-gray-600');
     const tone = $(this).val();
     if (tone === 'custom') {
         $('#custom-tone-row').removeClass('hidden');
@@ -393,12 +393,12 @@ $('#test-btn').on('click', function() {
             $('#test-spinner').addClass('hidden');
         },
         success: function(data) {
-            $('#test-result').removeClass('hidden text-red-600').addClass('text-green-600')
+            $('#test-result').removeClass('hidden text-red-600 dark:text-red-400').addClass('text-green-600 dark:text-green-400')
                 .html('&#10003; ' + data.message);
         },
         error: function(xhr) {
             const msg = (xhr.responseJSON || {}).message || 'Connection failed';
-            $('#test-result').removeClass('hidden text-green-600').addClass('text-red-600')
+            $('#test-result').removeClass('hidden text-green-600 dark:text-green-400').addClass('text-red-600 dark:text-red-400')
                 .html('&#10007; ' + msg);
         }
     });
@@ -524,16 +524,16 @@ function updateStepDots(active) {
         const dot = $('#dot-' + i);
         const label = $('#label-' + i);
         if (i < active) {
-            dot.removeClass('bg-gray-200 text-gray-400 bg-indigo-600 text-white')
+            dot.removeClass('bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 bg-indigo-600 text-white')
                .addClass('bg-green-500 text-white');
         } else if (i === active) {
-            dot.removeClass('bg-gray-200 text-gray-400 bg-green-500')
+            dot.removeClass('bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 bg-green-500')
                .addClass('bg-indigo-600 text-white');
-            label.removeClass('text-gray-400').addClass('text-indigo-600');
+            label.removeClass('text-gray-400 dark:text-gray-500').addClass('text-indigo-600');
         } else {
             dot.removeClass('bg-indigo-600 text-white bg-green-500')
-               .addClass('bg-gray-200 text-gray-400');
-            label.removeClass('text-indigo-600').addClass('text-gray-400');
+               .addClass('bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500');
+            label.removeClass('text-indigo-600').addClass('text-gray-400 dark:text-gray-500');
         }
     }
 }
