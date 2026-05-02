@@ -212,7 +212,7 @@ _REGISTRY_CODE = (
     "import json, importlib, inspect, evonic\n"
     "out = {}\n"
     "out['evonic'] = [n for n in dir(evonic) if not n.startswith('_') and inspect.isfunction(getattr(evonic,n)) and getattr(getattr(evonic,n),'__module__','') == 'evonic']\n"
-    "mods = ['display','shell','files','http','code_analysis','system']\n"
+    "mods = ['display','files','http','code_analysis','system']\n"
     "for m in mods:\n"
     "    mod = importlib.import_module(f'evonic.{m}')\n"
     "    out[f'evonic.{m}'] = [n for n in dir(mod) if not n.startswith('_') and inspect.isfunction(getattr(mod,n)) and getattr(getattr(mod,n),'__module__','').startswith(f'evonic.{m}')]\n"

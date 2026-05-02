@@ -2,7 +2,7 @@
 evonic — pre-installed helpers for the runpy Docker sandbox.
 
 Usage inside runpy:
-    from evonic import display, shell, files, http, code_analysis, system
+    from evonic import display, files, http, code_analysis, system
     from evonic import tree, find, stats
 """
 
@@ -14,9 +14,9 @@ import subprocess
 # Resolves correctly inside the container regardless of where the package is mounted.
 BIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin')
 
-from evonic import display, shell, files, http, code_analysis, system
+from evonic import display, files, http, code_analysis, system
 
-__all__ = ['display', 'shell', 'files', 'http', 'code_analysis', 'system', 'BIN_DIR',
+__all__ = ['display', 'files', 'http', 'code_analysis', 'system', 'BIN_DIR',
            'tree', 'find', 'stats']
 
 
@@ -190,7 +190,6 @@ def _registry() -> dict:
     _self = _sys.modules[__name__]
     modules = {
         'evonic.display': display,
-        'evonic.shell': shell,
         'evonic.files': files,
         'evonic.http': http,
         'evonic.code_analysis': code_analysis,
