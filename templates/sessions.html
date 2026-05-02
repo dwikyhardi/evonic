@@ -265,7 +265,7 @@ html.dark #mobile-dropdown .border-b { border-color: #374151; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=26"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=27"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 let allSessions = [];
@@ -402,6 +402,11 @@ function renderEntries(entries, { persistent = false } = {}) {
         if (entry.ts > lastChatTs) lastChatTs = entry.ts;
         const type = entry.type;
         if (type === 'user') {
+            // Skip if this exact message was already optimistically rendered by sendReply
+            if (_pendingReplyText !== null && entry.content === _pendingReplyText) {
+                _pendingReplyText = null;
+                continue;
+            }
             chatUI.appendMessage('user', entry.content || '', {timestamp: entry.ts ? new Date(entry.ts).toISOString() : null});
         } else if (type === 'thinking') {
             if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
@@ -424,7 +429,12 @@ function renderEntries(entries, { persistent = false } = {}) {
                 thinkingId = null;
             }
             if (entry.content) {
-                chatUI.appendMessage('assistant', entry.content, {timestamp: entry.ts ? new Date(entry.ts).toISOString() : null, metadata: meta});
+                // Skip if this was already optimistically rendered as an assistant reply (perspective 'B')
+                if (_pendingReplyText !== null && entry.content === _pendingReplyText) {
+                    _pendingReplyText = null;
+                } else {
+                    chatUI.appendMessage('assistant', entry.content, {timestamp: entry.ts ? new Date(entry.ts).toISOString() : null, metadata: meta});
+                }
             }
         } else if (type === 'error') {
             if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId); thinkingId = null; }
@@ -930,30 +940,35 @@ function startSidebarPolling() {
 
 // ==================== Admin Reply ====================
 
+let _pendingReplyText = null; // text of optimistically-rendered reply; suppressed in poll
+
 async function sendReply(e) {
     e.preventDefault();
     if (!currentSessionId) return;
-    const input = document.getElementById('reply-input');
-    const text = input.value.trim();
+    const $input = $('#reply-input');
+    const text = $input.val().trim();
     if (!text) return;
 
-    const btn = document.getElementById('reply-btn');
-    btn.disabled = true;
-    btn.textContent = 'Sending...';
+    const $btn = $('#reply-btn');
+    $btn.prop('disabled', true).text('Sending...');
 
-    const res = await fetch(`/api/sessions/${currentSessionId}/reply`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({text, perspective: _chatPerspective})
-    });
-    const data = await res.json();
-    btn.disabled = false;
-    btn.textContent = 'Send';
-
-    if (data.error) return alert(data.error);
-    input.value = '';
-    // Scroll to bottom so the latest message is visible
+    // Optimistically render the outgoing message so it appears before the thinking bubble.
+    // Perspective 'A' = sending as user role; 'B' = sending as assistant role.
+    const outRole = _chatPerspective === 'B' ? 'assistant' : 'user';
+    chatUI.appendMessage(outRole, text);
     chatUI.scrollToBottom();
+    _pendingReplyText = text;
+
+    const res = await $.ajax({
+        url: `/api/sessions/${currentSessionId}/reply`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({text, perspective: _chatPerspective}),
+    }).catch(err => ({ error: err.responseJSON?.error || 'Request failed' }));
+
+    $btn.prop('disabled', false).text('Send');
+    if (res.error) { _pendingReplyText = null; return alert(res.error); }
+    $input.val('');
 }
 
 function showStopBtn(show) {

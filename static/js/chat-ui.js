@@ -1655,7 +1655,7 @@ class ChatUI {
             const newAlign = isRight
                 ? 'items-end md:items-start md:justify-end'
                 : 'items-start md:justify-start';
-            $(this).removeClass('items-end items-start md\\:items-start md\\:justify-end md\\:justify-start justify-start justify-end').addClass(newAlign);
+            $(this).removeClass('items-end items-start md:items-start md:justify-end md:justify-start justify-start justify-end').addClass(newAlign);
         });
     }
 
