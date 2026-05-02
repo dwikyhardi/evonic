@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40" fill="none">
+  <rect width="40" height="40" rx="8" fill="#6366f1"/>
+  <text x="20" y="28" text-anchor="middle" fill="white" font-size="22" font-weight="bold" font-family="monospace">E</text>
+  <text x="50" y="28" fill="#e2e8f0" font-size="20" font-weight="bold" font-family="system-ui">Evonic</text>
+</svg>
