@@ -33,13 +33,9 @@ def _get_owner_name():
 
 
 def _is_autopilot(agent_id: str) -> bool:
-    """Check autopilot for an agent: agent column first, settings table fallback."""
+    """Check autopilot for an agent via settings table (kanban plugin-owned)."""
     try:
         from models.db import db as _db2
-        agent = _db2.get_agent(agent_id)
-        if agent and agent.get('autopilot_enabled'):
-            return True
-        # Fallback to settings table for backward compatibility
         if _db2.get_setting(f'autopilot:{agent_id}', '0') == '1':
             return True
     except Exception:
@@ -1064,7 +1060,7 @@ def _autopilot_handler(
     if arg not in ("on", "off"):
         return "Usage: `/autopilot on` or `/autopilot off`"
 
-    db.update_agent(agent_id=agent_id, autopilot_enabled=(1 if arg == "on" else 0))
+    db.set_setting(f'autopilot:{agent_id}', '1' if arg == 'on' else '0')
     status = "enabled" if arg == "on" else "disabled"
     agent_name = agent_id
     try:

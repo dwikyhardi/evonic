@@ -413,12 +413,6 @@ class SchemaMixin:
             # Backfill existing agents: NULL → 1 (messaging enabled by default)
             cursor.execute("UPDATE agents SET agent_messaging_enabled = 1 WHERE agent_messaging_enabled IS NULL")
 
-            # Migration: add autopilot_enabled toggle (default OFF = agent requires user approval)
-            try:
-                cursor.execute("ALTER TABLE agents ADD COLUMN autopilot_enabled BOOLEAN DEFAULT 0")
-            except sqlite3.OperationalError:
-                pass
-
             # Migration: enable inject_agent_id and inject_datetime for all existing agents
             cursor.execute("UPDATE agents SET inject_agent_id = 1 WHERE inject_agent_id = 0 OR inject_agent_id IS NULL")
             cursor.execute("UPDATE agents SET inject_datetime = 1 WHERE inject_datetime = 0 OR inject_datetime IS NULL")

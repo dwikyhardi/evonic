@@ -273,15 +273,7 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
                             </div>
                         </label>
                     </div>
-                    <div>
-                        <label class="flex items-center gap-3 cursor-pointer select-none">
-                            {{ toggle_widget(id='agent-autopilot-enabled', checked=(agent.autopilot_enabled if agent.autopilot_enabled is not none else 0)) }}
-                            <div>
-                                <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Autopilot</span>
-                                <p class="text-xs text-gray-400 mt-0.5">When enabled, the agent auto-accepts kanban tasks without waiting for user approval. Controlled by <code>/autopilot on|off</code>.</p>
-                            </div>
-                        </label>
-                    </div>
+
                     <div>
                         <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Summarize Prompt</label>
                         <textarea id="agent-summarize-prompt" rows="10" class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">{{ agent.summarize_prompt or DEFAULT_SUMMARIZE_PROMPT }}</textarea>
@@ -1044,7 +1036,6 @@ async function saveAdvanced() {
             disable_parallel_tool_execution: document.getElementById('agent-parallel-exec').checked ? 1 : 0,
             disable_turn_prefetch: document.getElementById('agent-prefetch').checked ? 1 : 0,
             agent_messaging_enabled: document.getElementById('agent-messaging-enabled').checked ? 1 : 0,
-            autopilot_enabled: document.getElementById('agent-autopilot-enabled').checked ? 1 : 0,
         })
     });
     const data = await res.json();
