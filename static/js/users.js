@@ -214,7 +214,7 @@
 
         idents.forEach(function (i) {
             var enabled = i.enabled === 1 || i.enabled === true;
-            var agentOptions = '<option value="">-- no agent (disabled) --</option>';
+            var agentOptions = '<option value="">-- inherit channel default --</option>';
             DETAIL_STATE.agents.forEach(function (a) {
                 var sel = a.id === i.agent_id ? 'selected' : '';
                 agentOptions += '<option value="' + esc(a.id) + '" ' + sel + '>' + esc(a.name || a.id) + '</option>';
@@ -235,9 +235,9 @@
                 +     '<div class="text-xs text-gray-400 mb-1">Routed Agent</div>'
                 +     '<select class="ud-i-agent w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-900 dark:text-gray-100">' + agentOptions + '</select>'
                 +   '</div>'
-                +   '<label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">'
+                +   '<label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer" title="When off, this identity falls back to the channel\'s default agent.">'
                 +     '<input type="checkbox" class="ud-i-enabled rounded border-gray-300" ' + (enabled ? 'checked' : '') + '>'
-                +     '<span>Enabled</span>'
+                +     '<span>Override active</span>'
                 +   '</label>'
                 +   '<button class="ud-i-save px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded text-sm font-medium">Save</button>'
                 +   '<button class="ud-i-delete px-3 py-1.5 text-red-600 border border-red-200 rounded text-sm hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>'
@@ -281,7 +281,7 @@
             $ch.append('<option value="">-- no channels available --</option>');
             $ch.prop('disabled', true);
             $('#btn-ai-save').prop('disabled', true).addClass('opacity-50 cursor-not-allowed');
-            // Show inline hint with a deep-link to the Agents page (where channels are created)
+            // Show inline hint with a deep-link to the top-level Channels page (where channels are created)
             var $hint = $('#ai-no-channels-hint');
             if ($hint.length === 0) {
                 $hint = $('<div id="ai-no-channels-hint" class="mt-2 text-xs text-amber-600 dark:text-amber-400"></div>');
@@ -289,9 +289,9 @@
             }
             $hint
                 .removeClass('hidden')
-                .html('No channels are configured yet. Create a channel first from <a href="/agents" class="underline font-medium">Agents</a> → open an agent → <em>Add Channel</em>.');
+                .html('No channels are configured yet. Create a channel first from the <a href="/channels" class="underline font-medium">Channels page</a>.');
         }
-        var $ag = $('#ai-agent').empty().append('<option value="">-- no agent (disabled) --</option>');
+        var $ag = $('#ai-agent').empty().append('<option value="">-- inherit channel default --</option>');
         DETAIL_STATE.agents.forEach(function (a) {
             $ag.append('<option value="' + esc(a.id) + '">' + esc(a.name || a.id) + '</option>');
         });
