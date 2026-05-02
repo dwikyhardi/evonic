@@ -25,7 +25,7 @@ Evonic is an agentic AI platform for building, managing, and orchestrating AI ag
 - **Workplaces** — Execution environments: local, SSH servers, or cloud devices via Evonet
 - **Evonet** — Lightweight connector that enables remote execution without SSH or firewall rules
 - **Scheduler** — Schedule recurring tasks, reminders, and cron-based triggers for agents
-- **Channels** — Connect agents to Telegram, WhatsApp, Discord, and more
+- **Channels** — Connect agents to Telegram, WhatsApp, Discord, Slack, and more
 - **Evaluation Engine** — Test and benchmark LLM capabilities with customizable evaluators
 - **Safety by Design** — Sandboxed execution + heuristic safety system for agent actions
 
