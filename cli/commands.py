@@ -2124,7 +2124,7 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False):
 
     if check_only:
         print('Fetching tags...')
-        sup.git_fetch_tags(app_root, cfg['git_remote'])
+        sup.git_fetch_tags(app_root)
         current = sup.get_current_release(app_root)
         latest = sup.get_latest_tag(app_root)
         print(f'Current : {current or "(none — flat repo mode)"}')
@@ -2148,7 +2148,7 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False):
 
     # Supervisor not running — run update inline
     print('Supervisor not running. Running update inline...')
-    sup.git_fetch_tags(app_root, cfg['git_remote'])
+    sup.git_fetch_tags(app_root)
     target = tag or sup.get_latest_tag(app_root)
     if not target:
         print('No tags found — nothing to update.')
