@@ -1948,9 +1948,13 @@ async function restoreActiveReasoning() {
         if (!replayEvents.length) return;
 
         // Replay trace into a new thinking bubble.
+        // Find the last user message to anchor the bubble below it.
+        const container = document.getElementById('chat-messages');
+        const userWrappers = container ? container.querySelectorAll('[data-msg-role="user"]') : [];
+        const userMsgEl = userWrappers.length ? userWrappers[userWrappers.length - 1] : null;
         let resumeSeq = 0;
         const turnBeginEvt = replayEvents.find(ev => ev.event === 'turn_begin');
-        let thinkingId = chatUI.showThinkingIndicator(turnBeginEvt ? turnBeginEvt.data.ts : null);
+        let thinkingId = chatUI.showThinkingIndicator(turnBeginEvt ? turnBeginEvt.data.ts : null, userMsgEl);
         for (const ev of replayEvents) {
             if (ev.seq > resumeSeq) resumeSeq = ev.seq;
             if (ev.event === 'thinking') {
@@ -1963,7 +1967,7 @@ async function restoreActiveReasoning() {
                 chatUI.appendTimelineEntry(thinkingId, {type: 'response', content: ev.data.content});
             } else if (ev.event === 'turn_split') {
                 chatUI.finalizeThinkingBubble(thinkingId);
-                thinkingId = chatUI.showThinkingIndicator();
+                thinkingId = chatUI.showThinkingIndicator(null, userMsgEl);
             }
         }
 
@@ -1975,7 +1979,7 @@ async function restoreActiveReasoning() {
         _currentTurn.stream = chatUI.connectThinkingStream(
             `/api/agents/${encodeURIComponent(AGENT_ID)}/chat/stream?session_id=${encodeURIComponent(sessionId)}&after=${resumeSeq}`,
             thinkingId,
-            { onSplit: (newId) => { _currentTurn.thinkingId = newId; }, onDone: () => { if (_currentTurn) _currentTurn.thinkingId = null; } }
+            { userMsgEl, onSplit: (newId) => { _currentTurn.thinkingId = newId; }, onDone: () => { if (_currentTurn) _currentTurn.thinkingId = null; } }
         );
 
         // Poll until the final response lands
@@ -2138,6 +2142,11 @@ async function sendChat() {
         chatPolling = false;
     }
 
+    // Create thinking bubble eagerly, anchored right below the user message.
+    // This guarantees correct DOM ordering — the bubble always sits between
+    // the user message and whatever follows, never above a prior finalized bubble.
+    let thinkingId = chatUI.showThinkingIndicator(null, userMsgEl);
+
     const abortController = new AbortController();
     const signal = abortController.signal;
 
@@ -2149,16 +2158,14 @@ async function sendChat() {
         sessionId = sData.session_id || null;
     } catch(e) { /* SSE won't work but chat still functions */ }
 
-    let thinkingId = null;
-    _currentTurn = { abortController, thinkingId: null, stream: null, pollTimer: null };
+    _currentTurn = { abortController, thinkingId, stream: null, pollTimer: null };
 
     if (sessionId) {
         _currentTurn.stream = chatUI.connectThinkingStream(
             `/api/agents/${AGENT_ID}/chat/stream?session_id=${encodeURIComponent(sessionId)}`,
-            null,
+            thinkingId,
             {
                 userMsgEl: userMsgEl,
-                onThinkingId: (id) => { thinkingId = id; _currentTurn.thinkingId = id; },
                 onSplit: (newId) => { thinkingId = newId; _currentTurn.thinkingId = newId; },
                 onDone: () => { thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null; },
             }
@@ -2174,7 +2181,7 @@ async function sendChat() {
         });
         const data = await res.json();
         if (data.buffered) {
-            pollForResponse(null);
+            pollForResponse(thinkingId);
             return;
         } else if (data.injected) {
             chatUI.removeThinkingIndicator(thinkingId);
@@ -2184,12 +2191,7 @@ async function sendChat() {
             chatUI.appendMessage('error', 'Error: ' + (data.error || 'Unknown error'));
         } else {
             // Non-buffered success: agent responded immediately.
-            // Create thinking bubble manually (SSE turn_begin may not have fired yet)
-            // and close the SSE afterwards so it doesn't keep reconnecting.
-            if (!thinkingId) {
-                thinkingId = chatUI.showThinkingIndicator();
-                if (_currentTurn) _currentTurn.thinkingId = thinkingId;
-            }
+            // Thinking bubble was already created eagerly; populate it and close SSE.
             // Only populate if SSE hasn't already (avoids duplicate entries)
             if (chatUI.getTimelineEntryCount(thinkingId) === 0) {
                 if (data.tool_trace && data.tool_trace.length > 0) {
@@ -2241,7 +2243,7 @@ async function syncLastChatTs() {
 
 function pollForResponse(existingThinkingId) {
     // Poll every 1s until a 'final' or 'error' entry arrives in JSONL.
-    // existingThinkingId: thinking bubble already shown (SSE streaming into it).
+    // existingThinkingId: thinking bubble already shown (created eagerly in sendChat/restoreActiveReasoning).
     if (!_currentTurn) return;  // no active turn to poll for
     if (_currentTurn.pollTimer) clearInterval(_currentTurn.pollTimer);
     let thinkingId = existingThinkingId || null;
@@ -2254,6 +2256,10 @@ function pollForResponse(existingThinkingId) {
         if (chatPolling) return;
         chatPolling = true;
         try {
+            // Sync thinkingId from _currentTurn in case turn_split created a new bubble
+            if (_currentTurn && _currentTurn.thinkingId && _currentTurn.thinkingId !== thinkingId) {
+                thinkingId = _currentTurn.thinkingId;
+            }
             const sid = await _getChatSessionId();
             const qs = sid
                 ? `session_id=${encodeURIComponent(sid)}&after_ts=${lastChatTs}&limit=50`
@@ -2261,10 +2267,7 @@ function pollForResponse(existingThinkingId) {
             const res = await fetch(`/api/agents/${AGENT_ID}/chat?${qs}`);
             const data = await res.json();
             const entries = data.entries || [];
-            if (!entries.length) {
-                if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
-                return;
-            }
+            if (!entries.length) return;  // bubble already exists with spinner, just wait
             const wasAtBottom = chatUI.isNearBottom(80);
             let gotFinal = false;
             for (const entry of entries) {
@@ -2272,14 +2275,9 @@ function pollForResponse(existingThinkingId) {
                 lastChatTs = entry.ts;
                 if (entry.type === 'final' || entry.type === 'error') {
                     chatUI.closeStream();
-                    // Sync thinkingId from _currentTurn (set by SSE onThinkingId callback).
-                    // Do this unconditionally — not only when intermediates were collected,
-                    // otherwise the bubble won't be finalized when SSE handled everything.
-                    if (!thinkingId && _currentTurn && _currentTurn.thinkingId) thinkingId = _currentTurn.thinkingId;
                     // SSE fallback: if SSE race-lost (agent finished before stream connected),
                     // the thinking bubble will be empty. Replay intermediates from JSONL history.
                     if (collectedIntermediates.length > 0) {
-                        if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
                         if (chatUI.getTimelineEntryCount(thinkingId) === 0) {
                             for (const ie of collectedIntermediates) {
                                 if (ie.type === 'thinking') {
@@ -2296,7 +2294,8 @@ function pollForResponse(existingThinkingId) {
                             }
                         }
                     }
-                    if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, (entry.metadata || {}).thinking_duration); thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null; }
+                    chatUI.finalizeThinkingBubble(thinkingId, (entry.metadata || {}).thinking_duration);
+                    thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null;
                     chatUI.appendMessage(entry.type === 'error' ? 'error' : 'assistant',
                                         entry.content, {metadata: entry.metadata || {}});
                     gotFinal = true;
@@ -2304,8 +2303,6 @@ function pollForResponse(existingThinkingId) {
                     collectedIntermediates.push(entry);
                     // Render progressively if SSE isn't connected (SSE handles live rendering otherwise)
                     if (!chatUI.hasActiveStream()) {
-                        if (!thinkingId && _currentTurn && _currentTurn.thinkingId) thinkingId = _currentTurn.thinkingId;
-                        if (!thinkingId) thinkingId = chatUI.showThinkingIndicator();
                         if (entry.type === 'thinking') {
                             chatUI.appendTimelineEntry(thinkingId, {type: 'thinking', content: entry.content});
                         } else if (entry.type === 'tool_call') {
@@ -2317,6 +2314,7 @@ function pollForResponse(existingThinkingId) {
                         } else if (entry.type === 'intermediate') {
                             chatUI.appendTimelineEntry(thinkingId, {type: 'response', content: entry.content});
                         }
+                        if (wasAtBottom) chatUI.scrollToBottom();
                     }
                 }
                 // Other types are handled by SSE live stream; skip to avoid duplication
