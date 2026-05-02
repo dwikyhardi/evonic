@@ -284,10 +284,11 @@ export class ChatUI {
         this.$container.find('[data-msg-role]').each(function() {
             const role = $(this).attr('data-msg-role');
             const isUser = role === 'user';
-            const newAlign = isUser
-                ? (p.userAlign === 'left' ? 'justify-start' : 'justify-end')
-                : (p.assistantAlign === 'left' ? 'justify-start' : 'justify-end');
-            $(this).removeClass('justify-start justify-end').addClass(newAlign);
+            const isRight = isUser ? (p.userAlign === 'right') : (p.assistantAlign === 'right');
+            const newAlign = isRight
+                ? 'items-end md:items-start md:justify-end'
+                : 'items-start md:justify-start';
+            $(this).removeClass('items-end items-start md\\:items-start md\\:justify-end md\\:justify-start justify-start justify-end').addClass(newAlign);
         });
     }
 

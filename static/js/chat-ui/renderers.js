@@ -480,15 +480,18 @@ export function buildMessageBubble(role, content, opts = {}, cfg = {}) {
     const isSystemUser = isUser && /^\[system(?:\/[^\]]*)?\]/i.test(content);
     const isAgentUser  = isUser && /^\[AGENT\/[^\]]+\]/i.test(content);
 
-    const alignClass = isUser
-        ? (userAlign === 'left' ? 'justify-start' : 'justify-end')
-        : (assistantAlign === 'left' ? 'justify-start' : 'justify-end');
+    // In flex-col (mobile) mode the cross axis is horizontal, so use items-end/start.
+    // In md:flex-row (desktop) mode the main axis is horizontal, so use justify-end/start.
+    const isRight = isUser ? (userAlign === 'right') : (assistantAlign === 'right');
+    const alignClass = isRight
+        ? 'items-end md:items-start md:justify-end'
+        : 'items-start md:justify-start';
 
     const avatarHtml = (!isUser && !isError && agentAvatarUrl)
         ? `<img src="${escape(agentAvatarUrl)}" alt="" class="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-1 bg-indigo-50 dark:bg-indigo-900/20" onerror="this.onerror=null;this.style.display='none'">`
         : '';
 
-    const $wrapper = $('<div>').addClass('flex').addClass(alignClass).attr('data-msg-role', role);
+    const $wrapper = $('<div>').addClass('flex flex-col md:flex-row').addClass(alignClass).attr('data-msg-role', role);
     if (avatarHtml) $wrapper.addClass('items-start gap-2').append($(avatarHtml));
 
     let $bubble;
