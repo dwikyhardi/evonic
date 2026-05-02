@@ -1704,10 +1704,12 @@ class ChatUI {
 
     // ── Public: queued message indicators ────────────────────────────────────
 
-    markLastUserBubbleQueued() {
-        const $last = this.$container.find('[data-msg-role="user"]').last();
+    markLastUserBubbleQueued($msgEl) {
+        // Accept an explicit element or fall back to the last user-role message
+        const $last = ($msgEl && $msgEl.length) ? $msgEl : this.$container.find('[data-msg-role="user"]').last();
         if (!$last.length || $last.find('.queued-indicator').length) return;
-        const $indicator = $('<div class="queued-indicator flex items-center gap-1 text-[10px] text-gray-400 mt-0.5 px-1 justify-end">');
+        const isRight = $last.hasClass('md:justify-end') || $last.hasClass('justify-end');
+        const $indicator = $('<div class="queued-indicator flex items-center gap-1 text-[10px] text-gray-400 mt-0.5 px-1">').addClass(isRight ? 'justify-end' : 'justify-start');
         $indicator.html('<svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg><span>Queued</span>');
         $last.find('div').first().append($indicator);
     }

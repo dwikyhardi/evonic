@@ -265,7 +265,7 @@ html.dark #mobile-dropdown .border-b { border-color: #374151; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=28"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=29"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 let allSessions = [];
@@ -955,7 +955,9 @@ async function sendReply(e) {
     // Optimistically render the outgoing message so it appears before the thinking bubble.
     // Perspective 'A' = sending as user role; 'B' = sending as assistant role.
     const outRole = _chatPerspective === 'B' ? 'assistant' : 'user';
-    chatUI.appendMessage(outRole, text);
+    const $msgEl = chatUI.appendMessage(outRole, text);
+    // If the agent is mid-turn, mark message as queued with clock indicator
+    if (_sseThinkingId) chatUI.markLastUserBubbleQueued($msgEl);
     chatUI.scrollToBottom();
     _pendingReplyText = text;
 
@@ -967,7 +969,11 @@ async function sendReply(e) {
     }).catch(err => ({ error: err.responseJSON?.error || 'Request failed' }));
 
     $btn.prop('disabled', false).text('Send');
-    if (res.error) { _pendingReplyText = null; return alert(res.error); }
+    if (res.error) {
+        _pendingReplyText = null;
+        $msgEl.remove(); // remove optimistically-rendered message on failure
+        return alert(res.error);
+    }
     $input.val('');
 }
 
