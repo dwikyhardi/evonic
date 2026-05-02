@@ -102,14 +102,15 @@ class TelegramChannel(BaseChannel):
             try:
                 user_id = str(update.message.chat_id)
 
-                # Strict allowlist: resolve the target agent via the per-channel
-                # identity table. Unknown / disabled / unrouted senders are
-                # silently dropped before any DB write or LLM call.
+                # Two-layer routing: identity wins, channel default fallbacks.
+                # The only case where this returns None is when the channel
+                # itself has no usable default agent (operator misconfiguration).
                 agent_id = resolve_target_agent(user_id)
                 if not agent_id:
-                    _logger.info(
-                        "Drop message: unknown sender %s on channel %s",
-                        user_id, channel_id,
+                    _logger.error(
+                        "Drop message: channel %s has no usable agent "
+                        "(default missing or disabled) for sender %s",
+                        channel_id, user_id,
                     )
                     return
 

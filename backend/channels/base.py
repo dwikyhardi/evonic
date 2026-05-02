@@ -126,27 +126,42 @@ class BaseChannel(ABC):
     def resolve_target_agent(self, external_user_id: str) -> str | None:
         """Resolve which agent should handle an inbound message from `external_user_id`.
 
-        Looks up the registered identity in `user_channel_identities` for this
-        channel. Returns the identity's `agent_id` only if both the identity and
-        its parent user are enabled and an agent is assigned. Otherwise returns
-        None — the caller MUST silently drop the message (strict allowlist).
+        Two-layer resolution:
+          1. Identity override — if `user_channel_identities` has a row for
+             (channel_id, external_user_id) that is enabled, has a non-disabled
+             parent user, and a non-NULL `agent_id`, route to that agent.
+          2. Channel default — otherwise fall back to `channels.agent_id`
+             (the channel's default agent), provided that agent still exists.
+
+        Returns None only when the channel itself has no usable default agent
+        (operator misconfiguration); in that case the caller drops the message
+        with an error log.
         """
+        from models.db import db
+
+        # Layer 1: identity override
         try:
-            from models.db import db
             ident = db.resolve_identity(self.channel_id, external_user_id)
         except Exception:
-            return None
-        if not ident:
-            return None
-        if not ident.get('enabled'):
-            return None
-        # `user_enabled` is joined from users.enabled (None if user row missing)
-        if ident.get('user_enabled') == 0:
-            return None
-        agent_id = ident.get('agent_id')
-        if not agent_id:
-            return None
-        return agent_id
+            ident = None
+        if ident \
+                and ident.get('enabled') \
+                and ident.get('user_enabled') != 0 \
+                and ident.get('agent_id'):
+            return ident['agent_id']
+
+        # Layer 2: channel default agent
+        try:
+            ch = db.get_channel(self.channel_id)
+        except Exception:
+            ch = None
+        if ch and ch.get('agent_id'):
+            try:
+                if db.get_agent(ch['agent_id']):
+                    return ch['agent_id']
+            except Exception:
+                pass
+        return None
 
     @property
     def is_running(self) -> bool:
