@@ -68,14 +68,14 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     <div class="flex items-center justify-between gap-2 sm:gap-3">
         <h1 class="text-lg sm:text-xl font-semibold text-gray-900 flex-shrink-0">Kanban Board</h1>
         <div class="flex items-center gap-1 sm:gap-1.5">
-          <button id="notifier-toggle" onclick="toggleNotifier()" class="shrink-0 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-1 sm:gap-1.5 transition relative group" title="Pause/resume agent notifications">
-            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 notifier-bell-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-            <svg id="notifier-muted-icon" class="w-3.5 h-3.5 sm:w-4 sm:h-4 hidden absolute" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-.894-.553l-2-4A1 1 0 011 9h2.586M5.586 15l-2 2M18 12a5 5 0 01-5 5m5-5a5 5 0 00-5-5m5 5H6m7 3v1m0-7V5m3.536 3.464l1.414-1.414M18 12h1a1 1 0 01.894.553l2 4A1 1 0 0121 17h-1m-2-2l2-2"></path></svg>
+          <button id="notifier-toggle" onclick="toggleNotifier()" class="shrink-0 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-1 sm:gap-1.5 transition relative group" title="Pause agent notifications">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 notifier-pause-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <svg id="notifier-play-icon" class="w-3.5 h-3.5 sm:w-4 sm:h-4 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </button>
+          <button id="auto-refresh-toggle" onclick="toggleAutoRefresh()" class="shrink-0 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-1 sm:gap-1.5 transition relative group" title="Auto-refresh board every 5 seconds">
+            <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 refresh-icon transition-transform duration-1000 ease-in-out group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
           </button>
         </div>
-        <button id="auto-refresh-toggle" onclick="toggleAutoRefresh()" class="shrink-0 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center gap-1 sm:gap-1.5 transition relative group" title="Auto-refresh board every 5 seconds">
-          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 refresh-icon transition-transform duration-1000 ease-in-out group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-        </button>
     </div>
     <div class="flex flex-col md:flex-row gap-2 items-center mt-3">
         <!-- Desktop search bar (left of buttons) -->
@@ -1525,22 +1525,22 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
     function updateNotifierUI() {
       const $btn = $("#notifier-toggle");
-      const $bell = $btn.find(".notifier-bell-icon");
-      const $muted = $("#notifier-muted-icon");
+      const $pause = $btn.find(".notifier-pause-icon");
+      const $play = $("#notifier-play-icon");
       if (isNotifierPaused) {
         $btn
           .removeClass("bg-gray-100 text-gray-700 hover:bg-gray-200")
           .addClass("bg-red-500 text-white hover:bg-red-600 shadow-md");
         $btn.attr("title", "Resume agent notifications");
-        $bell.addClass("hidden");
-        $muted.removeClass("hidden");
+        $pause.addClass("hidden");
+        $play.removeClass("hidden");
       } else {
         $btn
           .removeClass("bg-red-500 text-white hover:bg-red-600 shadow-md")
           .addClass("bg-gray-100 text-gray-700 hover:bg-gray-200");
         $btn.attr("title", "Pause agent notifications");
-        $bell.removeClass("hidden");
-        $muted.addClass("hidden");
+        $pause.removeClass("hidden");
+        $play.addClass("hidden");
       }
     }
 

@@ -33,6 +33,7 @@ from routes.models import models_bp
 from routes.health import health_bp
 from routes.workplaces import workplaces_bp
 import config
+from backend.version import get_version
 
 from flask import Flask
 from flask_sock import Sock
@@ -79,6 +80,10 @@ try:
             loaded_skills.append(skill)
 except Exception:
     pass
+
+# Print Evonic version on startup
+print(f"\n  🚀 Evonic v{get_version()}")
+print("---------------------------------------------")
 
 if loaded_plugins or loaded_skills:
     if loaded_plugins:
@@ -265,6 +270,11 @@ def inject_config():
 @app.context_processor
 def inject_plugin_nav():
     return {'plugin_nav_items': plugin_manager.get_nav_items()}
+
+
+@app.context_processor
+def inject_version():
+    return {'evonic_version': get_version()}
 
 
 @app.before_request

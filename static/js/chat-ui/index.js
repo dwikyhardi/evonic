@@ -55,6 +55,7 @@ export class ChatUI {
         this._turns = new Map();   // id → Turn
         this._eventLog = [];       // last 200 TurnEvents
         this.$bus = $('<div>');    // jQuery event bus
+        this._lastLiveTurnId = null; // ID of the most-recent live SSE turn, for dup detection
 
         this._log = log('ui');
         installDiagnostic(this, this._turns, this._eventLog);
@@ -103,6 +104,7 @@ export class ChatUI {
         this._turns.forEach(turn => turn.dispose('clear'));
         this._turns.clear();
         this.$container.empty();
+        this._lastLiveTurnId = null;
     }
 
     // ── Public: turn management ───────────────────────────────────────────────
@@ -366,6 +368,7 @@ export class ChatUI {
         const $anchor = insertAfterEl ? $(insertAfterEl) : this.$container.children().last();
         const turn = this.beginTurn($anchor);
         if (startTs) turn._startTime = startTs;
+        this._lastLiveTurnId = turn.id; // track for duplicate-bubble detection
         return turn;
     }
 
@@ -427,6 +430,7 @@ export class ChatUI {
                 if (evtName === 'turn:split') {
                     const $anchor = opts.userMsgEl ? $(opts.userMsgEl) : turn.$anchor;
                     const newTurn = this.beginTurn($anchor);
+                    this._lastLiveTurnId = newTurn.id;
                     this.markQueuedAsDelivered();
                     opts.onSplit(newTurn);
                 }
@@ -497,6 +501,11 @@ export class ChatUI {
     // ── Internal ──────────────────────────────────────────────────────────────
 
     _renderFinalizedBubble(timeline, duration) {
+        if (this._lastLiveTurnId) {
+            const $existing = this.$container.find(`[data-turn-id="${CSS.escape(this._lastLiveTurnId)}"]`);
+            this._lastLiveTurnId = null;
+            if ($existing.length) return; // SSE already rendered the thinking bubble
+        }
         const $anchor = this.$container.find('[data-msg-role="user"]').last();
         const turn = this.beginTurn($anchor);
         for (const ev of timeline) this.appendTimelineEntry(turn, ev);
