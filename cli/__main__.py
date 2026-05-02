@@ -17,15 +17,15 @@ try:
 except ImportError:
     pass
 
-# Warna banner berdasarkan hari (0=Senin, 1=Selasa, dst)
+# Banner color by day of week (0=Monday, 1=Tuesday, etc.)
 _DAY_COLORS = [
-    "\033[91m",  # Senin   - Bright Red
-    "\033[35m",  # Selasa  - Magenta
-    "\033[32m",  # Rabu    - Green
-    "\033[93m",  # Kamis   - Bright Yellow
-    "\033[34m",  # Jumat   - Blue
-    "\033[36m",  # Sabtu   - Cyan
-    "\033[93m",  # Minggu  - Bright Yellow (gold)
+    "\033[91m",  # Monday    - Bright Red
+    "\033[35m",  # Tuesday   - Magenta
+    "\033[32m",  # Wednesday - Green
+    "\033[93m",  # Thursday  - Bright Yellow
+    "\033[34m",  # Friday    - Blue
+    "\033[36m",  # Saturday  - Cyan
+    "\033[93m",  # Sunday    - Bright Yellow (gold)
 ]
 _RESET = "\033[0m"
 

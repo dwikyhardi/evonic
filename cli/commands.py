@@ -1616,22 +1616,22 @@ def setup_wizard():
             print("\n  Aborted.")
             sys.exit(1)
         if not pw1:
-            print("  Peringatan: Password tidak di-set. Web dashboard dapat diakses tanpa login.")
+            print("  Warning: No password set. Web dashboard will be accessible without login.")
             break
         if len(pw1) < 6:
-            print("  Error: Password minimal 6 karakter. Coba lagi.")
+            print("  Error: Password must be at least 6 characters. Try again.")
             continue
         try:
-            pw2 = getpass.getpass("  Konfirmasi password: ")
+            pw2 = getpass.getpass("  Confirm password: ")
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
             sys.exit(1)
         if pw1 != pw2:
-            print("  Error: Password tidak cocok. Coba lagi.")
+            print("  Error: Passwords do not match. Try again.")
             continue
         new_hash = generate_password_hash(pw1)
         _update_env_var(env_path, 'ADMIN_PASSWORD_HASH', new_hash)
-        print("  Password berhasil di-set.")
+        print("  Password set successfully.")
         break
 
     print()
