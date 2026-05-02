@@ -455,7 +455,10 @@ def link_shared_dirs(app_root: str, release_path: str) -> None:
                 # Last resort: copy (breaks atomicity for this dir)
                 shutil.copytree(target, link)
         else:
-            os.symlink(target, link, target_is_directory=is_dir)
+            # Use relative symlink so it works regardless of absolute project path
+            link_dir = os.path.dirname(link)
+            rel_target = os.path.relpath(target, link_dir)
+            os.symlink(rel_target, link, target_is_directory=is_dir)
 
 # ---------------------------------------------------------------------------
 # Health check
