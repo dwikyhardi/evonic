@@ -306,8 +306,8 @@ def git_fetch_tags(app_root: str) -> tuple:
 
 
 def get_latest_tag(app_root: str) -> Optional[str]:
-    """Return the newest semver tag (v*) by version sort."""
-    rc, out, _ = _git(app_root, ['tag', '-l', 'v*', '--sort=-version:refname'])
+    """Return the newest semver tag by version sort."""
+    rc, out, _ = _git(app_root, ['tag', '-l', '--sort=-version:refname'])
     if rc != 0 or not out:
         return None
     return out.splitlines()[0].strip()
@@ -455,7 +455,10 @@ def link_shared_dirs(app_root: str, release_path: str) -> None:
                 # Last resort: copy (breaks atomicity for this dir)
                 shutil.copytree(target, link)
         else:
-            os.symlink(target, link, target_is_directory=is_dir)
+            # Use relative symlink so it works regardless of absolute project path
+            link_dir = os.path.dirname(link)
+            rel_target = os.path.relpath(target, link_dir)
+            os.symlink(rel_target, link, target_is_directory=is_dir)
 
 # ---------------------------------------------------------------------------
 # Health check
