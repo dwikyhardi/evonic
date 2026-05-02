@@ -643,10 +643,48 @@ class SchemaMixin:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cloud_connectors_token ON cloud_connectors(connector_token)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_workplace ON agents(workplace_id)")
 
+            # ==================== Users & Channel Identities ====================
+
+            # Users table (managed external contacts; not dashboard logins)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    note TEXT,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # User channel identities (per-channel external IDs with assigned agent)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_channel_identities (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    external_user_id TEXT NOT NULL,
+                    agent_id TEXT,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (channel_id, external_user_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE,
+                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE SET NULL
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_uci_lookup ON user_channel_identities(channel_id, external_user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_uci_user ON user_channel_identities(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_uci_agent ON user_channel_identities(agent_id)")
+
             conn.commit()
 
         # Migrate chat data from main DB to per-agent DBs
         self._migrate_chat_to_agent_dbs()
+
+        # Backfill users + identities from existing chat sessions (one-shot)
+        self._backfill_users_from_sessions()
 
     def _migrate_chat_to_agent_dbs(self):
         """One-time migration: move chat_sessions/chat_messages from main DB to per-agent DBs."""
@@ -703,3 +741,99 @@ class SchemaMixin:
             cursor.execute("DROP TABLE IF EXISTS chat_sessions")
             conn.commit()
             print(f"[DB] Migration complete: {len(agent_ids)} agent(s) migrated.")
+
+    def _backfill_users_from_sessions(self):
+        """One-shot backfill: create users + identities from existing per-agent chat sessions.
+
+        Runs only when the `users` table is empty. Iterates each agent's chat DB and
+        inserts a `users` row per distinct `external_user_id` plus a
+        `user_channel_identities` row per `(channel_id, external_user_id)`, pointing
+        to the session's `agent_id`. Sessions without `channel_id` are skipped.
+        """
+        import uuid
+        from models.chat import agent_chat_manager
+
+        # Skip if users already exist
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM users")
+            if cursor.fetchone()[0] > 0:
+                return
+
+        # Gather distinct (channel_id, external_user_id, agent_id) tuples across agents
+        try:
+            agents = self.get_agents()
+        except Exception:
+            agents = []
+
+        triples = []  # list of (channel_id, external_user_id, agent_id)
+        for ag in agents:
+            aid = ag.get('id')
+            if not aid:
+                continue
+            try:
+                chat_db = agent_chat_manager.get(aid)
+                with chat_db._connect() as aconn:
+                    aconn.row_factory = sqlite3.Row
+                    ac = aconn.cursor()
+                    ac.execute("""
+                        SELECT DISTINCT channel_id, external_user_id, agent_id
+                        FROM chat_sessions
+                        WHERE channel_id IS NOT NULL AND channel_id != ''
+                    """)
+                    for r in ac.fetchall():
+                        triples.append((r['channel_id'], r['external_user_id'], r['agent_id']))
+            except Exception:
+                # Per-agent chat DB may not exist or be readable; skip silently
+                continue
+
+        if not triples:
+            return
+
+        # Validate channel_ids actually exist (avoid orphan FK rows)
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM channels")
+            valid_channels = {r['id'] for r in cursor.fetchall()}
+            cursor.execute("SELECT id FROM agents")
+            valid_agents = {r['id'] for r in cursor.fetchall()}
+
+            # Group by external_user_id → one user row per distinct external id
+            users_by_external = {}
+            for ch_id, ext_id, ag_id in triples:
+                if ch_id not in valid_channels:
+                    continue
+                users_by_external.setdefault(ext_id, []).append((ch_id, ag_id))
+
+            if not users_by_external:
+                return
+
+            print(f"[DB] Backfilling users from {len(triples)} legacy chat session(s)...")
+            inserted_users = 0
+            inserted_idents = 0
+            for ext_id, pairs in users_by_external.items():
+                user_id = str(uuid.uuid4())
+                cursor.execute(
+                    "INSERT INTO users (id, name, note) VALUES (?, ?, ?)",
+                    (user_id, f"Imported {ext_id}", "Auto-created from existing chat sessions"),
+                )
+                inserted_users += 1
+                seen_channels = set()
+                for ch_id, ag_id in pairs:
+                    if ch_id in seen_channels:
+                        continue
+                    seen_channels.add(ch_id)
+                    resolved_agent = ag_id if ag_id in valid_agents else None
+                    try:
+                        cursor.execute("""
+                            INSERT INTO user_channel_identities
+                            (id, user_id, channel_id, external_user_id, agent_id, enabled)
+                            VALUES (?, ?, ?, ?, ?, 1)
+                        """, (str(uuid.uuid4()), user_id, ch_id, ext_id, resolved_agent))
+                        inserted_idents += 1
+                    except sqlite3.IntegrityError:
+                        # UNIQUE(channel_id, external_user_id) collision — already present
+                        pass
+            conn.commit()
+            print(f"[DB] Backfill complete: {inserted_users} user(s), {inserted_idents} identity row(s).")

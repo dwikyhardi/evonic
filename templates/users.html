@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+        <div class="flex-1 w-full sm:w-auto">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Users</h2>
+            <p class="text-sm text-gray-500 mt-1">
+                Manage external contacts and route their channel messages to specific agents.
+                Unknown senders are silently dropped (allowlist-only).
+            </p>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" id="user-search" placeholder="Search users..."
+                   class="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+        </div>
+        <button id="btn-new-user"
+                class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            New User
+        </button>
+    </div>
+
+    {% if missing_user %}
+    <div class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-200">
+        User <code>{{ missing_user }}</code> was not found.
+    </div>
+    {% endif %}
+
+    <!-- User Grid -->
+    <div id="users-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+    <div id="users-empty" class="hidden text-center py-16 text-gray-400">
+        <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        <p class="text-lg font-medium">No users yet</p>
+        <p class="text-sm mt-1">Create your first user to start routing channel messages.</p>
+    </div>
+</div>
+
+<!-- New User Modal -->
+<div id="new-user-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" id="new-user-backdrop"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[450px] shadow-xl">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">New User</h3>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">Name *</label>
+                <input type="text" id="new-user-name" placeholder="e.g., Robin"
+                       class="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">Note</label>
+                <textarea id="new-user-note" rows="2" placeholder="Optional notes (VIP, internal, ...)"
+                          class="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"></textarea>
+            </div>
+            <div id="new-user-error" class="hidden mb-3 text-sm text-red-500"></div>
+        </div>
+        <div class="flex gap-3 justify-end px-6 pb-5">
+            <button id="btn-new-user-cancel" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+            <button id="btn-new-user-save" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Create</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/users.js') }}?v=1"></script>
+<script>
+$(function () {
+    EvonicUsers.initListPage();
+});
+</script>
+{% endblock %}

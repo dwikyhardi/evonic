@@ -75,6 +75,14 @@ class AgentMixin:
             raise ValueError("Super agent cannot be deleted")
         with self._connect() as conn:
             cursor = conn.cursor()
+            # Clear agent reference on user channel identities (table may not yet exist on legacy DBs)
+            try:
+                cursor.execute(
+                    "UPDATE user_channel_identities SET agent_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE agent_id = ?",
+                    (agent_id,)
+                )
+            except sqlite3.OperationalError:
+                pass
             cursor.execute("DELETE FROM agents WHERE id = ?", (agent_id,))
             conn.commit()
             return cursor.rowcount > 0

@@ -108,6 +108,14 @@ class ChannelMixin:
                 "UPDATE agents SET primary_channel_id = NULL WHERE primary_channel_id = ?",
                 (channel_id,)
             )
+            # Cascade-delete user channel identities bound to this channel
+            try:
+                cursor.execute(
+                    "DELETE FROM user_channel_identities WHERE channel_id = ?",
+                    (channel_id,)
+                )
+            except sqlite3.OperationalError:
+                pass
             cursor.execute("DELETE FROM channels WHERE id = ?", (channel_id,))
             conn.commit()
             return cursor.rowcount > 0

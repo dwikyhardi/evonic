@@ -123,6 +123,31 @@ class BaseChannel(ABC):
         """
         return None
 
+    def resolve_target_agent(self, external_user_id: str) -> str | None:
+        """Resolve which agent should handle an inbound message from `external_user_id`.
+
+        Looks up the registered identity in `user_channel_identities` for this
+        channel. Returns the identity's `agent_id` only if both the identity and
+        its parent user are enabled and an agent is assigned. Otherwise returns
+        None — the caller MUST silently drop the message (strict allowlist).
+        """
+        try:
+            from models.db import db
+            ident = db.resolve_identity(self.channel_id, external_user_id)
+        except Exception:
+            return None
+        if not ident:
+            return None
+        if not ident.get('enabled'):
+            return None
+        # `user_enabled` is joined from users.enabled (None if user row missing)
+        if ident.get('user_enabled') == 0:
+            return None
+        agent_id = ident.get('agent_id')
+        if not agent_id:
+            return None
+        return agent_id
+
     @property
     def is_running(self) -> bool:
         return self._running

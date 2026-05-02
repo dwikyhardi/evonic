@@ -66,6 +66,7 @@
                 <a href="/" class="{{ 'nav-active' if request.path == '/' else '' }}">Dashboard</a>
                 <a href="/agents" class="{{ 'nav-active' if request.path.startswith('/agents') else '' }}">Agents</a>
                 <a href="/sessions" class="{{ 'nav-active' if request.path.startswith('/sessions') else '' }}">Sessions</a>
+                <a href="/users" class="{{ 'nav-active' if request.path.startswith('/users') else '' }}">Users</a>
                 <a href="/evaluate" class="{{ 'nav-active' if request.path.startswith('/evaluate') else '' }}">Evaluation</a>
                 {% endif %}
  

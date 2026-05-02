@@ -388,12 +388,67 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
                 <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Channels</h3>
                 <button onclick="showAddChannelModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors">+ Add Channel</button>
             </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Inbound is allowlist-only — register users at
+                <a href="/users" class="text-indigo-500 hover:underline">/users</a>
+                so the bot can reply to them.
+            </p>
             <div id="channels-list" class="space-y-3">
                 <!-- Channels loaded dynamically -->
             </div>
             <div id="channels-empty" class="hidden text-center py-8 text-gray-400 text-sm">No channels configured.</div>
         </div>
+
+        <!-- Routed Users -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-3xl mt-4">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Routed Users</h3>
+                <span class="text-xs text-gray-400">Identities currently routed to this agent</span>
+            </div>
+            <div id="routed-users-list" class="space-y-2"></div>
+            <div id="routed-users-empty" class="hidden text-center py-6 text-gray-400 text-sm">No users routed yet.</div>
+        </div>
     </div>
+
+    <script>
+    // Load routed users list when the channels tab is opened
+    (function () {
+        function escAttr(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+        function loadRoutedUsers() {
+            $.ajax({ url: '/api/agents/{{ agent.id }}/routed-identities', method: 'GET', dataType: 'json' })
+                .done(function (data) {
+                    var $list = $('#routed-users-list');
+                    var $empty = $('#routed-users-empty');
+                    var idents = (data && data.identities) || [];
+                    $list.empty();
+                    if (!idents.length) { $empty.removeClass('hidden'); return; }
+                    $empty.addClass('hidden');
+                    idents.forEach(function (i) {
+                        var enabled = i.enabled === 1 || i.enabled === true;
+                        var row = ''
+                            + '<a href="/users/' + escAttr(i.user_id) + '" class="flex items-center justify-between gap-3 p-2.5 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">'
+                            +   '<div class="min-w-0 flex-1">'
+                            +     '<div class="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">' + escAttr(i.user_name || i.user_id) + '</div>'
+                            +     '<div class="text-xs text-gray-500 dark:text-gray-400 truncate">'
+                            +       escAttr(i.channel_name || '(unnamed)') + ' · ' + escAttr(i.channel_type || '?') + ' · ext: ' + escAttr(i.external_user_id)
+                            +     '</div>'
+                            +   '</div>'
+                            +   '<span class="text-xs px-2 py-0.5 rounded ' + (enabled ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300') + '">' + (enabled ? 'enabled' : 'disabled') + '</span>'
+                            + '</a>';
+                        $list.append(row);
+                    });
+                });
+        }
+        // Trigger load when channels tab becomes active
+        $(document).on('click', '[data-tab="channels"], button[onclick*="\'channels\'"]', function () {
+            setTimeout(loadRoutedUsers, 100);
+        });
+        // Also load on page ready in case tab is already visible
+        $(function () {
+            if (!$('#tab-channels').hasClass('hidden')) loadRoutedUsers();
+        });
+    })();
+    </script>
 
     <!-- Chat Tab -->
     <div id="tab-chat" class="tab-content flex-1 min-h-0">

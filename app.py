@@ -26,6 +26,7 @@ from routes.evaluation import evaluation_bp
 from routes.history import history_bp
 from routes.sessions import sessions_bp
 from routes.settings import settings_bp
+from routes.users import users_bp
 from routes.skills import skills_bp
 from routes.plugins import plugins_bp
 from routes.scheduler import scheduler_bp
@@ -60,6 +61,7 @@ app.register_blueprint(evaluation_bp)
 app.register_blueprint(history_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(sessions_bp)
+app.register_blueprint(users_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(models_bp)
 app.register_blueprint(health_bp)

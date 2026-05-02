@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-4 md:p-6 max-w-5xl mx-auto" data-user-id="{{ user_id }}">
+
+    <!-- Breadcrumb -->
+    <div class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+        <a href="/users" class="hover:underline text-indigo-500">Users</a>
+        <span class="mx-1">/</span>
+        <span id="ud-breadcrumb-name">…</span>
+    </div>
+
+    <!-- Profile -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-6">
+        <div class="flex items-start justify-between mb-4 gap-3">
+            <div class="flex-1">
+                <h2 id="ud-name-display" class="text-2xl font-bold text-gray-800 dark:text-gray-100">…</h2>
+                <p class="text-xs text-gray-400 mt-1" id="ud-id-line">id: <code class="text-gray-500">{{ user_id }}</code></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+                    <input type="checkbox" id="ud-enabled" class="rounded border-gray-300">
+                    <span>Enabled</span>
+                </label>
+                <button id="ud-delete" class="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                    Delete
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">Name</label>
+                <input type="text" id="ud-name"
+                       class="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            </div>
+            <div>
+                <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">Note</label>
+                <input type="text" id="ud-note" placeholder="VIP, internal, ..."
+                       class="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            </div>
+        </div>
+
+        <div class="mt-4 flex items-center gap-3">
+            <button id="ud-save" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Save</button>
+            <span id="ud-save-status" class="text-xs text-gray-400"></span>
+        </div>
+    </div>
+
+    <!-- Identities -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4 gap-3">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Channel Identities</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Map this user's external IDs to specific agents on each channel.
+                </p>
+            </div>
+            <button id="ud-add-identity"
+                    class="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Add Identity
+            </button>
+        </div>
+
+        <div id="ud-identities" class="space-y-3"></div>
+        <div id="ud-identities-empty" class="hidden py-8 text-center text-sm text-gray-400">
+            No identities yet. Click "Add Identity" to register a channel ID.
+        </div>
+    </div>
+</div>
+
+<!-- Add Identity Modal -->
+<div id="add-identity-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" id="add-identity-backdrop"></div>
+    <div class="relative bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[480px] shadow-xl">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">New Channel Identity</h3>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">Channel *</label>
+                <select id="ai-channel"
+                        class="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-900 dark:text-gray-100">
+                    <option value="">-- pick a channel --</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">External User ID *</label>
+                <input type="text" id="ai-external-id" placeholder="e.g., 123456789 (Telegram chat_id)"
+                       class="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-900 dark:text-gray-100 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-700 dark:text-gray-300 text-sm font-medium">Routed Agent</label>
+                <select id="ai-agent"
+                        class="w-full p-2.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-900 dark:text-gray-100">
+                    <option value="">-- no agent (disabled) --</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">Pick the agent that will handle messages from this identity.</p>
+            </div>
+            <div class="mb-4 flex items-center gap-2">
+                <input type="checkbox" id="ai-enabled" class="rounded border-gray-300" checked>
+                <label for="ai-enabled" class="text-sm text-gray-700 dark:text-gray-300">Enabled</label>
+            </div>
+            <div id="ai-error" class="hidden mb-3 text-sm text-red-500"></div>
+        </div>
+        <div class="flex gap-3 justify-end px-6 pb-5">
+            <button id="btn-ai-cancel" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+            <button id="btn-ai-save" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Add</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/users.js') }}?v=2"></script>
+<script>
+$(function () {
+    var uid = $('[data-user-id]').data('user-id');
+    EvonicUsers.initDetailPage(String(uid));
+});
+</script>
+{% endblock %}

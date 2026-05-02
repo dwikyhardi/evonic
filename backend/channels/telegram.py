@@ -93,7 +93,7 @@ class TelegramChannel(BaseChannel):
         from backend.agent_runtime import agent_runtime
 
         channel_id = self.channel_id
-        agent_id = self.agent_id
+        resolve_target_agent = self.resolve_target_agent
 
         async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not update.message:
@@ -101,6 +101,18 @@ class TelegramChannel(BaseChannel):
 
             try:
                 user_id = str(update.message.chat_id)
+
+                # Strict allowlist: resolve the target agent via the per-channel
+                # identity table. Unknown / disabled / unrouted senders are
+                # silently dropped before any DB write or LLM call.
+                agent_id = resolve_target_agent(user_id)
+                if not agent_id:
+                    _logger.info(
+                        "Drop message: unknown sender %s on channel %s",
+                        user_id, channel_id,
+                    )
+                    return
+
                 text = strip_system_tags(update.message.text or update.message.caption or '')
                 image_url = None
 
