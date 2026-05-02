@@ -7,6 +7,10 @@ Evonic is an agentic AI platform for building, managing, and orchestrating AI ag
 
 **Full documentation:** [evonic.dev](https://evonic.dev)
 
+<p align="center">
+  <img src="static/img/mascot-large.png" alt="Evonic Logo" width="200">
+</p>
+
 ---
 
 ## Key Features
