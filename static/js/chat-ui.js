@@ -1421,8 +1421,11 @@ class Turn {
 // ── Perspective helpers ───────────────────────────────────────────────────────
 
 const PERSPECTIVES = {
-    user:  { userAlign: 'right', assistantAlign: 'left' },
-    agent: { userAlign: 'left',  assistantAlign: 'right' },
+    'A': { userAlign: 'right', assistantAlign: 'left' },
+    'B': { userAlign: 'left',  assistantAlign: 'right' },
+    // legacy aliases
+    'user':  { userAlign: 'right', assistantAlign: 'left' },
+    'agent': { userAlign: 'left',  assistantAlign: 'right' },
 };
 
 // ── ChatUI class ──────────────────────────────────────────────────────────────
@@ -1714,7 +1717,10 @@ class ChatUI {
 
     
     showThinkingIndicator(startTs, insertAfterEl) {
-        const $anchor = insertAfterEl ? $(insertAfterEl) : this.$container.find('[data-msg-role="user"]').last();
+        // Anchor to the explicit element if given, otherwise the very last child so the
+        // thinking bubble always appears at the end (not anchored to last user message,
+        // which may be mid-conversation when called without an explicit anchor).
+        const $anchor = insertAfterEl ? $(insertAfterEl) : this.$container.children().last();
         const turn = this.beginTurn($anchor);
         if (startTs) turn._startTime = startTs;
         return turn;

@@ -265,7 +265,7 @@ html.dark #mobile-dropdown .border-b { border-color: #374151; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=23"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=24"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 let allSessions = [];
@@ -369,13 +369,11 @@ function dispatchSessionEvent(evtName, data, sessionId) {
 const POLL_INTERVAL = 2000;       // poll chat every 2s
 const SIDEBAR_POLL_INTERVAL = 5000; // refresh sidebar every 5s
 
-const chatUI = ChatUI({
-    containerId: 'chat-messages',
-    userAlign: 'left',
-    assistantAlign: 'right',
+const chatUI = new ChatUI($('#chat-messages'), {
+    perspective: 'B',
     showTimestamps: true,
     userBubbleClass: 'bg-white text-gray-800 border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100',
-    assistantBubbleClass: 'bg-gray-200 text-gray-800 dark:bg-[#152A3A] border dark:border-[#1B394F] dark:text-gray-100 rounded-2xl px-4 py-2.5 text-sm chat-prose break-words',
+    assistantBubbleClass: 'bg-gray-200 text-gray-800 dark:bg-[#152A3A] border dark:border-[#1B394F] dark:text-gray-100',
     formatTimestamp: formatTime,
 });
 
@@ -1223,7 +1221,7 @@ async function loadSettingsState() {
 function toggleChatPerspective(aMode) {
     _chatPerspective = aMode ? 'A' : 'B';
     localStorage.setItem('evonic_chat_perspective', _chatPerspective);
-    chatUI.setPerspective(_chatPerspective);
+    chatUI.setPerspective(aMode ? 'A' : 'B');
     updateReplyPlaceholder();
     showToast(aMode ? 'Messages will appear as A (right side)' : 'Messages will appear as B (left side)');
 }
