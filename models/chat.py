@@ -245,6 +245,28 @@ class AgentChatDB:
                         r['metadata'] = None
             return rows
 
+    def get_first_agent_request_metadata(self, session_id: str) -> dict | None:
+        """Return metadata of the first user message with agent_message=true in the session.
+
+        Used by auto-forward to locate report_to_id even when the originating
+        message falls outside the recent-message window.
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT metadata FROM chat_messages
+                WHERE session_id = ? AND role = 'user' AND metadata LIKE '%"agent_message"%'
+                ORDER BY created_at ASC LIMIT 1
+            """, (session_id,))
+            row = cursor.fetchone()
+            if not row or not row['metadata']:
+                return None
+            try:
+                return json.loads(row['metadata'])
+            except (json.JSONDecodeError, TypeError):
+                return None
+
     def add_chat_message(self, session_id: str, role: str, content: str = None,
                           tool_calls=None, tool_call_id: str = None,
                           metadata: dict = None) -> int:

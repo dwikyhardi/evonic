@@ -471,9 +471,28 @@ def _on_final_answer(data: dict) -> None:
             break
 
     if not report_to_id:
+        # The originating message may be older than the recent-message window
+        # (e.g. when B executed many tool calls).  Fall back to a targeted DB
+        # query that finds the first agent-request message in the session.
+        _logger.debug(
+            "Auto-forward: report_to_id not found in recent %d messages for '%s' "
+            "in session '%s' — falling back to first-message lookup.",
+            len(messages), sender_id, session_id,
+        )
+        try:
+            first_meta = db.get_first_agent_request_metadata(session_id, agent_id=agent_b_id)
+        except Exception as e:
+            _logger.warning("Auto-forward: first-message fallback failed for '%s': %s", session_id, e)
+            first_meta = None
+        if first_meta and first_meta.get('from_agent_id') == sender_id:
+            report_to_id = first_meta.get('report_to_id')
+            report_to_channel_id = first_meta.get('report_to_channel_id') or None
+            original_depth = first_meta.get('agent_message_depth', 0)
+
+    if not report_to_id:
         _logger.warning(
             "Auto-forward skip: no report_to_id found for sender '%s' in session '%s' "
-            "(searched %d messages).",
+            "(searched %d messages + first-message fallback).",
             sender_id, session_id, len(messages),
         )
         return

@@ -1607,7 +1607,7 @@ class AgentRuntime:
 
         db.add_chat_message(session_id, 'user', text, agent_id=agent_id)
         chatlog_manager.get(agent_id, session_id).append(
-            {'type': 'final', 'session_id': session_id, 'content': text,
+            {'type': 'user', 'session_id': session_id, 'content': text,
              'metadata': {'user_perspective': True}})
 
         # Invalidate prefetched context — a new message arrived
