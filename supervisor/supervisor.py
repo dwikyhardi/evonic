@@ -306,8 +306,8 @@ def git_fetch_tags(app_root: str) -> tuple:
 
 
 def get_latest_tag(app_root: str) -> Optional[str]:
-    """Return the newest semver tag (v*) by version sort."""
-    rc, out, _ = _git(app_root, ['tag', '-l', 'v*', '--sort=-version:refname'])
+    """Return the newest semver tag by version sort."""
+    rc, out, _ = _git(app_root, ['tag', '-l', '--sort=-version:refname'])
     if rc != 0 or not out:
         return None
     return out.splitlines()[0].strip()
