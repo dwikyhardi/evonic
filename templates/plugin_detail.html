@@ -74,28 +74,28 @@
     <div id="tab-logs" class="tab-content hidden">
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
             <!-- Logs toolbar -->
-            <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-200">
+            <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-600">
                 <div class="flex items-center gap-2">
-                    <select id="log-level-filter" onchange="applyLogFilter()" class="text-sm border border-gray-300 rounded-md px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none">
+                    <select id="log-level-filter" onchange="applyLogFilter()" class="text-sm border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-2.5 py-1.5 focus:border-indigo-500 focus:outline-none">
                         <option value="all">All levels</option>
                         <option value="info">Info</option>
                         <option value="warn">Warning</option>
                         <option value="error">Error</option>
                     </select>
-                    <label class="flex items-center gap-1.5 text-sm text-gray-500 cursor-pointer select-none">
-                        <input type="checkbox" id="log-auto-scroll" checked class="rounded border-gray-300 text-indigo-500 focus:ring-indigo-500">
+                    <label class="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 cursor-pointer select-none">
+                        <input type="checkbox" id="log-auto-scroll" checked class="rounded border-gray-300 dark:border-gray-500 dark:bg-gray-600 text-indigo-500 focus:ring-indigo-500">
                         Auto-scroll
                     </label>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span id="log-count" class="text-xs text-gray-400"></span>
-                    <button onclick="clearLogs()" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors">Clear</button>
+                    <span id="log-count" class="text-xs text-gray-400 dark:text-gray-500"></span>
+                    <button onclick="clearLogs()" class="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition-colors">Clear</button>
                 </div>
             </div>
             <!-- Log entries -->
             <div id="log-container" class="h-[500px] md:h-[400px] overflow-y-auto font-mono text-xs">
                 <div id="log-entries" class="p-4 space-y-1"></div>
-                <div id="log-empty" class="text-center py-16 text-gray-400">
+                <div id="log-empty" class="text-center py-16 text-gray-400 dark:text-gray-500">
                     <svg class="w-10 h-10 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <p class="text-sm">No logs yet</p>
                     <p class="text-xs mt-1">Logs will appear here when the plugin processes events</p>
@@ -120,9 +120,9 @@ const EVENT_DESCRIPTIONS = {
 };
 
 const LEVEL_STYLES = {
-    'info':  { bg: 'bg-gray-50',  text: 'text-gray-500',  badge: 'bg-gray-200 text-gray-600' },
-    'warn':  { bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-200 text-amber-700' },
-    'error': { bg: 'bg-red-50',   text: 'text-red-700',   badge: 'bg-red-200 text-red-700' },
+    'info':  { bg: 'bg-gray-50 dark:bg-gray-700/50',  text: 'text-gray-500 dark:text-gray-400',  badge: 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300' },
+    'warn':  { bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', badge: 'bg-amber-200 text-amber-700 dark:bg-amber-800 dark:text-amber-200' },
+    'error': { bg: 'bg-red-50 dark:bg-red-900/30',   text: 'text-red-700 dark:text-red-300',   badge: 'bg-red-200 text-red-700 dark:bg-red-800 dark:text-red-200' },
 };
 
 // ==================== Tabs ====================
@@ -304,12 +304,12 @@ function renderLogs() {
         const ts = formatTimestamp(entry.timestamp);
         return `<div class="flex items-start gap-2 py-1.5 px-2 rounded ${style.bg}">
             <!-- Desktop: horizontal layout with timestamp column -->
-            <div class="hidden md:block flex-shrink-0 text-gray-400 w-[140px]">${ts}</div>
+            <div class="hidden md:block flex-shrink-0 text-gray-400 dark:text-gray-500 w-[140px]">${ts}</div>
             <span class="hidden md:flex flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${style.badge} w-[46px] text-center">${esc(entry.level)}</span>
             <span class="hidden md:inline ${style.text} break-all flex-1 min-w-0">${esc(entry.message)}</span>
             <!-- Mobile: single column, timestamp+level on top, message below -->
             <div class="hidden md:hidden flex-1 min-w-0 flex flex-col gap-1">
-                <span class="flex items-center gap-1.5 text-[10px] tabular-nums text-gray-400">
+                <span class="flex items-center gap-1.5 text-[10px] tabular-nums text-gray-400 dark:text-gray-500">
                     ${ts}
                     <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${style.badge}">${esc(entry.level)}</span>
                 </span>
