@@ -723,7 +723,7 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=20"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=23"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 function showToast(message, type = 'success') {
@@ -788,15 +788,8 @@ async function removeAvatar() {
     if (headerAvatar) { headerAvatar.src = defaultSrc; headerAvatar.style.display = ''; }
 }
 
-const chatUI = ChatUI({
-    containerId: 'chat-messages',
-    userAlign: 'right',
-    assistantAlign: 'left',
-    showTimestamps: false,
-    userBubbleClass: 'bg-indigo-500 text-white dark:bg-indigo-800',
-    assistantBubbleClass: 'bg-gray-200 text-gray-800 dark:bg-[#152A3A] border dark:border-[#1B394F] dark:text-gray-100',
-    agentAvatarUrl: '/api/agents/{{ agent.id }}/avatar',
-});
+// chatUI is initialized on DOMContentLoaded by the init script at the bottom of this page.
+var chatUI = null;
 
 // Scroll-to-bottom button logic
 (function() {
@@ -830,7 +823,7 @@ function enterChatFullscreen() {
         const rect = $tab[0].getBoundingClientRect();
         $tab.css('height', Math.max(window.innerHeight - rect.top, 400) + 'px');
         $('html, body').css('overflow', 'hidden');
-        if (typeof chatUI !== 'undefined') chatUI.scrollToBottom();
+        if (chatUI) chatUI.scrollToBottom();
     });
 }
 
@@ -867,7 +860,7 @@ function toggleChatFullscreenMode() {
     }
 
     requestAnimationFrame(function () {
-        if (typeof chatUI !== 'undefined') chatUI.scrollToBottom();
+        if (chatUI) chatUI.scrollToBottom();
     });
 }
 
@@ -2650,11 +2643,11 @@ loadWorkplaceSelector();
 setInterval(pollWorkplaceStatus, 5000);
 
 // ==================== Tab persistence ====================
+// Deferred: runs after the chat-ui module initializes window.chatUI (see inline module below)
 (function() {
     const valid = ['chat', 'general', 'knowledge', 'tools', 'channels', 'skills'];
     const hash = location.hash.replace('#', '');
-    if (hash && valid.includes(hash)) showTab(hash);
-    else if (!hash) showTab('chat');
+    window._tabInitHash = (hash && valid.includes(hash)) ? hash : 'chat';
 })();
 
 // ==================== Delete Agent ====================
@@ -2692,5 +2685,20 @@ async function toggleEnabled() {
         btn.className = `flex items-center gap-1.5 text-sm ${newEnabled ? 'text-gray-500 hover:text-gray-700' : 'text-green-600 hover:text-green-800'} transition-colors`;
     }
 }
+</script>
+
+<!-- ==================== Chat UI v2 init ==================== -->
+<script>
+$(function () {
+    window.chatUI = new window.ChatUI($('#chat-messages'), {
+        perspective: 'user',
+        showTimestamps: false,
+        userBubbleClass: 'bg-indigo-500 text-white dark:bg-indigo-800',
+        assistantBubbleClass: 'bg-gray-200 text-gray-800 dark:bg-[#152A3A] border dark:border-[#1B394F] dark:text-gray-100',
+        agentAvatarUrl: '/api/agents/{{ agent.id }}/avatar',
+        agentId: '{{ agent.id }}',
+    });
+    showTab(window._tabInitHash || 'chat');
+});
 </script>
 {% endblock %}
