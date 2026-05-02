@@ -1769,8 +1769,180 @@ def pass_setup():
         print('Password changed successfully.')
 
 
-def reconfigure_wizard():
-    """Interactive reconfigure wizard for Evonic (CLI)."""
+def _reconfigure_supervisor_wizard():
+    """Interactive wizard for reconfiguring the supervisor daemon.
+
+    Prompts user for poll interval, health check port, release retention,
+    and optional Telegram notification settings. Saves the result to
+    supervisor/config.json.
+    """
+    import json
+
+    sup = _load_supervisor_module()
+    cfg_path = os.path.join(ROOT, 'supervisor', 'config.json')
+
+    # Load existing config if available, otherwise start from defaults
+    cfg = sup.load_config(cfg_path)
+
+    # --- Banner ---
+    print()
+    print("  Evonic Supervisor Reconfigure")
+    print("  " + "=" * 30)
+    print()
+    print("  Configure the supervisor daemon that manages the server")
+    print("  process, self-updates, and health checks.")
+    print()
+
+    # --- Step 1: Poll interval ---
+    print("  Poll interval \u2014 how often (in seconds) the supervisor checks")
+    print("  for new releases on GitHub.")
+    print()
+    current_poll = cfg.get('poll_interval', 300)
+    try:
+        poll_input = input(f"  Poll interval [{current_poll}]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Aborted.")
+        sys.exit(1)
+    if poll_input:
+        try:
+            poll_interval = int(poll_input)
+            if poll_interval < 60:
+                print("  Minimum poll interval is 60 seconds.")
+                poll_interval = 60
+        except ValueError:
+            print("  Invalid value. Using default.")
+            poll_interval = current_poll
+    else:
+        poll_interval = current_poll
+
+    # --- Step 2: Health check port ---
+    print()
+    print("  Health check port \u2014 the supervisor probes this port to")
+    print("  determine whether the server is responsive after a swap.")
+    print()
+    current_health = cfg.get('health_port', 8080)
+    try:
+        health_input = input(f"  Health check port [{current_health}]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Aborted.")
+        sys.exit(1)
+    if health_input:
+        try:
+            health_port = int(health_input)
+            if health_port < 1 or health_port > 65535:
+                print("  Port must be 1\u201365535. Using default.")
+                health_port = current_health
+        except ValueError:
+            print("  Invalid value. Using default.")
+            health_port = current_health
+    else:
+        health_port = current_health
+
+    # --- Step 3: Keep releases ---
+    print()
+    print("  Release retention \u2014 how many past releases to keep")
+    print("  (older ones are pruned after a successful update).")
+    print()
+    current_keep = cfg.get('keep_releases', 3)
+    try:
+        keep_input = input(f"  Keep releases [{current_keep}]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Aborted.")
+        sys.exit(1)
+    if keep_input:
+        try:
+            keep_releases = int(keep_input)
+            if keep_releases < 1:
+                print("  Must keep at least 1 release. Using default.")
+                keep_releases = current_keep
+        except ValueError:
+            print("  Invalid value. Using default.")
+            keep_releases = current_keep
+    else:
+        keep_releases = current_keep
+
+    # --- Step 4: Telegram notifications (optional) ---
+    print()
+    print("  Telegram notifications \u2014 optionally notify a chat when")
+    print("  the supervisor performs an update or encounters an error.")
+    print()
+    current_token = cfg.get('telegram_bot_token', '')
+    current_chat = cfg.get('telegram_chat_id', '')
+    masked_token = ('***' + current_token[-4:]) if len(current_token) > 4 else (current_token or '(not set)')
+    print(f"  Current bot token : {masked_token}")
+    print(f"  Current chat ID   : {current_chat or '(not set)'}")
+    print()
+    try:
+        use_telegram = input("  Configure Telegram notifications? [y/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Aborted.")
+        sys.exit(1)
+
+    telegram_bot_token = current_token
+    telegram_chat_id = current_chat
+
+    if use_telegram in ('y', 'yes'):
+        try:
+            token_input = input(f"  Bot token [{masked_token}]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Aborted.")
+            sys.exit(1)
+        if token_input:
+            telegram_bot_token = token_input
+        try:
+            chat_input = input(f"  Chat ID [{current_chat or ''}]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Aborted.")
+            sys.exit(1)
+        if chat_input:
+            telegram_chat_id = chat_input
+
+    # --- Summary ---
+    print()
+    print("  Supervisor Config Summary")
+    print("  " + "\u2500" * 30)
+    print(f"  Poll interval    : {poll_interval} seconds")
+    print(f"  Health check port: {health_port}")
+    print(f"  Keep releases    : {keep_releases}")
+    masked_final = ('***' + telegram_bot_token[-4:]) if len(telegram_bot_token) > 4 else telegram_bot_token
+    print(f"  Telegram token   : {masked_final or '(not set)'}")
+    print(f"  Telegram chat ID : {telegram_chat_id or '(not set)'}")
+    print()
+    try:
+        confirm = input("  Proceed? [Y/n]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Aborted.")
+        sys.exit(1)
+    if confirm in ('n', 'no'):
+        print("  Aborted.")
+        sys.exit(0)
+
+    # --- Save ---
+    cfg['poll_interval'] = poll_interval
+    cfg['health_port'] = health_port
+    cfg['keep_releases'] = keep_releases
+    cfg['telegram_bot_token'] = telegram_bot_token
+    cfg['telegram_chat_id'] = telegram_chat_id
+
+    os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+    with open(cfg_path, 'w') as f:
+        json.dump(cfg, f, indent=2)
+
+    print()
+    print(f"  Supervisor config saved to {cfg_path}")
+    print()
+
+
+def reconfigure_wizard(supervisor=False):
+    """Interactive reconfigure wizard for Evonic (CLI).
+
+    Args:
+        supervisor: If True, run the supervisor-specific reconfigure wizard
+                    instead of the full platform reconfigure wizard.
+    """
+    if supervisor:
+        return _reconfigure_supervisor_wizard()
+
     import getpass
 
     db = _get_db()

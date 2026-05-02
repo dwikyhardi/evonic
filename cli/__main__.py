@@ -98,10 +98,14 @@ def main():
     )
 
     # --- reconfigure ---
-    subparsers.add_parser(
+    reconfigure_parser = subparsers.add_parser(
         "reconfigure",
         help="Reconfigure an existing Evonic setup",
         description="Change LLM provider, model, communication style, language, sandbox, and password on an already configured Evonic instance.",
+    )
+    reconfigure_parser.add_argument(
+        "--supervisor", action="store_true", default=False,
+        help="Reconfigure the supervisor daemon settings (poll interval, ports, Telegram, etc.) and save to supervisor/config.json",
     )
 
     # --- update ---
@@ -533,7 +537,7 @@ def main():
     elif args.command == "pass":
         pass_setup()
     elif args.command == "reconfigure":
-        reconfigure_wizard()
+        reconfigure_wizard(supervisor=args.supervisor)
     elif args.command == "update":
         update_server(
             check_only=args.check,
