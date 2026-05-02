@@ -322,7 +322,7 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
                     <button onclick="showNewFileModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors">+ New File</button>
                     <label class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm cursor-pointer transition-colors">
                         Upload
-                        <input type="file" accept=".md,.txt" class="hidden" onchange="uploadFile(this)">
+                        <input type="file" accept=".md,.txt" class="hidden" multiple onchange="uploadFile(this)">
                     </label>
                 </div>
             </div>
@@ -1220,12 +1220,36 @@ async function deleteFile(filename) {
 }
 
 async function uploadFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const form = new FormData();
-    form.append('file', file);
-    await fetch(`/api/agents/${AGENT_ID}/kb`, {method: 'POST', body: form});
+    const files = Array.from(input.files || []);
+    if (files.length === 0) return;
+    let succeeded = 0;
+    const failures = [];
+    for (const file of files) {
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            const res = await fetch(`/api/agents/${AGENT_ID}/kb`, {method: 'POST', body: form});
+            if (!res.ok) {
+                let msg = res.statusText;
+                try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                failures.push({name: file.name, msg});
+            } else {
+                succeeded++;
+            }
+        } catch (e) {
+            failures.push({name: file.name, msg: (e && e.message) || 'Upload failed'});
+        }
+    }
     input.value = '';
+    if (typeof showToast === 'function') {
+        if (failures.length === 0) {
+            showToast(`Uploaded ${succeeded} file${succeeded === 1 ? '' : 's'}`, 'success');
+        } else if (succeeded === 0) {
+            showToast(`Upload failed: ${failures.map(f => f.name).join(', ')}`, 'error');
+        } else {
+            showToast(`Uploaded ${succeeded}, failed ${failures.length}: ${failures.map(f => f.name).join(', ')}`, 'error');
+        }
+    }
     loadKBFiles();
 }
 
