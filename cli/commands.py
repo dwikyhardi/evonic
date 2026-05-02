@@ -1690,6 +1690,8 @@ def setup_wizard():
         "keep_releases": 3,
         "python_bin": "python3",
         "uv_bin": None,
+        "telegram_bot_token": "",
+        "telegram_chat_id": "",
     }
     sup_cfg_dir = os.path.join(ROOT, "supervisor")
     os.makedirs(sup_cfg_dir, exist_ok=True)
@@ -2811,6 +2813,67 @@ def doctor_command(quick=False):
                     results.append(_info("  No models with base_url to test"))
         except Exception as e:
             results.append(_fail(f"LLM check failed: {e}"))
+
+    # ── 8. Supervisor Config Check ──────────────────────────────────────────────
+    _section("8. Supervisor Config Check")
+
+    sup_cfg_path = os.path.join(ROOT, "supervisor", "config.json")
+    if os.path.isfile(sup_cfg_path):
+        _info("  supervisor/config.json found")
+        try:
+            with open(sup_cfg_path) as f:
+                sup_cfg = json.load(f)
+
+            # Validate app_root
+            app_root = sup_cfg.get("app_root", "")
+            if app_root and os.path.isdir(app_root):
+                results.append(_ok(f"  app_root: {app_root}"))
+            elif app_root:
+                results.append(_fail(f"  app_root '{app_root}' does not exist or is not a directory"))
+            else:
+                results.append(_fail("  app_root is not set in supervisor/config.json"))
+
+            # Validate numeric fields
+            for key, label, min_val in [
+                ("poll_interval", "poll_interval", 1),
+                ("health_port", "health_port", 1),
+                ("health_temp_port", "health_temp_port", 1),
+                ("health_timeout", "health_timeout", 1),
+                ("monitor_duration", "monitor_duration", 1),
+                ("keep_releases", "keep_releases", 1),
+            ]:
+                val = sup_cfg.get(key)
+                if isinstance(val, int) and val >= min_val:
+                    _info(f"  {label}: {val}")
+                else:
+                    results.append(_warn(f"  {label} is invalid or missing (got {val!r})"))
+
+            # Validate telegram_bot_token
+            token = sup_cfg.get("telegram_bot_token", "")
+            if token:
+                results.append(_ok("  telegram_bot_token is configured"))
+            else:
+                results.append(_warn(
+                    "  telegram_bot_token is empty — configure it for supervisor notifications. "
+                    "Set via super agent channel or edit supervisor/config.json manually."
+                ))
+
+            # Validate telegram_chat_id
+            chat_id = sup_cfg.get("telegram_chat_id", "")
+            if chat_id:
+                results.append(_ok("  telegram_chat_id is configured"))
+            else:
+                results.append(_warn(
+                    "  telegram_chat_id is empty — configure it for supervisor notifications. "
+                    "Set via super agent channel or edit supervisor/config.json manually."
+                ))
+
+        except json.JSONDecodeError as e:
+            results.append(_fail(f"  supervisor/config.json parse error: {e}"))
+        except Exception as e:
+            results.append(_fail(f"  supervisor/config.json validation error: {e}"))
+    else:
+        results.append(_warn("  supervisor/config.json not found — self-update supervisor is not configured"))
 
     # ── Summary ───────────────────────────────────────────────
     _section("Summary")
