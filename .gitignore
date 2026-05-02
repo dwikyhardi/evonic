@@ -292,4 +292,7 @@ VERSION
 # WARNING: the following dir MUST keep ignored do not index!
 docs-site/
 agents/
+keys/
+data/
+plan/
 
