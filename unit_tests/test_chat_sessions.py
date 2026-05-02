@@ -89,6 +89,33 @@ class TestSessionCreate:
         sid2 = db.get_or_create_session(agent_id, 'user1')
         assert sid1 == sid2
 
+    def test_same_user_different_channel_reuses_session(self, agent_id, chat_db):
+        """Regression: the slug is independent of channel_id, so the same
+        user reaching us from a different channel must NOT crash on the
+        IntegrityError fallback (previously raised TypeError on None row).
+        """
+        # First the user talks via channel A.
+        sid1 = db.get_or_create_session(agent_id, 'user1', 'ch_a')
+        # Then via channel B — slug collides on PK, must reuse the row by id
+        # and rebind channel_id to 'ch_b' so subsequent lookups on ch_b hit.
+        sid2 = db.get_or_create_session(agent_id, 'user1', 'ch_b')
+        assert sid1 == sid2
+        # Re-asking for ch_b now matches via the active-session SELECT.
+        sid3 = db.get_or_create_session(agent_id, 'user1', 'ch_b')
+        assert sid3 == sid1
+        # Bouncing back to ch_a also works (re-rebinds via the same path).
+        sid4 = db.get_or_create_session(agent_id, 'user1', 'ch_a')
+        assert sid4 == sid1
+
+    def test_same_user_dashboard_then_channel_reuses_session(self, agent_id, chat_db):
+        """Regression: dashboard chat (channel_id=NULL) followed by a channel
+        message for the same external_user_id must not crash."""
+        sid1 = db.get_or_create_session(agent_id, 'user1')           # dashboard
+        sid2 = db.get_or_create_session(agent_id, 'user1', 'ch_a')   # channel
+        assert sid1 == sid2
+        sid3 = db.get_or_create_session(agent_id, 'user1')           # back to dashboard
+        assert sid3 == sid1
+
 
 class TestSessionMessages:
     def test_add_and_retrieve_messages(self, agent_id, chat_db):

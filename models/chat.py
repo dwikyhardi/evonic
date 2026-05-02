@@ -204,21 +204,28 @@ class AgentChatDB:
                 conn.commit()
                 return slug
             except sqlite3.IntegrityError:
-                # Race condition: another request inserted the same slug concurrently
-                if channel_id:
-                    cursor.execute("""
-                        SELECT id FROM chat_sessions
-                        WHERE agent_id = ? AND channel_id = ? AND external_user_id = ?
-                    """, (agent_id, channel_id, external_user_id))
-                else:
-                    cursor.execute("""
-                        SELECT id FROM chat_sessions
-                        WHERE agent_id = ? AND channel_id IS NULL AND external_user_id = ?
-                    """, (agent_id, external_user_id))
+                # PK collision on `id`. The slug is deterministic on
+                # (agent_id, external_user_id) and ignores channel_id, so the
+                # same user reaching us from a different channel collides
+                # with their existing session. Reuse the row by id and
+                # rebind channel_id so subsequent channel-scoped lookups hit.
+                cursor.execute(
+                    "SELECT id, channel_id, archived FROM chat_sessions WHERE id = ?",
+                    (slug,))
                 row = cursor.fetchone()
-                old_id = row['id']
-                if old_id != slug:
-                    _migrate_session_id(cursor, old_id, slug)
+                if row is None:
+                    # Truly unexpected — surface it instead of crashing on None.
+                    raise
+                needs_update = False
+                if (row['channel_id'] or None) != (channel_id or None):
+                    needs_update = True
+                if row['archived']:
+                    needs_update = True
+                if needs_update:
+                    cursor.execute(
+                        "UPDATE chat_sessions SET channel_id = ?, archived = 0, "
+                        "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (channel_id, slug))
                     conn.commit()
                 return slug
 
