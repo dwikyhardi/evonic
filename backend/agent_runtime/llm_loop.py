@@ -27,7 +27,6 @@ _logger = logging.getLogger(__name__)
 
 from backend.agent_runtime.llm_call import (
     _READ_ONLY_TOOLS, _ALWAYS_SERIAL_TOOLS, _MAX_PARALLEL_TOOL_WORKERS,
-    _db_write_locks, _db_write_locks_guard, _get_db_write_lock,
     _execute_tool_core,
 )
 from backend.agent_runtime.llm_response_parser import (
@@ -268,6 +267,7 @@ def run_tool_loop(agent: Dict[str, Any],
                 insert_at = 2 if agent_context.get('agent_state') is not None else 1
                 messages.insert(insert_at, sk_msg)
 
+        # LOCK ORDERING: Main path — llm_lock only. No other locks held here.
         with llm_lock:
             result = llm.chat_completion(
                 messages=messages,

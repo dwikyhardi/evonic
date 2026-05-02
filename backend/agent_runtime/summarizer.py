@@ -62,6 +62,9 @@ def maybe_summarize(agent: dict, session_id: str,
                     summarize_active: set,
                     llm_lock: threading.Lock) -> None:
     """Concurrency guard: prevents duplicate summarization for the same session."""
+    # LOCK ORDERING: _summarize_guard → llm_lock. _summarize_guard is acquired
+    # first (here), then llm_lock is acquired inside the summarization call.
+    # Never reverse this order.
     with summarize_guard:
         if session_id in summarize_active:
             return
@@ -158,6 +161,8 @@ def _do_summarize_jsonl(agent: dict, session_id: str, llm_lock: threading.Lock,
             messages_text=messages_text
         )
 
+        # LOCK ORDERING: llm_lock is acquired inside the summarization path,
+        # always AFTER _summarize_guard (held by caller maybe_summarize).
         with llm_lock:
             result = llm_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],
@@ -278,6 +283,8 @@ def _do_summarize_sqlite(agent: dict, session_id: str, llm_lock: threading.Lock,
             messages_text=messages_text
         )
 
+        # LOCK ORDERING: llm_lock is acquired inside the summarization path,
+        # always AFTER _summarize_guard (held by caller maybe_summarize).
         with llm_lock:
             result = llm_client.chat_completion(
                 messages=[{"role": "user", "content": prompt}],

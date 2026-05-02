@@ -357,6 +357,10 @@ class _LLMSerializer:
         # Serialize LLM access for single-slot backends.
         # Some LLM providers support only one concurrent request per API key.
         # Acquired before each LLM call, released after response.
+        #
+        # NOTE: If any code path ever needs to re-acquire _llm_lock while
+        # already holding it (re-entrancy), replace this with threading.RLock().
+        # threading.Lock will deadlock on re-entrant acquisition.
         self._llm_lock = threading.Lock()
 
         # Per-agent/per-model turn concurrency manager (set in __init__).
@@ -409,7 +413,10 @@ class AgentRuntime:
     _cleanup_tracker = _CleanupTracker()
     _llm_serializer = _LLMSerializer()
     _shutdown_mgr = _ShutdownManager()
-    # Shared pool for background tasks (summarization, etc.) — prevents thread orphaning
+    # Shared pool for background tasks (summarization, etc.) — prevents thread orphaning.
+    # max_workers=4 ensures a single hung/stuck task won't starve all background work.
+    # Background tasks are fire-and-forget — submitted tasks should have their own
+    # internal timeouts to prevent indefinite worker occupation.
     _bg_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix='agent-bg')
 
     @classmethod

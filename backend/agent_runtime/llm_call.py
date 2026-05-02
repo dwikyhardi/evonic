@@ -4,10 +4,7 @@ llm_call.py — LLM call preparation: tool classification & parallel execution p
 Part of the diet llm_loop.py refactor (Layout C / Pipeline).
 """
 
-import threading
-from typing import Dict
-
-# ── Tool classification for parallel execution ─────────────────────────────
+# ── Tool classification for parallel execution ──────────────────────────────
 
 _READ_ONLY_TOOLS: frozenset = frozenset({
     'read_file', 'read', 'calculator', 'find', 'stats', 'tree',
@@ -22,21 +19,7 @@ _ALWAYS_SERIAL_TOOLS: frozenset = frozenset({
 
 _MAX_PARALLEL_TOOL_WORKERS = 6
 
-# ── Per-session DB write lock ───────────────────────────────────────────────
-
-_db_write_locks: Dict[str, threading.Lock] = {}
-_db_write_locks_guard = threading.Lock()
-
-
-def _get_db_write_lock(session_id: str) -> threading.Lock:
-    """Get or create a per-session lock for serialising DB/chatlog writes."""
-    with _db_write_locks_guard:
-        if session_id not in _db_write_locks:
-            _db_write_locks[session_id] = threading.Lock()
-        return _db_write_locks[session_id]
-
-
-# ── Tool execution core ─────────────────────────────────────────────────────
+# ── Tool execution core ──────────────────────────────────────────────────────
 
 def _execute_tool_core(fn_name: str, args: dict,
                        builtin_exec, real_exec) -> dict:

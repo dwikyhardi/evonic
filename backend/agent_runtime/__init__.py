@@ -104,7 +104,7 @@ def _on_summary_updated(event):
 
     threading.Thread(
         target=extract_and_store_memories,
-        args=(agent, session_id, summary, AgentRuntime._llm_lock),
+        args=(agent, session_id, summary, AgentRuntime._llm_serializer._llm_lock),
         daemon=True,
     ).start()
 
