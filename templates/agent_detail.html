@@ -1930,12 +1930,13 @@ async function restoreActiveReasoning() {
     try {
         // Use cached session_id — already fetched in loadChatHistory()
         const sessionId = await _getChatSessionId();
-        if (!sessionId) return;
+        if (!sessionId || _chatBusy) return; // bail if user already sent a message
 
         // Fetch all buffered events for this session
         const eRes = await fetch(`/api/agents/${encodeURIComponent(AGENT_ID)}/chat/events?session_id=${encodeURIComponent(sessionId)}&after=0`);
-        if (!eRes.ok) return;
+        if (!eRes.ok || _chatBusy) return; // bail if user sent a message while fetching
         const eData = await eRes.json();
+        if (_chatBusy) return; // bail before touching shared state
         const events = eData.events || [];
         if (!events.length) return;
 
@@ -2037,6 +2038,7 @@ function startIdlePoll() {
                 : `user_id=web_test&after_ts=${lastChatTs}&limit=20`;
             const res = await fetch(`/api/agents/${AGENT_ID}/chat?${qs}`);
             const data = await res.json();
+            if (_chatBusy || chatUI.hasActiveStream()) return; // re-check: user may have sent a message while fetching
             const entries = data.entries || [];
             if (!entries.length) return;
             const wasAtBottom = chatUI.isNearBottom(80);
@@ -2131,6 +2133,12 @@ async function sendChat() {
     if (_chatThinkingId) {
         chatUI.removeThinkingIndicator(_chatThinkingId);
         _chatThinkingId = null;
+    }
+    // Kill any stale poll (e.g. from restoreActiveReasoning running concurrently)
+    if (chatPollTimer) {
+        clearInterval(chatPollTimer);
+        chatPollTimer = null;
+        chatPolling = false;
     }
     // clearActiveSpinner: finalize any orphaned poll-created spinner bubble
     if (typeof chatUI.clearActiveSpinner === 'function') {

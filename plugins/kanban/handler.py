@@ -346,20 +346,35 @@ def _agent_has_kanban_skill(agent_id: str) -> bool:
 
 
 
-def _notify_agent(agent_id: str, task: dict, channel_type: str, sdk=None, force: bool = False) -> dict:
+def _notify_agent(agent_id: str, task: dict, channel_type: str, sdk=None, force: bool = False, force_delay: bool = False) -> dict:
     """Send a trigger message to the agent about a kanban task.
 
     Returns:
         {'success': True} on success, or {'success': False, 'reason': <str>} on failure.
         Reasons: 'busy' (agent working on another task), 'no_skill' (missing kanban skill),
-                 'no_session' (no active channel session), 'deduplicated' (duplicate notification).
+                 'no_session' (no active channel session), 'deduplicated' (duplicate notification),
+                  'delayed' (task created within delay window).
 
     Args:
         force: If True, bypass the busy guard and override any pending task state.
                Use for manual user-triggered notifications so the agent always
                receives the full [System/Task] message instead of only the
                [SYSTEM REMINDER] injected by the message interceptor.
+        force_delay: If True, bypass the TASK_DELAY_SECONDS setting and notify
+                     the agent immediately regardless of how recently the task
+                     was created. This is used when the user clicks the
+                     "Trigger Agents" button to force immediate delivery.
     """
+
+    # Task delay check — bypassed when force_delay=True (e.g. user clicked Trigger Agents)
+    if not force_delay:
+        if _is_task_delayed(task, _load_config()):
+            _log(
+                f'Task {task["id"]} created within delay window, skipping for agent {agent_id}',
+                'info', sdk,
+            )
+            return {'success': False, 'reason': 'delayed'}
+
     if not force and (agent_id in _pending_tasks or agent_id in _active_tasks or agent_id in _paused_tasks):
         busy_task_id = _pending_tasks.get(agent_id) or _active_tasks.get(agent_id) or _paused_tasks.get(agent_id)
         _log(

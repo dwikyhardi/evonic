@@ -349,6 +349,9 @@ def _register_builtins():
 
         def _do_restart():
             import time
+            import resource
+            import subprocess
+
             time.sleep(1.5)  # Brief delay so response is sent first
 
             # Stop all channels cleanly so Telegram releases its long-poll
@@ -359,19 +362,29 @@ def _register_builtins():
 
             # Close all inherited file descriptors (including Flask's bound
             # socket) so the new process can bind the same port cleanly.
-            # `resource` is POSIX-only; on Windows os.execv inherits handles
-            # through the CRT and there's no RLIMIT_NOFILE to bound the loop.
-            if sys.platform != 'win32':
+            # Use os.close_range with inheritable=False (Python 3.13+) so
+            # the child inherits the same FDs but the parent's semaphores
+            # don't trigger leak warnings on macOS. Fallback to
+            # os.closerange for older Python versions.
+            try:
+                maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+                if maxfd == resource.RLIM_INFINITY or maxfd > 65535:
+                    maxfd = 4096
                 try:
-                    import resource
-                    maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-                    if maxfd == resource.RLIM_INFINITY or maxfd > 65535:
-                        maxfd = 4096
+                    os.close_range(3, maxfd, inheritable=False)
+                except AttributeError:
                     os.closerange(3, maxfd)
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            # Spawn a new process to handle the restart.
+            # close_fds=True ensures no leftover FDs leak into the child.
+            # The parent can exit cleanly (watchdog won't kill us).
+            subprocess.Popen(
+                [sys.executable] + sys.argv,
+                close_fds=True,
+            )
+            os._exit(0)  # Exit parent immediately so child runs independently
 
         t = threading.Thread(target=_do_restart, daemon=True)
         t.start()

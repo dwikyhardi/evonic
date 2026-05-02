@@ -475,7 +475,7 @@ def create_blueprint():
             from plugins.kanban.handler import _notify_agent, _load_config
             cfg = _load_config()
             channel_type = cfg.get('CHANNEL_TYPE', 'telegram')
-            result = _notify_agent(agent_id, task, channel_type, force=True)
+            result = _notify_agent(agent_id, task, channel_type, force=True, force_delay=True)
             if not result.get('success'):
                 reason = result.get('reason', 'unknown')
                 error_messages = {
@@ -483,6 +483,7 @@ def create_blueprint():
                     'no_session': f'Agent {agent_id} has no active channel session.',
                     'busy': f'Agent {agent_id} is busy with another task.',
                     'deduplicated': f'Notification for agent {agent_id} was deduplicated.',
+                    'delayed': f'Notification for agent {agent_id} is delayed by config.',
                 }
                 return jsonify({'error': error_messages.get(reason, f'Failed to trigger agent {agent_id}.')}), 409
         except Exception as e:
