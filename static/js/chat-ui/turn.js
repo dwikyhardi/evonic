@@ -22,7 +22,7 @@
 
 import { log, assert } from './debug.js';
 
-const STALE_TIMEOUT_MS = 45_000;
+const STALE_TIMEOUT_MS = 300_000; // 5 minutes — safety net for truly abandoned turns
 
 const TERMINAL_PHASES = new Set(['final', 'done', 'aborted']);
 
@@ -215,6 +215,15 @@ export class Turn {
             return;
         }
         if (seq) this._lastSeq = seq;
+
+        // Reset stale timeout on every live event — turn is clearly still active
+        if (this._staleTimeout) {
+            clearTimeout(this._staleTimeout);
+            this._staleTimeout = setTimeout(() => {
+                this._log.warn('stale timeout reached, auto-finalizing', this.id);
+                this._finalizeBubble(null);
+            }, STALE_TIMEOUT_MS);
+        }
 
         this._log.debug('ingest', evtName, seq, '→ phase was', this.phase, this.id);
 
