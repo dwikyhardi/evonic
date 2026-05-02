@@ -245,25 +245,17 @@ document.addEventListener('evonic:approval-resolved', function(e) {
     }
 });
 
-// Global SSE listener: connect to the current page's agent stream and listen for
-// approval_required / approval_resolved events so the modal appears regardless
-// of whether the user is on the agent's chat page.
-// This is the primary entry point when the SSE stream is the delivery mechanism.
+// Global SSE listener: connect to the shared /api/approvals/stream endpoint.
+// This pushes ALL approval events (any agent, any session) — the event data
+// already carries agent_id, so no URL-parsing gymnastics are needed.
+// The modal appears regardless of which page the user is on.
 (function() {
     var _sse = null;
-    var _agentId = null;
 
-    function _parseAgentId() {
-        // Extract agent_id from the current page URL: /agents/:agentId/...
-        var m = window.location.pathname.match(/^\/agents\/([^/]+)/);
-        return m ? m[1] : null;
-    }
-
-    function _connectSSE(sessionId) {
+    function _connectSSE() {
         if (_sse) return;
-        var url = '/api/agents/' + encodeURIComponent(_agentId) + '/chat/stream?session_id=' + encodeURIComponent(sessionId);
         try {
-            _sse = new EventSource(url);
+            _sse = new EventSource('/api/approvals/stream');
         } catch (e) {
             return;
         }
@@ -293,17 +285,7 @@ document.addEventListener('evonic:approval-resolved', function(e) {
 
     function _startSSE() {
         if (_sse) return;
-        _agentId = _agentId || _parseAgentId();
-        if (!_agentId) return;
-
-        // Fetch session_id from the API (the page URL never carries it)
-        fetch('/api/agents/' + encodeURIComponent(_agentId) + '/chat/session?user_id=web_test')
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                var sessionId = data.session_id || '';
-                if (sessionId) _connectSSE(sessionId);
-            })
-            .catch(function() { /* ignore — no approval modal without session */ });
+        _connectSSE();
     }
 
     // Start SSE when the page loads and when it becomes visible
