@@ -2657,11 +2657,14 @@ loadWorkplaceSelector();
 setInterval(pollWorkplaceStatus, 5000);
 
 // ==================== Tab persistence ====================
-// Deferred: runs after the chat-ui module initializes window.chatUI (see inline module below)
+// Restore tab from URL hash on page load (same pattern as settings.html)
 (function() {
     const valid = ['chat', 'general', 'knowledge', 'tools', 'channels', 'skills'];
     const hash = location.hash.replace('#', '');
     window._tabInitHash = (hash && valid.includes(hash)) ? hash : 'chat';
+    if (window._tabInitHash !== 'chat') {
+        showTab(window._tabInitHash);
+    }
 })();
 
 // ==================== Delete Agent ====================
