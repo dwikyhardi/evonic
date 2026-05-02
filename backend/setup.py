@@ -355,7 +355,7 @@ def run_setup(
         # 7. Enable all installed plugins
         for manifest_path in glob.glob(os.path.join(config.BASE_DIR, 'plugins', '*', 'plugin.json')):
             try:
-                with open(manifest_path) as f:
+                with open(manifest_path, encoding='utf-8') as f:
                     manifest = json.load(f)
                 plugin_id = manifest.get('id', '')
                 if plugin_id:
@@ -366,7 +366,7 @@ def run_setup(
         # 8. Enable all installed skills
         for manifest_path in glob.glob(os.path.join(config.BASE_DIR, 'skills', '*', 'skill.json')):
             try:
-                with open(manifest_path) as f:
+                with open(manifest_path, encoding='utf-8') as f:
                     manifest = json.load(f)
                 skill_id = manifest.get('id', '')
                 if skill_id:

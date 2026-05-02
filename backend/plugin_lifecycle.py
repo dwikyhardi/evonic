@@ -101,7 +101,7 @@ class PluginManager:
             # Read manifest to know which events and slash commands this plugin subscribes to
             manifest_path = os.path.join(plugin_dir, 'plugin.json')
             if os.path.isfile(manifest_path):
-                with open(manifest_path) as f:
+                with open(manifest_path, encoding='utf-8') as f:
                     manifest = json.load(f)
                 events = manifest.get('events', [])
                 slash_commands = manifest.get('slash_commands', [])
@@ -221,7 +221,7 @@ class PluginManager:
         plugin_dir = os.path.join(PLUGINS_DIR, plugin_id)
         manifest_path = os.path.join(plugin_dir, 'plugin.json')
         if os.path.isfile(manifest_path):
-            with open(manifest_path) as f:
+            with open(manifest_path, encoding='utf-8') as f:
                 manifest = json.load(f)
             for sc in manifest.get('slash_commands', []):
                 sc_name = sc.get('id', '')
@@ -330,7 +330,7 @@ class PluginManager:
             if not os.path.isfile(manifest_path):
                 continue
             try:
-                with open(manifest_path) as f:
+                with open(manifest_path, encoding='utf-8') as f:
                     manifest = json.load(f)
                 manifest['_dir'] = plugin_dir
                 manifest['event_count'] = len(manifest.get('events', []))
@@ -409,7 +409,7 @@ class PluginManager:
         if not os.path.isfile(manifest_path):
             return None
         try:
-            with open(manifest_path) as f:
+            with open(manifest_path, encoding='utf-8') as f:
                 manifest = json.load(f)
             manifest['_dir'] = plugin_dir
             return manifest
@@ -434,7 +434,7 @@ class PluginManager:
             if not manifest_path:
                 return {'error': 'No plugin.json found in zip'}
 
-            with open(manifest_path) as f:
+            with open(manifest_path, encoding='utf-8') as f:
                 manifest = json.load(f)
 
             plugin_id = manifest.get('id', '')
@@ -460,7 +460,7 @@ class PluginManager:
         if not os.path.isfile(manifest_path):
             return {'error': f'No plugin.json found in {source_dir}'}
 
-        with open(manifest_path) as f:
+        with open(manifest_path, encoding='utf-8') as f:
             manifest = json.load(f)
 
         plugin_id = manifest.get('id', '')
@@ -544,7 +544,7 @@ class PluginManager:
             config_path = os.path.join(PLUGINS_DIR, plugin_id, 'config.json')
             if os.path.isfile(config_path):
                 try:
-                    with open(config_path) as f:
+                    with open(config_path, encoding='utf-8') as f:
                         file_config = json.load(f)
                     var_names = {v['name'] for v in variables}
                     for name, val in file_config.items():

@@ -27,7 +27,7 @@ def _load_global_config() -> Dict[str, Any]:
     if not os.path.isfile(CONFIG_PATH):
         return {}
     try:
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding='utf-8') as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
         return {}
@@ -53,7 +53,7 @@ class SkillsManager:
             if not os.path.isfile(manifest_path):
                 continue
             try:
-                with open(manifest_path) as f:
+                with open(manifest_path, encoding='utf-8') as f:
                     manifest = json.load(f)
                 manifest['_dir'] = skill_dir
                 manifest['tool_count'] = len(self._load_tool_defs(skill_dir, manifest))
@@ -69,7 +69,7 @@ class SkillsManager:
         manifest_path = os.path.join(skill_dir, 'skill.json')
         if not os.path.isfile(manifest_path):
             return None
-        with open(manifest_path) as f:
+        with open(manifest_path, encoding='utf-8') as f:
             manifest = json.load(f)
         manifest['enabled'] = self.is_skill_enabled(skill_id)
         tool_defs = self._load_tool_defs(skill_dir, manifest)
@@ -89,7 +89,7 @@ class SkillsManager:
         manifest_path = os.path.join(skill_dir, 'skill.json')
         if not os.path.isfile(manifest_path):
             return []
-        with open(manifest_path) as f:
+        with open(manifest_path, encoding='utf-8') as f:
             manifest = json.load(f)
         if not self.is_skill_enabled(skill_id):
             return []
@@ -138,7 +138,7 @@ class SkillsManager:
             if not manifest_path:
                 return {'error': 'No skill.json found in zip (must be at root or one directory deep)'}
 
-            with open(manifest_path) as f:
+            with open(manifest_path, encoding='utf-8') as f:
                 manifest = json.load(f)
 
             skill_id = manifest.get('id', '')
@@ -162,13 +162,13 @@ class SkillsManager:
             saved_config = None
             config_path = os.path.join(skill_dest, 'config.json')
             if os.path.isfile(config_path):
-                with open(config_path) as f:
+                with open(config_path, encoding='utf-8') as f:
                     saved_config = f.read()
             if os.path.exists(skill_dest):
                 shutil.rmtree(skill_dest)
             shutil.copytree(skill_src, skill_dest)
             if saved_config is not None:
-                with open(os.path.join(skill_dest, 'config.json'), 'w') as f:
+                with open(os.path.join(skill_dest, 'config.json'), 'w', encoding='utf-8') as f:
                     f.write(saved_config)
 
             # Run setup.install() if available
@@ -183,7 +183,7 @@ class SkillsManager:
         if not os.path.isfile(manifest_path):
             return {'error': f'No skill.json found in {source_dir}'}
 
-        with open(manifest_path) as f:
+        with open(manifest_path, encoding='utf-8') as f:
             manifest = json.load(f)
 
         skill_id = manifest.get('id', '')
@@ -201,13 +201,13 @@ class SkillsManager:
             saved_config = None
             config_path = os.path.join(skill_dest, 'config.json')
             if os.path.isfile(config_path):
-                with open(config_path) as f:
+                with open(config_path, encoding='utf-8') as f:
                     saved_config = f.read()
             if os.path.exists(skill_dest):
                 shutil.rmtree(skill_dest)
             shutil.copytree(source_dir, skill_dest)
             if saved_config is not None:
-                with open(os.path.join(skill_dest, 'config.json'), 'w') as f:
+                with open(os.path.join(skill_dest, 'config.json'), 'w', encoding='utf-8') as f:
                     f.write(saved_config)
 
         # Run setup.install()
@@ -241,7 +241,7 @@ class SkillsManager:
         from models.db import db
         db.set_setting(f'skill_enabled:{skill_id}', '1' if enabled else '0')
 
-        with open(manifest_path) as f:
+        with open(manifest_path, encoding='utf-8') as f:
             manifest = json.load(f)
         manifest['enabled'] = enabled
         return manifest
@@ -252,7 +252,7 @@ class SkillsManager:
         manifest_path = os.path.join(skill_dir, 'skill.json')
         if not os.path.isfile(manifest_path):
             return []
-        with open(manifest_path) as f:
+        with open(manifest_path, encoding='utf-8') as f:
             manifest = json.load(f)
         return manifest.get('variables', [])
 
@@ -362,7 +362,7 @@ class SkillsManager:
         manifest_path = os.path.join(skill_dir, 'skill.json')
         if not os.path.isfile(manifest_path):
             return {'error': f"Skill '{skill_id}' not found"}
-        with open(manifest_path) as f:
+        with open(manifest_path, encoding='utf-8') as f:
             manifest = json.load(f)
         tools_file = manifest.get('tools_file', '')
         if not tools_file:
@@ -370,7 +370,7 @@ class SkillsManager:
         tools_path = os.path.join(skill_dir, tools_file)
         if not os.path.isfile(tools_path):
             return {'error': f"Tools file not found: {tools_file}"}
-        with open(tools_path) as f:
+        with open(tools_path, encoding='utf-8') as f:
             defs = json.load(f)
         updated = False
         for entry in defs:
@@ -380,7 +380,7 @@ class SkillsManager:
                 break
         if not updated:
             return {'error': f"Tool '{fn_name}' not found in skill '{skill_id}'"}
-        with open(tools_path, 'w') as f:
+        with open(tools_path, 'w', encoding='utf-8') as f:
             json.dump(defs, f, indent=2, ensure_ascii=False)
         return {'success': True}
 
@@ -393,7 +393,7 @@ class SkillsManager:
         if not os.path.isfile(tools_path):
             return []
         try:
-            with open(tools_path) as f:
+            with open(tools_path, encoding='utf-8') as f:
                 data = json.load(f)
             # The tools file is an array of OpenAI function defs
             if isinstance(data, list):

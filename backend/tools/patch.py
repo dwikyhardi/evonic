@@ -572,7 +572,7 @@ def test_execute():
     passed += 1
 
     print('Test 2: Insert lines')
-    with open(tmp, 'w') as f:
+    with open(tmp, 'w', encoding='utf-8') as f:
         f.write('alpha\nbeta\ngamma\n')
     r = apply_patch(tmp, '@@ -1,2 +1,4 @@\n alpha\n+inserted1\n+inserted2\n beta\n')
     assert r['result'] == 'success', r
@@ -580,7 +580,7 @@ def test_execute():
     passed += 1
 
     print('Test 3: Insertion-only hunk (no context at all)')
-    with open(tmp, 'w') as f:
+    with open(tmp, 'w', encoding='utf-8') as f:
         f.write('line1\nline2\nline3\n')
     r = apply_hunks(tmp, '@@ -2,0 +2,2 @@\n+new_a\n+new_b\n')
     assert r['result'] == 'success', r
@@ -598,7 +598,7 @@ def test_execute():
     passed += 1
 
     print('Test 5: Multiple hunks')
-    with open(tmp, 'w') as f:
+    with open(tmp, 'w', encoding='utf-8') as f:
         f.write('a\nb\nc\nd\ne\nf\n')
     r = apply_patch(tmp, '@@ -1,2 +1,2 @@\n a\n-b\n+B\n@@ -5,2 +5,2 @@\n e\n-f\n+F\n')
     assert r['result'] == 'success', r
@@ -606,14 +606,14 @@ def test_execute():
     passed += 1
 
     print('Test 6: Context mismatch → error (Python fallback)')
-    with open(tmp, 'w') as f:
+    with open(tmp, 'w', encoding='utf-8') as f:
         f.write('line1\nline2\nline3\n')
     r = apply_hunks(tmp, '@@ -1,2 +1,2 @@\n WRONG_CONTEXT\n-line2\n+LINE2\n')
     assert 'error' in r, r
     passed += 1
 
     print('Test 7: Git-style headers skipped')
-    with open(tmp, 'w') as f:
+    with open(tmp, 'w', encoding='utf-8') as f:
         f.write('foo\nbar\n')
     patch = 'diff --git a/f b/f\nindex a..b 100644\n--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n foo\n-bar\n+BAR\n'
     r = apply_patch(tmp, patch)
@@ -643,7 +643,7 @@ def test_execute():
     passed += 1
 
     print('Test 11: Implicit hunk count=1')
-    with open(tmp, 'w') as f:
+    with open(tmp, 'w', encoding='utf-8') as f:
         f.write('only line\n')
     r = apply_patch(tmp, '@@ -1 +1 @@\n-only line\n+ONLY LINE\n')
     assert r['result'] == 'success', r
@@ -653,7 +653,7 @@ def test_execute():
     print('Test 12: Python fallback drift tolerance (±50 lines)')
     lines = [f'filler_{i}\n' for i in range(44)]
     lines += ['target line\n', 'after target\n']
-    with open(tmp, 'w') as f:
+    with open(tmp, 'w', encoding='utf-8') as f:
         f.writelines(lines)
     r = apply_hunks(tmp, '@@ -1,2 +1,2 @@\n target line\n-after target\n+REPLACED\n')
     assert r['result'] == 'success', r

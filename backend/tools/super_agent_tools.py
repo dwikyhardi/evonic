@@ -559,7 +559,6 @@ def _exec_restart(args: dict, agent_context: dict = None) -> dict:
     import sys as _sys
     import threading
     import time
-    import resource
     import json as _json
     import logging
 
@@ -619,13 +618,16 @@ def _exec_restart(args: dict, agent_context: dict = None) -> dict:
         from backend.channels.registry import channel_manager
         channel_manager.stop_all()
         time.sleep(1.0)
-        try:
-            maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-            if maxfd == resource.RLIM_INFINITY or maxfd > 65535:
-                maxfd = 4096
-            os.closerange(3, maxfd)
-        except Exception:
-            pass
+        # `resource` is POSIX-only; skip FD cleanup on Windows.
+        if _sys.platform != 'win32':
+            try:
+                import resource
+                maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+                if maxfd == resource.RLIM_INFINITY or maxfd > 65535:
+                    maxfd = 4096
+                os.closerange(3, maxfd)
+            except Exception:
+                pass
         os.execv(_sys.executable, [_sys.executable] + _sys.argv)
 
     t = threading.Thread(target=_do_restart, daemon=True)

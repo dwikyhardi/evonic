@@ -349,7 +349,6 @@ def _register_builtins():
 
         def _do_restart():
             import time
-            import resource
             time.sleep(1.5)  # Brief delay so response is sent first
 
             # Stop all channels cleanly so Telegram releases its long-poll
@@ -359,14 +358,18 @@ def _register_builtins():
             time.sleep(1.0)  # Give Telegram server-side time to release
 
             # Close all inherited file descriptors (including Flask's bound
-            # socket) so the new process can bind the same port cleanly
-            try:
-                maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-                if maxfd == resource.RLIM_INFINITY or maxfd > 65535:
-                    maxfd = 4096
-                os.closerange(3, maxfd)
-            except Exception:
-                pass
+            # socket) so the new process can bind the same port cleanly.
+            # `resource` is POSIX-only; on Windows os.execv inherits handles
+            # through the CRT and there's no RLIMIT_NOFILE to bound the loop.
+            if sys.platform != 'win32':
+                try:
+                    import resource
+                    maxfd = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+                    if maxfd == resource.RLIM_INFINITY or maxfd > 65535:
+                        maxfd = 4096
+                    os.closerange(3, maxfd)
+                except Exception:
+                    pass
 
             os.execv(sys.executable, [sys.executable] + sys.argv)
 
