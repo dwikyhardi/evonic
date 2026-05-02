@@ -308,6 +308,18 @@ def status_server():
         return 1
 
 
+def restart_server():
+    """Stop the running server, then start it again in daemon mode."""
+    print("Stopping server...")
+    stop_server()
+
+    # Small delay to ensure ports are freed
+    time.sleep(1)
+
+    print("Starting server...")
+    start_server(daemon=True)
+
+
 # ─── Plugin Management ────────────────────────────────────────────────────────
 
 def _get_plugin_manager():

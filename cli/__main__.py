@@ -49,7 +49,7 @@ EVONIC_BANNER = _DAY_COLORS[datetime.now().weekday()] + r"""
 """ + _RESET
 
 from cli.commands import (
-    start_server, stop_server, status_server,
+    start_server, stop_server, status_server, restart_server,
     plugin_list, plugin_install, plugin_uninstall, plugin_enable, plugin_disable, plugin_new,
     skill_list, skill_add, skill_get, skill_rm,
     skillset_list, skillset_get, skillset_apply,
@@ -128,6 +128,9 @@ def main():
 
     # --- status ---
     subparsers.add_parser("status", help="Check if the server is running")
+
+    # --- restart ---
+    subparsers.add_parser("restart", help="Restart the server (stop then start in daemon mode)")
 
     # --- doctor ---
     doctor_parser = subparsers.add_parser(
@@ -544,6 +547,8 @@ def main():
         stop_server()
     elif args.command == "status":
         status_server()
+    elif args.command == "restart":
+        restart_server()
     elif args.command == "doctor":
         doctor_command(quick=args.quick)
     elif args.command == "plugin":
