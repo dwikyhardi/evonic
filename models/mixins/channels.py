@@ -23,6 +23,32 @@ class ChannelMixin:
                 results.append(d)
             return results
 
+    def list_all_channels(self) -> List[Dict[str, Any]]:
+        """Return every channel across all agents, joined with `agents.name`.
+
+        Used by the top-level `/channels` page where channels are managed
+        independently of any single agent.
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT c.*, a.name AS agent_name
+                FROM channels c
+                LEFT JOIN agents a ON a.id = c.agent_id
+                ORDER BY c.created_at DESC
+            """)
+            results = []
+            for row in cursor.fetchall():
+                d = dict(row)
+                if d.get('config'):
+                    try:
+                        d['config'] = json.loads(d['config'])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                results.append(d)
+            return results
+
     def get_channel(self, channel_id: str) -> Optional[Dict[str, Any]]:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -68,7 +94,7 @@ class ChannelMixin:
         return chan_id
 
     def update_channel(self, channel_id: str, data: Dict[str, Any]) -> bool:
-        allowed = {'name', 'type', 'config', 'enabled'}
+        allowed = {'agent_id', 'name', 'type', 'config', 'enabled'}
         updates = {k: v for k, v in data.items() if k in allowed}
         if 'config' in updates and isinstance(updates['config'], dict):
             updates['config'] = json.dumps(updates['config'])

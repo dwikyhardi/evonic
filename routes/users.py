@@ -139,22 +139,9 @@ def api_delete_identity(identity_id):
 
 # ==================== Helpers used by the dashboard JS ====================
 
-@users_bp.route('/api/channels', methods=['GET'])
-def api_list_all_channels():
-    """Flat list of all channels across agents — used by user detail page picker."""
-    agents = db.get_agents()
-    channels = []
-    for ag in agents:
-        for ch in db.get_channels(ag['id']):
-            channels.append({
-                'id': ch['id'],
-                'name': ch.get('name'),
-                'type': ch.get('type'),
-                'agent_id': ag['id'],
-                'agent_name': ag.get('name'),
-                'enabled': bool(ch.get('enabled')),
-            })
-    return jsonify({'channels': channels})
+# Note: `GET /api/channels` (the flat-list helper used by the user-detail
+# picker) lives in `routes/channels.py` since channels became a top-level
+# resource. The URL is kept identical for backward compatibility.
 
 
 @users_bp.route('/api/agents/<agent_id>/routed-identities', methods=['GET'])
