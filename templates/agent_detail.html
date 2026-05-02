@@ -386,12 +386,16 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-3xl">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Channels</h3>
-                <button onclick="showAddChannelModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors">+ Add Channel</button>
+                <a href="/channels" class="text-indigo-500 hover:text-indigo-600 text-sm font-medium inline-flex items-center gap-1" title="Manage all channels">
+                    Manage in /channels
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </a>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                Inbound is allowlist-only — register users at
-                <a href="/users" class="text-indigo-500 hover:underline">/users</a>
-                so the bot can reply to them.
+                Read-only summary of channels whose default agent is this one. Inbound now falls back to this agent for unknown senders;
+                register users at <a href="/users" class="text-indigo-500 hover:underline">/users</a>
+                to override which agent answers a specific contact. Create or edit channels from
+                <a href="/channels" class="text-indigo-500 hover:underline">/channels</a>.
             </p>
             <div id="channels-list" class="space-y-3">
                 <!-- Channels loaded dynamically -->
@@ -1801,12 +1805,9 @@ async function loadChannels() {
         const statusText = running ? 'Running' : 'Stopped';
         const isPrimary = ch.is_primary;
         const primaryIcon = isPrimary ? '<span class="text-yellow-500" title="Primary channel">&#9733;</span>' : '';
-        const toggleBtn = running
-            ? `<button onclick="toggleChannel('${ch.id}', false)" class="text-xs px-3 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100">Stop</button>`
-            : `<button onclick="toggleChannel('${ch.id}', true)" class="text-xs px-3 py-1 rounded bg-green-50 text-green-600 hover:bg-green-100">Start</button>`;
-        const qrBtn = (ch.type === 'whatsapp' && running)
-            ? `<button onclick="openQRModal('${ch.id}')" class="text-xs px-3 py-1 rounded bg-green-50 text-green-700 hover:bg-green-100">Scan QR</button>`
-            : '';
+        // Channels became a top-level resource; the agent detail tab is now a read-only summary.
+        // Only the "primary channel" toggle remains here because it is a per-agent, agent-side concept
+        // (controls which channel the scheduler / super-agent broadcaster uses).
         const primaryBtn = isPrimary
             ? `<button onclick="unsetPrimaryChannel('${ch.id}')" class="text-xs px-3 py-1 rounded bg-yellow-50 text-yellow-600 hover:bg-yellow-100" title="Remove as primary">&#9733;</button>`
             : `<button onclick="setPrimaryChannel('${ch.id}')" class="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200" title="Set as primary channel for message routing">&#9734;</button>`;
@@ -1825,9 +1826,7 @@ async function loadChannels() {
             </div>
             <div class="flex items-center gap-2">
                 ${primaryBtn}
-                ${qrBtn}
-                ${toggleBtn}
-                <button onclick="deleteChannel('${ch.id}')" class="text-xs text-red-500 hover:text-red-700">Delete</button>
+                <a href="/channels" class="text-xs text-indigo-500 hover:text-indigo-600" title="Edit, start/stop, or delete this channel">Manage</a>
             </div>
         </div>`;
     }).join('');
