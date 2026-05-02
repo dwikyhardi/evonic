@@ -2182,6 +2182,14 @@ async function sendChat() {
         } else if (!data.success) {
             chatUI.removeThinkingIndicator(thinkingId);
             chatUI.appendMessage('error', 'Error: ' + (data.error || 'Unknown error'));
+        } else if (data.clear_ui) {
+            // /clear slash command — clear the UI and show confirmation as system message
+            chatUI.removeThinkingIndicator(thinkingId);
+            chatUI.clearContainer();
+            chatUI.appendMessage('system', data.response);
+            thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null;
+            chatUI.closeStream();
+            await syncLastChatTs();
         } else {
             // Non-buffered success: agent responded immediately.
             // Thinking bubble was already created eagerly; populate it and close SSE.

@@ -747,7 +747,9 @@ class AgentRuntime:
                              'sender_id': external_user_id})
                 _cl.append({'type': 'system', 'session_id': session_id, 'content': response,
                              'metadata': {'slash_command': True}})
-                return {"response": response, "tool_trace": [], "timeline": []}
+                # Signal the client to clear the chat UI when the clear command was used
+                extra = {"clear_ui": True} if cmd_name == "clear" else {}
+                return {"response": response, "tool_trace": [], "timeline": [], **extra}
             # Unknown command — fall through to normal LLM processing
 
         # Save user message (store image reference and any extra metadata)

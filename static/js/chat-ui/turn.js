@@ -331,6 +331,12 @@ export class Turn {
             this._onTrigger('turn:split', { turnId: this.id });
             return;
         }
+
+        if (evtName === 'session_clear') {
+            // Propagate to ChatUI.onTrigger which calls ChatUI.clear()
+            this._onTrigger('session_clear', data);
+            return;
+        }
     }
 
     // ── Timeline entries ──────────────────────────────────────────────────────

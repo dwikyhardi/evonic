@@ -974,6 +974,12 @@ async function sendReply(e) {
         $msgEl.remove(); // remove optimistically-rendered message on failure
         return alert(res.error);
     }
+    // Defensive: if the response indicates a UI clear (e.g. /clear command), clear the chat
+    if (res.clear_ui) {
+        chatUI.clearContainer();
+        _pendingReplyText = null;
+        return;
+    }
     $input.val('');
 }
 
