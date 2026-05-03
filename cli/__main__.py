@@ -111,6 +111,11 @@ def main():
     # --- update ---
     update_parser = subparsers.add_parser("update", help="Check for and apply self-updates")
     update_parser.add_argument(
+        "channel", nargs="?", default=None,
+        choices=["nightly"],
+        help="Update channel: 'nightly' pulls the latest from origin/main (no tag)"
+    )
+    update_parser.add_argument(
         "--check", action="store_true", default=False,
         help="Only check for available updates, do not apply"
     )
@@ -544,6 +549,7 @@ def main():
             force=args.force,
             tag=args.tag,
             rollback_flag=args.rollback,
+            nightly=(args.channel == "nightly"),
         )
     elif args.command == "start":
         start_server(port=args.port, host=args.host, debug=args.debug, daemon=args.daemon)

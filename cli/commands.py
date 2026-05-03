@@ -2387,7 +2387,7 @@ def _get_supervisor_pid():
         return None
 
 
-def update_server(check_only=False, force=False, tag=None, rollback_flag=False):
+def update_server(check_only=False, force=False, tag=None, rollback_flag=False, nightly=False):
     """
     Trigger or run a self-update.
 
@@ -2396,6 +2396,7 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False):
     - rollback_flag: swap back to the previous release
     - default: signal running supervisor (SIGUSR1) or run update inline
     - tag: target a specific tag instead of latest
+    - nightly: fetch origin/main and run full update lifecycle (no tags)
     """
     sup = _load_supervisor_module()
     cfg_path = os.path.join(ROOT, 'supervisor', 'config.json')
@@ -2408,6 +2409,17 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False):
         sys.exit(0 if ok else 1)
 
     if check_only:
+        if nightly:
+            print('Fetching origin/main...')
+            ok, err = sup.git_fetch_branch(app_root, 'main')
+            if not ok:
+                print(f'Fetch failed: {err}')
+                sys.exit(1)
+            rc, sha, _ = sup._git(app_root, ['rev-parse', '--short', 'origin/main'])
+            current = sup.get_current_release(app_root)
+            print(f'Current      : {current or "(none — flat repo mode)"}')
+            print(f'origin/main  : {sha if rc == 0 else "unknown"}')
+            return
         print('Fetching tags...')
         sup.git_fetch_tags(app_root)
         current = sup.get_current_release(app_root)
@@ -2419,6 +2431,18 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False):
         elif latest:
             print('Already up to date.')
         return
+
+    if nightly:
+        # Nightly: always run inline (no supervisor signal)
+        print('Fetching origin/main (nightly)...')
+        ok, err = sup.git_fetch_branch(app_root, 'main')
+        if not ok:
+            print(f'Fetch failed: {err}')
+            sys.exit(1)
+        rc, sha, _ = sup._git(app_root, ['rev-parse', '--short', 'origin/main'])
+        print(f'Updating to nightly (origin/main @ {sha if rc == 0 else "unknown"})...')
+        ok = sup.run_update('main', cfg, None, skip_verify=True, nightly=True)
+        sys.exit(0 if ok else 1)
 
     # Signal running supervisor for immediate check
     if not sup.is_windows():
