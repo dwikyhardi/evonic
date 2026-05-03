@@ -16,14 +16,26 @@ class ChatDelegationMixin:
         from models.chat import agent_chat_manager
         return agent_chat_manager.get(agent_id)
 
+    def _refresh_session_count(self, agent_id: str) -> None:
+        """Recompute session_count from per-agent chat DB and store in main agents table."""
+        try:
+            sc, _ = self._chat_db(agent_id).get_counts()
+            with self._connect() as conn:
+                conn.execute("UPDATE agents SET session_count = ? WHERE id = ?", (sc, agent_id))
+                conn.commit()
+        except Exception:
+            pass
+
     def get_or_create_session(self, agent_id: str, external_user_id: str,
                                channel_id: str = None) -> str:
         channel_type = None
         if channel_id:
             ch = self.get_channel(channel_id)
             channel_type = ch.get('type') if ch else None
-        return self._chat_db(agent_id).get_or_create_session(
+        session_id = self._chat_db(agent_id).get_or_create_session(
             agent_id, external_user_id, channel_id, channel_type=channel_type)
+        self._refresh_session_count(agent_id)
+        return session_id
 
     def get_session_messages(self, session_id: str, limit: int = 50,
                               agent_id: str = None) -> List[Dict[str, Any]]:
@@ -125,6 +137,7 @@ class ChatDelegationMixin:
                 os.remove(cl._path)
             except FileNotFoundError:
                 pass
+            self._refresh_session_count(agent_id)
         return result
 
     def get_first_agent_request_metadata(self, session_id: str, agent_id: str = None) -> dict | None:

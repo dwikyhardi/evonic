@@ -18,16 +18,9 @@ class DashboardMixin:
             channel_count = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM channels WHERE enabled = 1")
             active_channel_count = cursor.fetchone()[0]
-            # Aggregate chat stats from per-agent DBs
-            session_count = 0
-            cursor.execute("SELECT id FROM agents")
-            for row in cursor.fetchall():
-                try:
-                    chat_db = self._chat_db(row[0])
-                    sc, _ = chat_db.get_counts()
-                    session_count += sc
-                except Exception:
-                    pass
+            # Session count from cached column — single query, no N+1 per-agent DB opens
+            cursor.execute("SELECT COALESCE(SUM(session_count), 0) FROM agents")
+            session_count = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM evaluation_runs")
             eval_run_count = cursor.fetchone()[0]
             cursor.execute("SELECT overall_score FROM evaluation_runs WHERE overall_score IS NOT NULL ORDER BY started_at DESC LIMIT 1")
@@ -57,12 +50,7 @@ class DashboardMixin:
                 LIMIT ?
             """, (limit,))
             agents = [dict(row) for row in cursor.fetchall()]
-        for a in agents:
-            try:
-                sc, _ = self._chat_db(a['id']).get_counts()
-                a['session_count'] = sc
-            except Exception:
-                a['session_count'] = 0
+        # session_count is already included in a.* above — no N+1 per-agent DB opens needed
         return agents
 
     def get_recent_runs(self, limit: int = 5) -> List[Dict[str, Any]]:
