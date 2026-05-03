@@ -16,6 +16,9 @@ Config keys expected in workplace.config:
   workspace_path  — remote working directory (optional, used as cwd)
 """
 
+import base64
+import shlex
+
 from backend.tools.lib.exec_backend import ExecutionBackend
 
 
@@ -74,3 +77,70 @@ class RemoteWorkplaceBackend(ExecutionBackend):
             s['workspace'] = self._workspace
             return s
         return {'backend': 'remote_workplace', 'status': 'disconnected'}
+
+    def _resolve_path(self, path: str) -> str:
+        """Make relative paths absolute against workspace_path."""
+        if not path.startswith('/') and self._workspace:
+            return self._workspace.rstrip('/') + '/' + path
+        return path
+
+    def file_exists(self, path: str) -> bool:
+        path = self._resolve_path(path)
+        r = self._ssh.run_bash(f'test -e {shlex.quote(path)} && echo yes || echo no', 5, {})
+        return r.get('stdout', '').strip() == 'yes'
+
+    def file_stat(self, path: str) -> dict:
+        path = self._resolve_path(path)
+        code = f"""
+import os
+p = {repr(path)}
+if not os.path.exists(p):
+    print('exists=0 size=0 is_binary=0')
+else:
+    size = os.path.getsize(p)
+    try:
+        chunk = open(p, 'rb').read(8192)
+        is_binary = b'\\x00' in chunk
+    except Exception:
+        is_binary = True
+    print(f'exists=1 size={{size}} is_binary={{1 if is_binary else 0}}')
+"""
+        r = self._ssh.run_python(code, 10, {})
+        out = r.get('stdout', '').strip()
+        try:
+            parts = dict(kv.split('=') for kv in out.split())
+            return {
+                'exists': parts.get('exists') == '1',
+                'size': int(parts.get('size', 0)),
+                'is_binary': parts.get('is_binary') == '1',
+            }
+        except Exception:
+            return {'exists': False, 'size': 0, 'is_binary': False}
+
+    def read_file(self, path: str) -> dict:
+        path = self._resolve_path(path)
+        r = self._ssh.run_bash(f'cat {shlex.quote(path)}', 30, {})
+        if r.get('exit_code', 1) != 0:
+            return {'error': r.get('stderr', '') or r.get('error', 'read failed')}
+        return {'content': r.get('stdout', '')}
+
+    def write_file(self, path: str, content: str, create_dirs: bool = True) -> dict:
+        path = self._resolve_path(path)
+        encoded = base64.b64encode(content.encode('utf-8')).decode('ascii')
+        script = ''
+        if create_dirs:
+            dir_path = path.rsplit('/', 1)[0] if '/' in path else ''
+            if dir_path:
+                script += f'mkdir -p {shlex.quote(dir_path)}\n'
+        script += f'echo {shlex.quote(encoded)} | base64 -d > {shlex.quote(path)}\n'
+        r = self._ssh.run_bash(script, 30, {})
+        if r.get('exit_code', 1) != 0:
+            return {'error': r.get('stderr', '') or r.get('error', 'write failed')}
+        return {'ok': True}
+
+    def make_dirs(self, path: str) -> dict:
+        path = self._resolve_path(path)
+        r = self._ssh.run_bash(f'mkdir -p {shlex.quote(path)}', 10, {})
+        if r.get('exit_code', 1) != 0:
+            return {'error': r.get('stderr', '') or r.get('error', 'mkdir failed')}
+        return {'ok': True}

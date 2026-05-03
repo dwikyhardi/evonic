@@ -8,7 +8,9 @@ Authentication priority:
                       (look_for_keys=True, allow_agent=True) — same as `ssh user@host`
 """
 
+import base64
 import os
+import shlex
 import time
 
 from backend.tools.lib.exec_backend import ExecutionBackend, truncate
@@ -127,6 +129,62 @@ class SSHBackend(ExecutionBackend):
         # Wrap: set env vars in shell, then pipe code to python3
         wrapper = env_prefix + 'python3 -'
         return self._exec('bash -c ' + _shell_quote(wrapper), code, timeout)
+
+    def file_exists(self, path: str) -> bool:
+        r = self._exec(f'test -e {shlex.quote(path)} && echo yes || echo no', '', 5)
+        return r.get('stdout', '').strip() == 'yes'
+
+    def file_stat(self, path: str) -> dict:
+        code = f"""
+import os
+p = {repr(path)}
+if not os.path.exists(p):
+    print('exists=0 size=0 is_binary=0')
+else:
+    size = os.path.getsize(p)
+    try:
+        chunk = open(p, 'rb').read(8192)
+        is_binary = b'\\x00' in chunk
+    except Exception:
+        is_binary = True
+    print(f'exists=1 size={{size}} is_binary={{1 if is_binary else 0}}')
+"""
+        r = self.run_python(code, 10, {})
+        out = r.get('stdout', '').strip()
+        try:
+            parts = dict(kv.split('=') for kv in out.split())
+            return {
+                'exists': parts.get('exists') == '1',
+                'size': int(parts.get('size', 0)),
+                'is_binary': parts.get('is_binary') == '1',
+            }
+        except Exception:
+            return {'exists': False, 'size': 0, 'is_binary': False}
+
+    def read_file(self, path: str) -> dict:
+        r = self._exec(f'cat {shlex.quote(path)}', '', 30)
+        if r.get('exit_code', 1) != 0:
+            return {'error': r.get('stderr', '') or r.get('error', 'read failed')}
+        return {'content': r.get('stdout', '')}
+
+    def write_file(self, path: str, content: str, create_dirs: bool = True) -> dict:
+        encoded = base64.b64encode(content.encode('utf-8')).decode('ascii')
+        script = ''
+        if create_dirs:
+            dir_path = path.rsplit('/', 1)[0] if '/' in path else ''
+            if dir_path:
+                script += f'mkdir -p {shlex.quote(dir_path)}\n'
+        script += f'echo {shlex.quote(encoded)} | base64 -d > {shlex.quote(path)}\n'
+        r = self._exec('bash -s', script, 30)
+        if r.get('exit_code', 1) != 0:
+            return {'error': r.get('stderr', '') or r.get('error', 'write failed')}
+        return {'ok': True}
+
+    def make_dirs(self, path: str) -> dict:
+        r = self._exec(f'mkdir -p {shlex.quote(path)}', '', 10)
+        if r.get('exit_code', 1) != 0:
+            return {'error': r.get('stderr', '') or r.get('error', 'mkdir failed')}
+        return {'ok': True}
 
     def destroy(self) -> dict:
         try:
