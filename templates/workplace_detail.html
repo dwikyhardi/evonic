@@ -139,8 +139,8 @@
         <div id="connection-actions" class="hidden bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mt-4">
             <h3 class="font-semibold text-gray-800 dark:text-gray-100 mb-3">Connection</h3>
             <div class="flex gap-3">
-                <button onclick="connectWorkplace()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md text-sm font-medium transition-colors">Connect</button>
-                <button onclick="disconnectWorkplace()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Disconnect</button>
+                <button id="btn-connect" onclick="connectWorkplace()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md text-sm font-medium transition-colors">Connect</button>
+                <button id="btn-disconnect" onclick="disconnectWorkplace()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Disconnect</button>
             </div>
         </div>
 
@@ -258,6 +258,10 @@ function applyWorkplaceData(h) {
         applyConnectorData(h.connector, h.status);
         loadBinaryPlatforms();
     }
+    // Toggle connect/disconnect buttons based on status
+    const isConnected = h.status === 'connected';
+    $('#btn-connect').toggleClass('hidden', isConnected);
+    $('#btn-disconnect').toggleClass('hidden', !isConnected);
 }
 
 function applyConnectorData(connector, homeStatus) {
@@ -509,6 +513,9 @@ function refreshStatus() {
         $('#status-json').text(JSON.stringify(data, null, 2));
         const dotCls = STATUS_DOT_CLS[data.status] || 'bg-gray-400';
         $('#workplace-status-dot').attr('class', 'w-3 h-3 rounded-full ' + dotCls);
+        const isConnected = data.status === 'connected';
+        $('#btn-connect').toggleClass('hidden', isConnected);
+        $('#btn-disconnect').toggleClass('hidden', !isConnected);
     });
 }
 
@@ -518,7 +525,7 @@ function connectWorkplace() {
         method: 'POST',
         success: function(r) {
             showToast(r.ok ? 'Connected' : (r.error || 'Failed'), r.ok ? 'success' : 'error');
-            setTimeout(refreshStatus, 500);
+            setTimeout(loadWorkplace, 500);
         },
         error: function(xhr) { showToast((xhr.responseJSON && xhr.responseJSON.error) || 'Error', 'error'); }
     });
@@ -528,7 +535,7 @@ function disconnectWorkplace() {
     $.ajax({
         url: '/api/workplaces/' + HOME_ID + '/disconnect',
         method: 'POST',
-        success: function() { showToast('Disconnected', 'success'); setTimeout(refreshStatus, 500); },
+        success: function() { showToast('Disconnected', 'success'); setTimeout(loadWorkplace, 500); },
         error: function() { showToast('Error disconnecting', 'error'); }
     });
 }
@@ -577,7 +584,7 @@ function startWorkplaceEventStream() {
     homeEventSource.addEventListener('connector_connected',    onConnectorEvent);
     homeEventSource.addEventListener('connector_disconnected', onConnectorEvent);
     homeEventSource.addEventListener('connector_paired',       onConnectorEvent);
-    homeEventSource.addEventListener('home_status_changed',    onConnectorEvent);
+    homeEventSource.addEventListener('workplace_status_changed',    onConnectorEvent);
 
     homeEventSource.onerror = function() {
         // Reconnect after 5s on error
