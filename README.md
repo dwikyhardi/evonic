@@ -93,7 +93,7 @@ Each agent has its own system prompt, assigned tools, knowledge base, and worksp
 
 ## Channels
 
-Currently only support for Telegram and WhatsApp, other channels coming soon.
+Currently only support for Telegram. WhatsApp, Discord, and Slack are coming soon.
 
 ---
 
