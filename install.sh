@@ -1,0 +1,293 @@
+#!/bin/sh
+# =============================================================================
+# Evonic Platform — Public Install Script
+# Served at: https://evonic.dev/install
+# Usage:    curl --proto '=https' --tlsv1.2 -sSf https://evonic.dev/install | sh
+#
+# Installs: evonic CLI → then user runs: evonic setup → evonic start -d
+# =============================================================================
+
+set -e
+
+# ── Configuration ────────────────────────────────────────────────────────────
+EVONIC_HOME="${EVONIC_HOME:-$HOME/.evonic}"
+REPO_URL="https://github.com/evonic/evonic.git"
+VENV_DIR="$EVONIC_HOME/venv"
+BIN_DIR="$EVONIC_HOME/bin"
+WRAPPER="$BIN_DIR/evonic"
+
+# ── Color helpers ────────────────────────────────────────────────────────────
+bold=""; red=""; green=""; yellow=""; blue=""; cyan=""; reset=""
+if [ -t 1 ] && [ -n "$TERM" ] && [ "$TERM" != "dumb" ]; then
+    bold="$(printf '\033[1m')"
+    red="$(printf '\033[31m')"
+    green="$(printf '\033[32m')"
+    yellow="$(printf '\033[33m')"
+    blue="$(printf '\033[34m')"
+    cyan="$(printf '\033[36m')"
+    reset="$(printf '\033[0m')"
+fi
+
+info()    { printf '%s' "$bold$blue"; printf '[INFO]    '; printf '%s' "$reset"; printf '%s\n' "$*"; }
+ok()      { printf '%s' "$bold$green"; printf '[OK]      '; printf '%s' "$reset"; printf '%s\n' "$*"; }
+warn()    { printf '%s' "$bold$yellow"; printf '[WARN]    '; printf '%s' "$reset"; printf '%s\n' "$*"; }
+err()     { printf '%s' "$bold$red"; printf '[ERROR]   '; printf '%s' "$reset"; printf '%s\n' "$*"; }
+step()    { printf '\n%s' "$bold$cyan"; printf '▶ %s' "$*"; printf '%s\n\n' "$reset"; }
+banner() {
+    printf '%s' "$cyan"
+    cat << 'EOBANNER'
+   ______                     _
+  / ____/___ _   _____  _____(_)____
+ / __/  / __ \ | / / _ \/ ___/ / ___/
+/ /___ / /_/ / |/ /  __/ /  / / /__
+/_____/ \____/|___/\___/_/  /_/\___/
+EOBANNER
+    printf '%s' "$reset"
+    printf '  %sEvonic Platform Installer%s\n' "$bold" "$reset"
+    printf '  %shttps://evonic.dev%s\n\n' "$blue" "$reset"
+}
+
+die() {
+    err "$*"
+    exit 1
+}
+
+# ── Step 1: Prerequisite checks ─────────────────────────────────────────────
+check_prereqs() {
+    step "Step 1/7: Checking prerequisites"
+
+    missing=""
+    for cmd in git python3 pip3; do
+        if command -v "$cmd" >/dev/null 2>&1; then
+            ok "$cmd found"
+        else
+            err "$cmd not found"
+            missing="$missing $cmd"
+        fi
+    done
+
+    if [ -n "$missing" ]; then
+        die "Missing prerequisites: $missing. Please install them and re-run."
+    fi
+}
+
+# ── Step 2: Clone or update repository ──────────────────────────────────────
+clone_repo() {
+    step "Step 2/7: Getting Evonic source code"
+
+    if [ -d "$EVONIC_HOME/.git" ]; then
+        info "Repository exists — pulling latest changes..."
+        git -C "$EVONIC_HOME" pull --ff-only origin main 2>/dev/null || \
+        git -C "$EVONIC_HOME" pull origin main 2>/dev/null || \
+        warn "Could not pull; continuing with existing code."
+        ok "Repository updated"
+    elif [ -d "$EVONIC_HOME" ]; then
+        warn "$EVONIC_HOME exists but is not a git repo. Removing and re-cloning..."
+        rm -rf "$EVONIC_HOME"
+        git clone --depth 1 "$REPO_URL" "$EVONIC_HOME"
+        ok "Repository cloned"
+    else
+        git clone --depth 1 "$REPO_URL" "$EVONIC_HOME"
+        ok "Repository cloned"
+    fi
+}
+
+# ── Step 3: Create Python virtual environment ───────────────────────────────
+create_venv() {
+    step "Step 3/7: Creating Python virtual environment"
+
+    if [ -f "$VENV_DIR/bin/python" ] || [ -f "$VENV_DIR/bin/python3" ]; then
+        ok "Virtual environment already exists — skipping"
+        return
+    fi
+
+    python3 -m venv "$VENV_DIR"
+    ok "Virtual environment created at $VENV_DIR"
+}
+
+# ── Step 4: Install Python dependencies ─────────────────────────────────────
+install_deps() {
+    step "Step 4/7: Installing Python dependencies"
+
+    pip="$VENV_DIR/bin/pip"
+    if [ ! -f "$pip" ]; then
+        pip="$VENV_DIR/bin/pip3"
+    fi
+
+    "$pip" install --upgrade pip --quiet
+    "$pip" install -r "$EVONIC_HOME/requirements.txt"
+    ok "Dependencies installed"
+}
+
+# ── Step 5: Create CLI wrapper script ───────────────────────────────────────
+create_wrapper() {
+    step "Step 5/7: Creating evonic CLI wrapper"
+
+    mkdir -p "$BIN_DIR"
+
+    cat > "$WRAPPER" << EOF
+#!/bin/sh
+# ── evonic CLI wrapper — auto-generated by install.sh ──
+EVONIC_HOME="\${EVONIC_HOME:-$EVONIC_HOME}"
+
+# Activate venv and run
+if [ -f "\$EVONIC_HOME/venv/bin/activate" ]; then
+    . "\$EVONIC_HOME/venv/bin/activate"
+fi
+
+cd "\$EVONIC_HOME"
+exec python3 -m cli "\$@"
+EOF
+
+    chmod +x "$WRAPPER"
+    ok "Wrapper script created at $WRAPPER"
+}
+
+# ── Step 6: PATH prompt ─────────────────────────────────────────────────────
+prompt_path() {
+    step "Step 6/7: Adding evonic to your PATH"
+
+    # Detect shell and profile file
+    shell_name="$(basename "${SHELL:-/bin/sh}")"
+    profile=""
+
+    case "$shell_name" in
+        zsh)  profile="$HOME/.zshrc" ;;
+        bash) profile="$HOME/.bashrc" ;;
+        fish) profile="$HOME/.config/fish/config.fish" ;;
+        *)    profile="$HOME/.profile" ;;
+    esac
+
+    if [ "$shell_name" = "fish" ]; then
+        path_line="set -gx PATH $BIN_DIR \$PATH"
+    else
+        path_line="export PATH=\"$BIN_DIR:\$PATH\""
+    fi
+
+    # Check if already in PATH
+    case ":$PATH:" in
+        *:"$BIN_DIR":*)
+            ok "$BIN_DIR is already in your PATH"
+            ;;
+        *)
+            printf '\n%s' "$yellow"
+            printf '  ┌─────────────────────────────────────────────────────────────────────┐\n'
+            printf '  │ %sAdd evonic to your PATH%s by adding this line to %s%s%s:      │\n' \
+                "$bold" "$reset" "$bold$blue" "$profile" "$reset"
+            printf '  │                                                                     │\n'
+            printf '  │   %s%s%s │\n' "$bold" "$path_line" "$reset"
+            printf '  │                                                                     │\n'
+            printf '  │ %sThen restart your shell or run:%s                                   │\n' "$cyan" "$reset"
+            printf '  │   %ssource %s%s │\n' "$bold" "$profile" "$reset"
+            printf '  └─────────────────────────────────────────────────────────────────────┘\n'
+            printf '\n%s' "$reset"
+
+            # Ask to auto-append
+            printf '%sAdd this to %s automatically? [Y/n]: %s' "$bold" "$profile" "$reset"
+            read -r auto_add
+            if [ "$auto_add" != "n" ] && [ "$auto_add" != "N" ]; then
+                if [ -f "$profile" ]; then
+                    echo "" >> "$profile"
+                fi
+                mkdir -p "$(dirname "$profile")"
+                echo "$path_line" >> "$profile"
+                ok "Added to $profile — run 'source $profile' or restart your shell"
+            else
+                warn "Skipped. Remember to add the line manually to use 'evonic' command."
+            fi
+            ;;
+    esac
+}
+
+# ── Step 7: Optional evonet binary ──────────────────────────────────────────
+download_evonet() {
+    step "Step 7/7: evonet binary (optional)"
+
+    printf '%sDownload the pre-built evonet binary? [Y/n]: %s' "$bold" "$reset"
+    read -r dl_evonet
+    if [ "$dl_evonet" = "n" ] || [ "$dl_evonet" = "N" ]; then
+        ok "Skipped evonet download"
+        return
+    fi
+
+    # Detect OS and architecture
+    os_name="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch="$(uname -m)"
+
+    case "$arch" in
+        x86_64|amd64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        armv7l) arch="armv7" ;;
+        *) warn "Unsupported architecture: $arch — skipping evonet"; return ;;
+    esac
+
+    case "$os_name" in
+        linux)    os_name="linux" ;;
+        darwin)   os_name="darwin" ;;
+        *)       warn "Unsupported OS: $os_name — skipping evonet"; return ;;
+    esac
+
+    evonet_url="https://github.com/evonic/evonic/releases/latest/download/evonet-${os_name}-${arch}"
+    evonet_dest="$BIN_DIR/evonet"
+
+    info "Downloading evonet for ${os_name}/${arch}..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -sSfL "$evonet_url" -o "$evonet_dest" || {
+            warn "Failed to download evonet from $evonet_url — release may not exist yet"
+            return
+        }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "$evonet_url" -O "$evonet_dest" || {
+            warn "Failed to download evonet from $evonet_url — release may not exist yet"
+            return
+        }
+    else
+        warn "Neither curl nor wget found — skipping evonet download"
+        return
+    fi
+
+    chmod +x "$evonet_dest"
+    ok "evonet installed at $evonet_dest"
+}
+
+# ── Main ────────────────────────────────────────────────────────────────────
+main() {
+    banner
+
+    info "EVONIC_HOME = $EVONIC_HOME"
+    info "Shell       = ${SHELL:-unknown}"
+
+    check_prereqs
+    clone_repo
+    create_venv
+    install_deps
+    create_wrapper
+    prompt_path
+    download_evonet
+
+    # ── Done ────────────────────────────────────────────────────────────────
+    printf '\n%s' "$bold$green"
+    cat << 'EODONE'
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║                         ✅  Evonic installed!                                ║
+║                                                                              ║
+EODONE
+    printf '%s' "$reset"
+
+    if ! echo ":$PATH:" | grep -q ":$BIN_DIR:"; then
+        printf '%s  ⚡  %sApply PATH now:  %ssource %s%s\n' \
+            "$bold$yellow" "$reset" "$bold" "$profile" "$reset"
+    else
+        printf '%s  ⚡  %sReady to use:%s\n' "$bold$green" "$reset" "$reset"
+    fi
+
+    printf '%s  ══  Next steps:%s\n' "$bold" "$reset"
+    printf '%s     1.  %sevonic setup       %s%s# configure LLM provider & super agent%s\n' \
+        "$bold" "$cyan" "$reset" "$blue" "$reset"
+    printf '%s     2.  %sevonic start -d    %s%s# start the platform as a daemon%s\n' \
+        "$bold" "$cyan" "$reset" "$blue" "$reset"
+    printf '\n'
+}
+
+main
