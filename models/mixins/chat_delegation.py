@@ -33,13 +33,17 @@ class ChatDelegationMixin:
         if not agent_id:
             return -1
         result = self._chat_db(agent_id).add_chat_message(session_id, role, content, tool_calls, tool_call_id, metadata=metadata)
-        # Update last_active_at in main agents table
-        try:
-            with self._connect() as conn:
-                conn.execute("UPDATE agents SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?", (agent_id,))
-                conn.commit()
-        except Exception:
-            pass
+        # Update last_active_at only for user/assistant messages — NOT for tool
+        # calls or tool results, which can fire dozens of times per turn and
+        # cause constant write pressure on the main DB (WAL checkpoint contention
+        # blocks reads like db.get_agent() on the agent detail page).
+        if role in ('user', 'assistant'):
+            try:
+                with self._connect() as conn:
+                    conn.execute("UPDATE agents SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?", (agent_id,))
+                    conn.commit()
+            except Exception:
+                pass
         return result
 
     def touch_agent_active(self, agent_id: str) -> None:
