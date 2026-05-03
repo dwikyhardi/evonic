@@ -43,7 +43,7 @@ Evonic is an agentic AI platform for building, managing, and orchestrating AI ag
 One-liner install:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://evonic.dev/install.sh | sh
+curl -fsSL https://evonic.dev/install.sh | bash
 ```
 
 This will clone the repo, set up a virtual environment, install dependencies, setup configuration, and walk you through adding `evonic` to your PATH.

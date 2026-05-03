@@ -1405,6 +1405,15 @@ def setup_wizard():
     """Interactive first-time setup wizard for Evonic (CLI)."""
     import getpass
 
+    # ── Pipe-safe input: when stdin is piped (e.g., curl | bash → evonic setup),
+    #    rebind sys.stdin to /dev/tty so input() and getpass.getpass()
+    #    read directly from the terminal instead of hitting EOF. ──
+    if not sys.stdin.isatty():
+        try:
+            sys.stdin = open('/dev/tty', 'r')
+        except OSError:
+            pass  # No /dev/tty available; existing EOFError handlers will abort gracefully
+
     db = _get_db()
     if db.has_super_agent():
         print("Setup is already complete. Super agent already exists.")
