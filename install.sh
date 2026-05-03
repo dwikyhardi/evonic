@@ -2,7 +2,7 @@
 # =============================================================================
 # Evonic Platform — Public Install Script
 # Served at: https://evonic.dev/install
-# Usage:    curl --proto '=https' --tlsv1.2 -sSf https://evonic.dev/install | sh
+# Usage:    curl -fsSL https://evonic.dev/install | bash
 #
 # Installs: Evonic → evonic setup → evonic start -d
 # =============================================================================
@@ -37,12 +37,12 @@ banner() {
     printf '%s' "$cyan"
     cat << 'EOBANNER'
 
-___________                  .__.        
-\_   _____/__  ______   ____ |__| ____  
- |    __)_\  \/ /    \ /    \|  |/ ___\ 
+___________                  .__.
+\_   _____/__  ______   ____ |__| ____
+ |    __)_\  \/ /    \ /    \|  |/ ___\
  |        \\   (   O  )   |  \  \  \____
 /_______  / \_/ \____/|___|  /__|\___  /
-        \/                 \/        \/ 
+        \/                 \/        \/
 
 EOBANNER
     printf '%s' "$reset"
@@ -95,7 +95,7 @@ clone_repo() {
     fi
 }
 
-# ── Step 3: Create Python virtual environment ───────────────────────────────
+# ── Step 3: Create Python virtual environment ────────────────────────────────
 create_venv() {
     step "Step 3/6: Creating Python virtual environment"
 
@@ -122,7 +122,7 @@ install_deps() {
     ok "Dependencies installed"
 }
 
-# ── Step 5: Create CLI wrapper script ───────────────────────────────────────
+# ── Step 5: Create CLI wrapper script ────────────────────────────────────────
 create_wrapper() {
     step "Step 5/6: Creating evonic CLI wrapper"
 
@@ -152,65 +152,38 @@ prompt_path() {
 
     # Detect shell and profile file
     shell_name="$(basename "${SHELL:-/bin/sh}")"
-    profile=""
-
     case "$shell_name" in
-        zsh)  profile="$HOME/.zshrc" ;;
-        bash) profile="$HOME/.bashrc" ;;
-        fish) profile="$HOME/.config/fish/config.fish" ;;
+        zsh) profile="${ZDOTDIR:-$HOME}/.zshrc" ;;
+        bash) profile="$HOME/.bashrc"
+              [ ! -f "$profile" ] && profile="$HOME/.bash_profile" ;;
         *)    profile="$HOME/.profile" ;;
     esac
 
-    if [ "$shell_name" = "fish" ]; then
-        path_line="set -gx PATH $BIN_DIR \$PATH"
-    else
-        path_line="export PATH=\"$BIN_DIR:\$PATH\""
+    if echo ":$PATH:" | grep -q ":$BIN_DIR:"; then
+        ok "evonic is already in your PATH"
+        return
     fi
 
-    # Check if already in PATH
-    case ":$PATH:" in
-        *:"$BIN_DIR":*)
-            ok "$BIN_DIR is already in your PATH"
-            ;;
-        *)
-            printf '\n'
-            warn "evonic is not in your PATH yet."
-            printf '  %sAdd this line to %s%s%s:%s\n' "$bold" "$bold$blue" "$profile" "$reset" "$reset"
-            printf '\n'
-            printf '    %s%s%s\n' "$bold" "$path_line" "$reset"
-            printf '\n'
-            printf '  %sThen run:  %ssource %s%s\n' "$reset" "$bold" "$profile" "$reset"
-            printf '\n'
-
-            # Ask to auto-append
-            printf '%sAdd this to %s automatically? [Y/n]: %s' "$bold" "$profile" "$reset"
-            read -r auto_add
-            if [ "$auto_add" != "n" ] && [ "$auto_add" != "N" ]; then
-                if [ -f "$profile" ]; then
-                    echo "" >> "$profile"
-                fi
-                mkdir -p "$(dirname "$profile")"
-                echo "$path_line" >> "$profile"
-                ok "Added to $profile \u2014 run 'source $profile' or restart your shell"
-            else
-                warn "Skipped. Remember to add the line manually to use 'evonic' command."
-            fi
-            ;;
-    esac
+    info "Adding evonic to your PATH in $profile"
+    printf '\n# Added by Evonic installer\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$profile"
+    ok "PATH updated. Restart your shell or run: source $profile"
 }
 
-# ── Main ────────────────────────────────────────────────────────────────────
+# ── Main ─────────────────────────────────────────────────────────────────────
 main() {
     banner
 
-    info "EVONIC_HOME = $EVONIC_HOME"
-    info "Shell       = ${SHELL:-unknown}"
+    # Quick confirmation — force prompt even when piped via curl | bash
+    printf '%sThis will install Evonic to: %s%s\n' "$bold" "$reset" "$EVONIC_HOME"
+    printf '%sContinue? [Y/n]%s ' "$bold" "$reset"
+    if [ -t 0 ]; then
+        read -r reply
+    else
+        read -r reply < /dev/tty
+    fi
 
-    printf '\n%sThis will install Evonic into %s%s%s.\n' "$bold" "$blue" "$EVONIC_HOME" "$reset"
-    printf '%sProceed? [Y/n]: %s' "$bold" "$reset"
-    read -r answer
-    case "$answer" in
-        n|N|no|NO|No) info "Aborted by user."; exit 0 ;;
+    case "$reply" in
+        [nN]|[nN][oO]) die "Installation cancelled." ;;
         *) info "Starting installation..." ;;
     esac
 
@@ -221,7 +194,7 @@ main() {
     create_wrapper
     prompt_path
 
-    # ── Done ──────────────────────────────────────────────────────────────────
+    # ── Done ────────────────────────────────────────────────────────────────
     printf '\n%s' "$bold$green"
     cat << 'EODONE'
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -242,6 +215,11 @@ EODONE
     "$WRAPPER" setup
 
     printf '\n%s  ──  Next step:%s\n' "$bold" "$reset"
+    if ! echo ":$PATH:" | grep -q ":$BIN_DIR:"; then
+        printf '%s     %sFirst, add evonic to your PATH:%s\n' "$bold" "$yellow" "$reset"
+        printf '%s     %ssource %s%s\n' "$bold" "$cyan" "$profile" "$reset"
+        printf '%s     %s(or restart your terminal)%s\n\n' "$bold" "$blue" "$reset"
+    fi
     printf '%s     %sevonic start -d    %s%s# start the platform as a daemon%s\n'         "$bold" "$cyan" "$reset" "$blue" "$reset"
     printf '\n'
 }
