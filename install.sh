@@ -54,7 +54,7 @@ die() {
 
 # ── Step 1: Prerequisite checks ─────────────────────────────────────────────
 check_prereqs() {
-    step "Step 1/7: Checking prerequisites"
+    step "Step 1/6: Checking prerequisites"
 
     missing=""
     for cmd in git python3 pip3; do
@@ -73,7 +73,7 @@ check_prereqs() {
 
 # ── Step 2: Clone or update repository ──────────────────────────────────────
 clone_repo() {
-    step "Step 2/7: Getting Evonic source code"
+    step "Step 2/6: Getting Evonic source code"
 
     if [ -d "$EVONIC_HOME/.git" ]; then
         info "Repository exists — pulling latest changes..."
@@ -94,7 +94,7 @@ clone_repo() {
 
 # ── Step 3: Create Python virtual environment ───────────────────────────────
 create_venv() {
-    step "Step 3/7: Creating Python virtual environment"
+    step "Step 3/6: Creating Python virtual environment"
 
     if [ -f "$VENV_DIR/bin/python" ] || [ -f "$VENV_DIR/bin/python3" ]; then
         ok "Virtual environment already exists — skipping"
@@ -107,7 +107,7 @@ create_venv() {
 
 # ── Step 4: Install Python dependencies ─────────────────────────────────────
 install_deps() {
-    step "Step 4/7: Installing Python dependencies"
+    step "Step 4/6: Installing Python dependencies"
 
     pip="$VENV_DIR/bin/pip"
     if [ ! -f "$pip" ]; then
@@ -121,7 +121,7 @@ install_deps() {
 
 # ── Step 5: Create CLI wrapper script ───────────────────────────────────────
 create_wrapper() {
-    step "Step 5/7: Creating evonic CLI wrapper"
+    step "Step 5/6: Creating evonic CLI wrapper"
 
     mkdir -p "$BIN_DIR"
 
@@ -145,7 +145,7 @@ EOF
 
 # ── Step 6: PATH prompt ─────────────────────────────────────────────────────
 prompt_path() {
-    step "Step 6/7: Adding evonic to your PATH"
+    step "Step 6/6: Adding evonic to your PATH"
 
     # Detect shell and profile file
     shell_name="$(basename "${SHELL:-/bin/sh}")"
@@ -199,57 +199,6 @@ prompt_path() {
     esac
 }
 
-# ── Step 7: Optional evonet binary ──────────────────────────────────────────
-download_evonet() {
-    step "Step 7/7: evonet binary (optional)"
-
-    printf '%sDownload the pre-built evonet binary? [Y/n]: %s' "$bold" "$reset"
-    read -r dl_evonet
-    if [ "$dl_evonet" = "n" ] || [ "$dl_evonet" = "N" ]; then
-        ok "Skipped evonet download"
-        return
-    fi
-
-    # Detect OS and architecture
-    os_name="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    arch="$(uname -m)"
-
-    case "$arch" in
-        x86_64|amd64) arch="amd64" ;;
-        aarch64|arm64) arch="arm64" ;;
-        armv7l) arch="armv7" ;;
-        *) warn "Unsupported architecture: $arch — skipping evonet"; return ;;
-    esac
-
-    case "$os_name" in
-        linux)    os_name="linux" ;;
-        darwin)   os_name="darwin" ;;
-        *)       warn "Unsupported OS: $os_name — skipping evonet"; return ;;
-    esac
-
-    evonet_url="https://github.com/evonic/evonic/releases/latest/download/evonet-${os_name}-${arch}"
-    evonet_dest="$BIN_DIR/evonet"
-
-    info "Downloading evonet for ${os_name}/${arch}..."
-    if command -v curl >/dev/null 2>&1; then
-        curl -sSfL "$evonet_url" -o "$evonet_dest" || {
-            warn "Failed to download evonet from $evonet_url — release may not exist yet"
-            return
-        }
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q "$evonet_url" -O "$evonet_dest" || {
-            warn "Failed to download evonet from $evonet_url — release may not exist yet"
-            return
-        }
-    else
-        warn "Neither curl nor wget found — skipping evonet download"
-        return
-    fi
-
-    chmod +x "$evonet_dest"
-    ok "evonet installed at $evonet_dest"
-}
-
 # ── Main ────────────────────────────────────────────────────────────────────
 main() {
     banner
@@ -263,7 +212,6 @@ main() {
     install_deps
     create_wrapper
     prompt_path
-    download_evonet
 
     # ── Done ────────────────────────────────────────────────────────────────
     printf '\n%s' "$bold$green"
