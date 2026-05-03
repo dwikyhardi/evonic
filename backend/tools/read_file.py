@@ -9,7 +9,7 @@ except ImportError:
 
 from backend.tools._workspace import resolve_workspace_path
 
-_MAX_FILE_SIZE = 100 * 1024  # 100 KB
+_MAX_FILE_SIZE = 400 * 1024  # 400 KB
 _CHUNK_CHARS = 8000  # max content chars per page (leaves room for header/footer within 8KB LLM limit)
 
 
@@ -29,7 +29,7 @@ def read_file(file_path: str, offset: int = 1) -> str:
 
     Constraints:
     - The file must be a text file (not binary).
-    - The file size must not exceed 100KB.
+    - The file size must not exceed 400KB.
     - When the file is large, returns a paginated chunk starting from `offset` (1-based line number).
 
     Args:
@@ -47,8 +47,8 @@ def read_file(file_path: str, offset: int = 1) -> str:
     if file_size > _MAX_FILE_SIZE:
         size_kb = file_size / 1024
         return (
-            f"Error: File size is {size_kb:.1f}KB ({file_size} bytes) which exceeds the 100KB "
-            f"limit. Only files up to 100KB (102,400 bytes) can be read with this tool."
+            f"Error: File size is {size_kb:.1f}KB ({file_size} bytes) which exceeds the 400KB "
+            f"limit. Only files up to 400KB (409,600 bytes) can be read with this tool."
         )
 
     # Reject binary files
@@ -136,8 +136,8 @@ def execute(agent, args: dict) -> dict:
         if file_size > _MAX_FILE_SIZE:
             size_kb = file_size / 1024
             return (
-                f"Error: File size is {size_kb:.1f}KB ({file_size} bytes) which exceeds the 100KB "
-                f"limit. Only files up to 100KB (102,400 bytes) can be read with this tool."
+                f"Error: File size is {size_kb:.1f}KB ({file_size} bytes) which exceeds the 400KB "
+                f"limit. Only files up to 400KB (409,600 bytes) can be read with this tool."
             )
 
         if st.get('is_binary'):
@@ -215,10 +215,10 @@ def test_execute():
         f.write(b"\x00\x01\x02\x03binary content")
     print(read_file(binary_file))
 
-    print("\n--- Test 4: File too large (>100KB) ---")
+    print("\n--- Test 4: File too large (>400KB) ---")
     large_file = "/tmp/evonic_read_file_test_large.txt"
     with open(large_file, "w") as f:
-        f.write("x" * (101 * 1024))
+        f.write("x" * (401 * 1024))
     print(read_file(large_file))
 
     # Cleanup
