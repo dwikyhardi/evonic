@@ -1653,7 +1653,44 @@ def setup_wizard():
     print()
     print(f"  Super agent '{agent_name}' created successfully.")
 
-    # ── Step 10: Password Setup ──
+    # ── Step 10: Telegram Binding ──
+    bot_token = ""
+    print()
+    print("  Telegram Integration")
+    print("  " + "─" * 30)
+    print("  Connect a Telegram bot so you can chat with your")
+    print("  super agent directly through Telegram.")
+    print()
+    try:
+        telegram_choice = input("  Connect Telegram bot? [y/N]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("\n  Skipped.")
+        telegram_choice = "n"
+    if telegram_choice in ("y", "yes"):
+        try:
+            bot_token = getpass.getpass("  Telegram Bot Token: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Aborted.")
+            sys.exit(1)
+        if bot_token:
+            try:
+                db.create_channel({
+                    "agent_id": agent_id,
+                    "type": "telegram",
+                    "name": "Telegram Bot",
+                    "config": {"bot_token": bot_token},
+                    "enabled": True,
+                })
+                print("  Telegram bot connected successfully.")
+                print(f"  You can now chat with '{agent_name}' via Telegram.")
+            except Exception as e:
+                print(f"  Failed to connect Telegram bot: {e}")
+        else:
+            print("  No token provided. Skipping Telegram setup.")
+    else:
+        print("  Skipped. You can add Telegram later from the web dashboard.")
+
+    # ── Step 11: Password Setup ──
     from werkzeug.security import generate_password_hash
     print()
     print("  Set Web Dashboard Password")
@@ -1699,7 +1736,7 @@ def setup_wizard():
         "keep_releases": 3,
         "python_bin": "python3",
         "uv_bin": None,
-        "telegram_bot_token": "",
+        "telegram_bot_token": bot_token,
         "telegram_chat_id": "",
     }
     sup_cfg_dir = os.path.join(ROOT, "supervisor")
