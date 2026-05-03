@@ -9,6 +9,7 @@ Usage inside runpy:
 import fnmatch
 import os
 import subprocess
+from pathlib import PurePosixPath
 
 # Absolute path to the bundled native binaries directory (evonic/bin/).
 # Resolves correctly inside the container regardless of where the package is mounted.
@@ -37,9 +38,44 @@ def _load_gitignore_patterns(path: str) -> list:
 
 
 def _is_ignored(name: str, patterns: list) -> bool:
+    """Check if *name* matches any gitignore pattern.
+
+    name is ALWAYS a bare name (no path separators). For file filtering
+    the caller passes both fname and full relpath as separate calls;
+    this function handles both cases correctly via the presence of '/'
+    in the pattern itself.
+
+    Key difference from fnmatch: gitignore ``*`` does NOT cross ``/``.
+    We use PurePosixPath.match() for patterns containing ``/`` to get
+    the correct boundary behavior.
+    """
     for pat in patterns:
-        if fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(name, pat.rstrip('/')):
-            return True
+        # Skip negation patterns — we don't support un-ignore
+        if pat.startswith('!'):
+            continue
+        # Strip trailing slash (directory-only marker)
+        clean = pat.rstrip('/')
+        if not clean:
+            continue
+        if '/' in clean:
+            # Pattern contains a path separator.
+            if clean.endswith('/**'):
+                # gitignore: `dir/**` matches everything under `dir/`
+                # pathlib.match() does NOT handle ** as a final component,
+                # so we match by prefix.
+                prefix = clean[:-3]
+                if name == prefix or name.startswith(prefix + '/'):
+                    return True
+            elif PurePosixPath(name).match(clean):
+                # PurePosixPath.match() correctly prevents * from crossing /
+                # boundaries, unlike fnmatch which lets * match / in 3.11+.
+                return True
+        else:
+            # Pattern has no separator: match against the basename.
+            # This mirrors gitignore behavior where patterns without /
+            # match at any directory depth against the filename only.
+            if fnmatch.fnmatch(name, clean):
+                return True
     return False
 
 
