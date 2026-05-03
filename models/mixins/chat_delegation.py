@@ -1,4 +1,9 @@
+import os
 from typing import Dict, Any, List, Optional
+
+import sqlite3
+
+from models.chat import AGENTS_DIR
 
 
 class ChatDelegationMixin:
@@ -180,53 +185,115 @@ class ChatDelegationMixin:
         return session
 
     def get_all_sessions(self, search: str = None, limit: int = 50, offset: int = 0,
-                          exclude_test: bool = True) -> List[Dict[str, Any]]:
-        """Aggregate sessions across all per-agent chat DBs."""
+                          exclude_test: bool = True) -> tuple:
+        """Aggregate sessions across all per-agent chat DBs using ATTACH + UNION ALL.
+
+        Sorting, filtering, and pagination are done by SQLite instead of loading
+        every session into Python memory and doing it there."""
         agents = self.get_agents()
-        all_sessions = []
-        for agent in agents:
-            chat_db = self._chat_db(agent['id'])
-            sessions = chat_db.get_sessions_with_preview()
-            for s in sessions:
-                s['agent_name'] = agent.get('name', 'Unknown')
-                # Enrich channel info
-                if s.get('channel_id'):
-                    ch = self.get_channel(s['channel_id'])
-                    s['channel_type'] = ch.get('type') if ch else None
-                    s['channel_name'] = ch.get('name') if ch else None
-                else:
-                    s['channel_type'] = None
-                    s['channel_name'] = None
-            all_sessions.extend(sessions)
-        # Enrich agent-to-agent sessions with peer agent name
-        agent_map = {a['id']: a.get('name', 'Unknown') for a in agents}
-        for s in all_sessions:
-            euid = s.get('external_user_id', '')
-            if euid.startswith('__agent__'):
-                peer_agent_id = euid[len('__agent__'):]
-                peer_name = agent_map.get(peer_agent_id)
-                if peer_name:
-                    s['peer_agent_name'] = peer_name
-        # Filter out test chat sessions (web_test user with no channel)
-        if exclude_test:
-            all_sessions = [s for s in all_sessions
-                            if not (s.get('external_user_id') == 'web_test'
-                                    and not s.get('channel_id'))]
-        # Filter by search
-        if search:
-            q = search.lower()
-            all_sessions = [s for s in all_sessions
-                            if q in (s.get('agent_name') or '').lower()
-                            or q in (s.get('external_user_id') or '').lower()
-                            or q in (s.get('peer_agent_name') or '').lower()]
-        # Sort by updated_at descending
-        all_sessions.sort(key=lambda s: s.get('updated_at') or '', reverse=True)
-        total = len(all_sessions)
-        if limit > 0:
-            all_sessions = all_sessions[offset:offset + limit]
-        else:
-            all_sessions = []
-        return all_sessions, total
+        if not agents:
+            return [], 0
+
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+
+            # Raise ATTACH limit — one per agent + main DB
+            max_dbs = len(agents) + 1
+            if max_dbs > 10:
+                conn.execute(f"PRAGMA max_attached = {max_dbs}")
+
+            attached = []
+            for agent in agents:
+                aid = agent['id']
+                db_path = os.path.join(AGENTS_DIR, aid, 'chat.db')
+                if not os.path.exists(db_path):
+                    continue
+                safe_id = aid.replace('-', '_').replace('.', '_').replace('"', '_')
+                alias = f"a_{safe_id}"
+                conn.execute(f'ATTACH DATABASE ? AS "{alias}"', (db_path,))
+                attached.append((aid, alias))
+
+            if not attached:
+                return [], 0
+
+            # Build UNION ALL across all agent chat DBs.
+            # Two versions: one with message-count/preview subqueries for the data
+            # query, and a lightweight one (no correlated subqueries) for the COUNT.
+            _qmsg = 'SELECT m2.content FROM "{a}".chat_messages m2 WHERE m2.session_id = s.id AND m2.role IN (\'user\', \'assistant\') AND m2.content IS NOT NULL ORDER BY m2.created_at DESC LIMIT 1'
+            _qrole = 'SELECT m3.role FROM "{a}".chat_messages m3 WHERE m3.session_id = s.id AND m3.role IN (\'user\', \'assistant\') AND m3.content IS NOT NULL ORDER BY m3.created_at DESC LIMIT 1'
+            _qcnt = 'SELECT COUNT(*) FROM "{a}".chat_messages m WHERE m.session_id = s.id'
+
+            arms = []
+            light_arms = []
+            for aid, alias in attached:
+                arms.append(f'''
+                    SELECT s.id, s.agent_id, s.channel_id, s.external_user_id,
+                           s.bot_enabled, s.created_at, s.updated_at,
+                           ({_qcnt.format(a=alias)}) AS message_count,
+                           ({_qmsg.format(a=alias)}) AS last_message,
+                           ({_qrole.format(a=alias)}) AS last_message_role
+                    FROM "{alias}".chat_sessions s
+                    WHERE s.archived = 0
+                ''')
+                light_arms.append(
+                    f'SELECT agent_id, external_user_id, channel_id, updated_at FROM "{alias}".chat_sessions WHERE archived = 0'
+                )
+
+            union_body = " UNION ALL ".join(arms)
+            light_union = " UNION ALL ".join(light_arms)
+
+            # WHERE clause shared by both queries
+            where_parts = []
+            params = []
+
+            if exclude_test:
+                where_parts.append(
+                    "NOT (combined.external_user_id = 'web_test' AND combined.channel_id IS NULL)"
+                )
+
+            if search:
+                q = f"%{search}%"
+                where_parts.append(
+                    "(ag.name LIKE ? OR combined.external_user_id LIKE ? OR peer.name LIKE ?)"
+                )
+                params.extend([q, q, q])
+
+            where_sql = " AND ".join(where_parts) if where_parts else "1=1"
+
+            # ---- COUNT query (lightweight, no correlated subqueries) ----
+            count_sql = f"""
+                SELECT COUNT(*) FROM ({light_union}) combined
+                JOIN agents ag ON ag.id = combined.agent_id
+                LEFT JOIN agents peer ON (
+                    combined.external_user_id LIKE '__agent__%'
+                    AND peer.id = substr(combined.external_user_id, 10)
+                )
+                WHERE {where_sql}
+            """
+            total = conn.execute(count_sql, params).fetchone()[0]
+
+            if limit <= 0:
+                return [], total
+
+            # ---- Data query (with message counts and previews) ----
+            data_sql = f"""
+                SELECT combined.*, ag.name AS agent_name,
+                       ch.type AS channel_type, ch.name AS channel_name,
+                       peer.name AS peer_agent_name
+                FROM ({union_body}) combined
+                JOIN agents ag ON ag.id = combined.agent_id
+                LEFT JOIN channels ch ON ch.id = combined.channel_id
+                LEFT JOIN agents peer ON (
+                    combined.external_user_id LIKE '__agent__%'
+                    AND peer.id = substr(combined.external_user_id, 10)
+                )
+                WHERE {where_sql}
+                ORDER BY combined.updated_at DESC
+                LIMIT ? OFFSET ?
+            """
+            rows = conn.execute(data_sql, params + [limit, offset]).fetchall()
+
+            return [dict(r) for r in rows], total
 
     def _find_agent_for_session(self, session_id: str) -> Optional[str]:
         """Look up which agent owns a session by scanning agent chat DBs."""
