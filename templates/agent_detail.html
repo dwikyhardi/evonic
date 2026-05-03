@@ -715,7 +715,7 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=36"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=37"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 function showToast(message, type = 'success') {
@@ -1925,10 +1925,13 @@ async function restoreActiveReasoning() {
         if (!events.length) return;
 
         // Only replay events from the current in-progress turn.
-        // Discard everything up to and including the last 'done' so a completed
-        // turn is never replayed when the user sends a new message.
+        // Discard everything up to and including the last 'done' OR 'turn_split' so
+        // that pre-split events (already rendered by renderEntries from JSONL) are not
+        // replayed again — which would create a duplicate thinking bubble for turn 1.
         const lastDoneIdx = events.reduce((idx, ev, i) => ev.event === 'done' ? i : idx, -1);
-        const replayEvents = lastDoneIdx >= 0 ? events.slice(lastDoneIdx + 1) : events;
+        const lastSplitIdx = events.reduce((idx, ev, i) => ev.event === 'turn_split' ? i : idx, -1);
+        const cutIdx = Math.max(lastDoneIdx, lastSplitIdx);
+        const replayEvents = cutIdx >= 0 ? events.slice(cutIdx + 1) : events;
         if (!replayEvents.length) return;
 
         // Replay trace into a new thinking bubble.
