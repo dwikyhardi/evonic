@@ -55,6 +55,9 @@ class WhatsAppChannel(BaseChannel):
         self._llm_thinking_handler = None
         # Maps external_user_id (bare number) → full WhatsApp JID for reliable replies
         self._jid_map: Dict[str, str] = {}
+        # Debounce state for llm_thinking typing indicator
+        self._typing_timer: Dict[str, threading.Timer] = {}
+        self._typing_lock = threading.Lock()
 
     @staticmethod
     def get_channel_type() -> str:
@@ -126,7 +129,25 @@ class WhatsAppChannel(BaseChannel):
                 _logger.error("WhatsApp approval resolution send failed: %s", e)
 
         def _on_llm_thinking(data):
-            pass  # WhatsApp typing indicators not reliably supported via Baileys
+            if data.get('channel_id') != self.channel_id:
+                return
+            user_id = data.get('external_user_id')
+            if not user_id:
+                return
+            # Debounce: cancel any pending timer, fire after 3 s idle to avoid spamming
+            with self._typing_lock:
+                existing = self._typing_timer.pop(user_id, None)
+                if existing:
+                    existing.cancel()
+
+                def _fire():
+                    with self._typing_lock:
+                        self._typing_timer.pop(user_id, None)
+                    self.send_typing(user_id)
+
+                t = threading.Timer(3.0, _fire)
+                self._typing_timer[user_id] = t
+                t.start()
 
         self._approval_required_handler = _on_approval_required
         self._approval_resolved_handler = _on_approval_resolved
@@ -274,6 +295,21 @@ class WhatsAppChannel(BaseChannel):
 
         response = _strip_markdown(result.get('response') or '')
         if response and response != "(No response)":
+            # Human-like typing delay relative to response length
+            _TYPING_SPEED = 15   # chars/sec
+            _MIN_DELAY = 1.0     # seconds
+            _MAX_DELAY = 8.0     # seconds
+            _TYPING_REFRESH = 5.0  # re-send composing every N seconds during delay
+
+            delay = max(_MIN_DELAY, min(len(response) / _TYPING_SPEED, _MAX_DELAY))
+            self.send_typing(sender)
+            deadline = time.monotonic() + delay
+            while time.monotonic() < deadline:
+                remaining = deadline - time.monotonic()
+                time.sleep(min(_TYPING_REFRESH, remaining))
+                if time.monotonic() < deadline:
+                    self.send_typing(sender)
+
             for chunk in _split_message(response):
                 self._do_send(sender, chunk)
 
@@ -283,6 +319,14 @@ class WhatsAppChannel(BaseChannel):
             'external_user_id': sender,
             'message': response,
         })
+
+    def send_typing(self, external_user_id: str):
+        """Send composing presence to the given user."""
+        to = self._jid_map.get(external_user_id, external_user_id)
+        try:
+            self._bridge_post('/typing', {'to': to})
+        except Exception as e:
+            _logger.debug("WhatsApp typing indicator failed for %s: %s", external_user_id, e)
 
     def get_qr(self) -> dict:
         """Fetch QR code data from the bridge."""
