@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import threading
 import config
 from models.schema import SchemaMixin, _migrate_db_to_subdir
 from models.mixins import (
@@ -33,15 +34,27 @@ class Database(
 ):
     def __init__(self, db_path: str = config.DB_PATH):
         self.db_path = db_path
+        self._tlocal = threading.local()
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         _migrate_db_to_subdir(db_path)
         self._init_tables()
 
     def _connect(self) -> sqlite3.Connection:
-        """Create a connection with WAL mode and busy timeout for concurrency."""
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.execute("PRAGMA busy_timeout = 10000")
-        conn.execute("PRAGMA journal_mode=WAL")
+        """Return a thread-local cached connection with WAL mode and busy timeout.
+
+        The connection is created once per thread and reused across all
+        ``with self._connect() as conn:`` calls.  sqlite3.Connection.__exit__
+        handles transactions but does not close, so the connection stays
+        alive for the lifetime of the thread.
+        """
+        conn = getattr(self._tlocal, 'conn', None)
+        if conn is None:
+            conn = sqlite3.connect(self.db_path, timeout=10)
+            conn.execute("PRAGMA busy_timeout = 10000")
+            conn.execute("PRAGMA journal_mode=WAL")
+            self._tlocal.conn = conn
+        # Reset shared mutable state so every "borrow" starts clean
+        conn.row_factory = None
         return conn
 
 
