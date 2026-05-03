@@ -4,14 +4,14 @@
 # Served at: https://evonic.dev/install
 # Usage:    curl --proto '=https' --tlsv1.2 -sSf https://evonic.dev/install | sh
 #
-# Installs: evonic CLI → then user runs: evonic setup → evonic start -d
+# Installs: Evonic → evonic setup → evonic start -d
 # =============================================================================
 
 set -e
 
 # ── Configuration ────────────────────────────────────────────────────────────
 EVONIC_HOME="${EVONIC_HOME:-$HOME/.evonic}"
-REPO_URL="https://github.com/evonic/evonic.git"
+REPO_URL="https://github.com/anvie/evonic.git"
 VENV_DIR="$EVONIC_HOME/venv"
 BIN_DIR="$EVONIC_HOME/bin"
 WRAPPER="$BIN_DIR/evonic"
@@ -36,11 +36,14 @@ step()    { printf '\n%s' "$bold$cyan"; printf '▶ %s' "$*"; printf '%s\n\n' "$
 banner() {
     printf '%s' "$cyan"
     cat << 'EOBANNER'
-   ______                     _
-  / ____/___ _   _____  _____(_)____
- / __/  / __ \ | / / _ \/ ___/ / ___/
-/ /___ / /_/ / |/ /  __/ /  / / /__
-/_____/ \____/|___/\___/_/  /_/\___/
+
+___________                  .__.        
+\_   _____/__  ______   ____ |__| ____  
+ |    __)_\  \/ /    \ /    \|  |/ ___\ 
+ |        \\   (   O  )   |  \  \  \____
+/_______  / \_/ \____/|___|  /__|\___  /
+        \/                 \/        \/ 
+
 EOBANNER
     printf '%s' "$reset"
     printf '  %sEvonic Platform Installer%s\n' "$bold" "$reset"
@@ -170,17 +173,14 @@ prompt_path() {
             ok "$BIN_DIR is already in your PATH"
             ;;
         *)
-            printf '\n%s' "$yellow"
-            printf '  ┌─────────────────────────────────────────────────────────────────────┐\n'
-            printf '  │ %sAdd evonic to your PATH%s by adding this line to %s%s%s:      │\n' \
-                "$bold" "$reset" "$bold$blue" "$profile" "$reset"
-            printf '  │                                                                     │\n'
-            printf '  │   %s%s%s │\n' "$bold" "$path_line" "$reset"
-            printf '  │                                                                     │\n'
-            printf '  │ %sThen restart your shell or run:%s                                   │\n' "$cyan" "$reset"
-            printf '  │   %ssource %s%s │\n' "$bold" "$profile" "$reset"
-            printf '  └─────────────────────────────────────────────────────────────────────┘\n'
-            printf '\n%s' "$reset"
+            printf '\n'
+            warn "evonic is not in your PATH yet."
+            printf '  %sAdd this line to %s%s%s:%s\n' "$bold" "$bold$blue" "$profile" "$reset" "$reset"
+            printf '\n'
+            printf '    %s%s%s\n' "$bold" "$path_line" "$reset"
+            printf '\n'
+            printf '  %sThen run:  %ssource %s%s\n' "$reset" "$bold" "$profile" "$reset"
+            printf '\n'
 
             # Ask to auto-append
             printf '%sAdd this to %s automatically? [Y/n]: %s' "$bold" "$profile" "$reset"
@@ -191,7 +191,7 @@ prompt_path() {
                 fi
                 mkdir -p "$(dirname "$profile")"
                 echo "$path_line" >> "$profile"
-                ok "Added to $profile — run 'source $profile' or restart your shell"
+                ok "Added to $profile \u2014 run 'source $profile' or restart your shell"
             else
                 warn "Skipped. Remember to add the line manually to use 'evonic' command."
             fi
@@ -206,6 +206,14 @@ main() {
     info "EVONIC_HOME = $EVONIC_HOME"
     info "Shell       = ${SHELL:-unknown}"
 
+    printf '\n%sThis will install Evonic into %s%s%s.\n' "$bold" "$blue" "$EVONIC_HOME" "$reset"
+    printf '%sProceed? [Y/n]: %s' "$bold" "$reset"
+    read -r answer
+    case "$answer" in
+        n|N|no|NO|No) info "Aborted by user."; exit 0 ;;
+        *) info "Starting installation..." ;;
+    esac
+
     check_prereqs
     clone_repo
     create_venv
@@ -213,28 +221,28 @@ main() {
     create_wrapper
     prompt_path
 
-    # ── Done ────────────────────────────────────────────────────────────────
+    # ── Done ──────────────────────────────────────────────────────────────────
     printf '\n%s' "$bold$green"
     cat << 'EODONE'
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
 ║                         ✅  Evonic installed!                                ║
 ║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 EODONE
     printf '%s' "$reset"
 
     if ! echo ":$PATH:" | grep -q ":$BIN_DIR:"; then
-        printf '%s  ⚡  %sApply PATH now:  %ssource %s%s\n' \
-            "$bold$yellow" "$reset" "$bold" "$profile" "$reset"
+        printf '%s  ⚡  %sApply PATH now:  %ssource %s%s\n'             "$bold$yellow" "$reset" "$bold" "$profile" "$reset"
     else
         printf '%s  ⚡  %sReady to use:%s\n' "$bold$green" "$reset" "$reset"
     fi
 
-    printf '%s  ══  Next steps:%s\n' "$bold" "$reset"
-    printf '%s     1.  %sevonic setup       %s%s# configure LLM provider & super agent%s\n' \
-        "$bold" "$cyan" "$reset" "$blue" "$reset"
-    printf '%s     2.  %sevonic start -d    %s%s# start the platform as a daemon%s\n' \
-        "$bold" "$cyan" "$reset" "$blue" "$reset"
+    printf '\n%s  ──  Running evonic setup...%s\n\n' "$bold" "$reset"
+    "$WRAPPER" setup
+
+    printf '\n%s  ──  Next step:%s\n' "$bold" "$reset"
+    printf '%s     %sevonic start -d    %s%s# start the platform as a daemon%s\n'         "$bold" "$cyan" "$reset" "$blue" "$reset"
     printf '\n'
 }
 
