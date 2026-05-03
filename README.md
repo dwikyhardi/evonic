@@ -1,7 +1,6 @@
 # Evonic
 
-> **Swarm Intelligence, Zero Lock-in.**
-> *Your Models. Your Rules. Your Swarm.*
+> **Swarm Intelligence, Zero Lock-in.** > _Your Models. Your Rules. Your Swarm._
 
 Evonic is an agentic AI platform for building, managing, and orchestrating AI agents. Designed for open models, it supports multi-agent swarms, modular skills, and seamless deployment across channels — all without vendor lock-in.
 
@@ -94,8 +93,7 @@ Each agent has its own system prompt, assigned tools, knowledge base, and worksp
 
 ## Channels
 
-Currently only support for Telegram. WhatsApp and Discord soon.
-
+Currently only support for Telegram and WhatsApp, other channels coming soon.
 
 ---
 
