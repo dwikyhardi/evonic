@@ -40,6 +40,12 @@ class ConcurrencyGate:
         with self._lock:
             return self._max > 0 and self._active >= self._max
 
+    @property
+    def capacity_details(self) -> dict:
+        """Return {active, max} for diagnostic logging."""
+        with self._lock:
+            return {"active": self._active, "max": self._max}
+
     def __enter__(self):
         self.acquire()
         return self
@@ -129,6 +135,15 @@ class ConcurrencyManager:
         if gate is None:
             return False
         return gate.is_at_capacity()
+
+    def get_agent_capacity_details(self, agent_id: str) -> dict:
+        """Return {active, max} for the agent's concurrency gate, or {active: 0, max: 0}
+        if no gate exists yet."""
+        with self._gates_lock:
+            gate = self._agent_gates.get(agent_id)
+        if gate is None:
+            return {"active": 0, "max": self._default_agent_limit}
+        return gate.capacity_details
 
     @contextmanager
     def turn_gate(self, agent_id: str, model_id: Optional[str]):

@@ -1961,7 +1961,14 @@ function renderEntries(entries, { persistent = false } = {}) {
         } else if (type === 'final') {
             const meta = entry.metadata || {};
             if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, meta.thinking_duration); thinkingId = null; }
-            chatUI.appendMessage(meta.error ? 'error' : 'assistant', entry.content, {metadata: meta});
+            // Concurrency-limited busy-ack: render as a system notification with distinct styling
+            if (meta.concurrency_limited || meta.busy_ack) {
+                chatUI.appendMessage('system', '[SYSTEM/Concurrency]\n' + entry.content, {metadata: meta});
+            } else if (meta.error) {
+                chatUI.appendMessage('error', entry.content, {metadata: meta});
+            } else {
+                chatUI.appendMessage('assistant', entry.content, {metadata: meta});
+            }
         } else if (type === 'error') {
             const meta = entry.metadata || {};
             if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId, meta.thinking_duration); thinkingId = null; }
@@ -2426,8 +2433,13 @@ function pollForResponse(existingThinkingId) {
                     }
                     chatUI.finalizeThinkingBubble(thinkingId, (entry.metadata || {}).thinking_duration);
                     thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null;
-                    chatUI.appendMessage(entry.type === 'error' ? 'error' : 'assistant',
-                                        entry.content, {metadata: entry.metadata || {}});
+                    const fMeta = entry.metadata || {};
+                    if (fMeta.concurrency_limited || fMeta.busy_ack) {
+                        chatUI.appendMessage('system', '[SYSTEM/Concurrency]\n' + entry.content, {metadata: fMeta});
+                    } else {
+                        chatUI.appendMessage(entry.type === 'error' ? 'error' : 'assistant',
+                                            entry.content, {metadata: fMeta});
+                    }
                     gotFinal = true;
                 } else if (['thinking', 'tool_call', 'tool_output', 'intermediate'].includes(entry.type)) {
                     collectedIntermediates.push(entry);

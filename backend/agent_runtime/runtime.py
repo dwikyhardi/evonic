@@ -800,28 +800,39 @@ class AgentRuntime:
         # gate frees up. The ack must NOT enter LLM context (busy_ack flag).
         _concurrency_mgr = self._llm_serializer._concurrency_mgr
         if _concurrency_mgr.is_agent_at_capacity(agent_id) and not self._is_busy(session_id):
+            _agent_name = agent.get('name', agent_id)
+            _cap = _concurrency_mgr.get_agent_capacity_details(agent_id)
             _logger.info(
-                "Agent %s at concurrency capacity — busy ack for session %s (user: %s)",
-                agent_id, session_id, external_user_id,
+                "[CONCURRENCY_LIMITED] agent=%s (%s) session=%s user=%s "
+                "active=%d/%d — sending busy ack, message queued for later processing",
+                _agent_name, agent_id, session_id, external_user_id,
+                _cap["active"], _cap["max"],
             )
-            _ack_text = ("I'm currently handling another task, your message has been received "
-                         "and I'll get back to you once I'm done.")
+            _ack_text = (
+                f"Agent is at maximum concurrent capacity ({_cap['active']}/{_cap['max']} slots in use). "
+                "Your message has been queued and will be processed as soon as a slot becomes available. "
+                "Please wait."
+            )
+            _ack_meta = {"busy_ack": True, "concurrency_limited": True,
+                         "concurrency_active": _cap["active"], "concurrency_max": _cap["max"]}
             _db_retry(db.add_chat_message, session_id, 'assistant', _ack_text,
-                      agent_id=agent_id, metadata={"busy_ack": True},
+                      agent_id=agent_id, metadata=_ack_meta,
                       label="save busy ack")
             chatlog_manager.get(agent_id, session_id).append({
                 'type': 'final',
                 'session_id': session_id,
                 'content': _ack_text,
-                'metadata': {'busy_ack': True},
+                'metadata': _ack_meta,
             })
-            event_stream.emit('turn_complete', {
+            event_stream.emit('concurrency_limited', {
                 'agent_id': agent_id,
-                'agent_name': agent.get('name', ''),
+                'agent_name': _agent_name,
                 'session_id': session_id,
                 'external_user_id': external_user_id,
                 'channel_id': channel_id,
                 'response': _ack_text,
+                'concurrency_active': _cap["active"],
+                'concurrency_max': _cap["max"],
                 'tool_trace': [],
                 'thinking_duration': 0,
                 'busy_ack': True,
