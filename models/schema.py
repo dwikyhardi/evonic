@@ -555,6 +555,8 @@ class SchemaMixin:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_individual_results_test ON individual_test_results(test_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_channels_agent ON channels(agent_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_primary_channel ON agents(primary_channel_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_last_active ON agents(last_active_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_runs_model_score ON evaluation_runs(model_name, overall_score, completed_at)")
 
             # ==================== Workplaces Tables ====================
 
