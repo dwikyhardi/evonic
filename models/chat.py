@@ -536,15 +536,24 @@ class AgentChatDB:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute("""
+                WITH msg_counts AS (
+                    SELECT session_id, COUNT(*) AS cnt
+                    FROM chat_messages
+                    GROUP BY session_id
+                ),
+                last_msg AS (
+                    SELECT session_id, content, role,
+                        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC) AS rn
+                    FROM chat_messages
+                    WHERE role IN ('user', 'assistant') AND content IS NOT NULL
+                )
                 SELECT s.*,
-                    (SELECT COUNT(*) FROM chat_messages m WHERE m.session_id = s.id) AS message_count,
-                    (SELECT m2.content FROM chat_messages m2
-                     WHERE m2.session_id = s.id AND m2.role IN ('user', 'assistant') AND m2.content IS NOT NULL
-                     ORDER BY m2.created_at DESC LIMIT 1) AS last_message,
-                    (SELECT m3.role FROM chat_messages m3
-                     WHERE m3.session_id = s.id AND m3.role IN ('user', 'assistant') AND m3.content IS NOT NULL
-                     ORDER BY m3.created_at DESC LIMIT 1) AS last_message_role
+                    COALESCE(mc.cnt, 0) AS message_count,
+                    lm.content AS last_message,
+                    lm.role AS last_message_role
                 FROM chat_sessions s
+                LEFT JOIN msg_counts mc ON mc.session_id = s.id
+                LEFT JOIN last_msg lm ON lm.session_id = s.id AND lm.rn = 1
                 WHERE s.archived = 0
                 ORDER BY s.updated_at DESC
             """)
