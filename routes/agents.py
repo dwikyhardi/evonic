@@ -445,7 +445,10 @@ def api_create_channel(agent_id):
     data['agent_id'] = agent_id
     if not data.get('type'):
         return jsonify({'error': 'Channel type is required'}), 400
-    chan_id = db.create_channel(data)
+    try:
+        chan_id = db.create_channel(data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 409
     # Auto-start the channel after creation
     from backend.channels.registry import channel_manager
     try:
@@ -460,7 +463,10 @@ def api_create_channel(agent_id):
 @agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>', methods=['PUT'])
 def api_update_channel(agent_id, channel_id):
     data = request.get_json()
-    db.update_channel(channel_id, data)
+    try:
+        db.update_channel(channel_id, data)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 409
     return jsonify({'success': True, 'channel': db.get_channel(channel_id)})
 
 

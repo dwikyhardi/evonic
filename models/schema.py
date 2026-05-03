@@ -460,7 +460,8 @@ class SchemaMixin:
                     enabled BOOLEAN DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+                    UNIQUE(agent_id, name)
                 )
             """)
 

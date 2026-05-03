@@ -40,18 +40,29 @@ class ChannelMixin:
             return d
 
     def create_channel(self, channel: Dict[str, Any]) -> str:
+        agent_id = channel['agent_id']
+        name = channel.get('name', '')
         chan_id = channel.get('id') or str(uuid.uuid4())
         cfg = channel.get('config', {})
         if isinstance(cfg, dict):
             cfg = json.dumps(cfg)
         with self._connect() as conn:
             cursor = conn.cursor()
+            # Guard: no duplicate channel name within the same agent
+            cursor.execute(
+                "SELECT id FROM channels WHERE agent_id = ? AND name = ?",
+                (agent_id, name)
+            )
+            if cursor.fetchone():
+                raise ValueError(
+                    f"Channel '{name}' already exists for agent '{agent_id}'"
+                )
             cursor.execute("""
                 INSERT INTO channels (id, agent_id, type, name, config, enabled)
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (
-                chan_id, channel['agent_id'], channel['type'],
-                channel.get('name', ''), cfg, channel.get('enabled', True)
+                chan_id, agent_id, channel['type'],
+                name, cfg, channel.get('enabled', True)
             ))
             conn.commit()
         return chan_id
@@ -63,10 +74,25 @@ class ChannelMixin:
             updates['config'] = json.dumps(updates['config'])
         if not updates:
             return False
-        set_clause = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [channel_id]
         with self._connect() as conn:
             cursor = conn.cursor()
+            # Guard: renaming to a name that already exists for this agent
+            if 'name' in updates:
+                # Get the agent_id for this channel
+                cursor.execute("SELECT agent_id FROM channels WHERE id = ?", (channel_id,))
+                row = cursor.fetchone()
+                if row:
+                    agent_id = row[0]
+                    cursor.execute(
+                        "SELECT id FROM channels WHERE agent_id = ? AND name = ? AND id != ?",
+                        (agent_id, updates['name'], channel_id)
+                    )
+                    if cursor.fetchone():
+                        raise ValueError(
+                            f"Channel '{updates['name']}' already exists for agent '{agent_id}'"
+                        )
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            values = list(updates.values()) + [channel_id]
             cursor.execute(
                 f"UPDATE channels SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 values
