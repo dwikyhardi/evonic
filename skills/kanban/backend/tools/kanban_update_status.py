@@ -24,8 +24,8 @@ def execute(agent: dict, args: dict) -> dict:
     if not task:
         return {'status': 'error', 'message': f'Task {task_id} not found'}
 
-    if task.get('assignee') != agent_id and task.get('picked_by') != agent_id:
-        return {'status': 'error', 'message': 'You are not authorized to update this task'}
+    if task.get('assignee') != agent_id and not agent.get('is_super'):
+        return {'status': 'error', 'message': 'Only the assigned agent or a super agent can update this task'}
 
     old_status = task.get('status')
     fields = {'status': new_status, 'updated_at': _now()}
