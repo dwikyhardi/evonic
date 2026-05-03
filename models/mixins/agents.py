@@ -53,7 +53,7 @@ class AgentMixin:
                    'send_intermediate_responses', 'outbound_buffer_seconds', 'enable_agent_state', 'workspace',
                    'enabled', 'is_super', 'sandbox_enabled', 'safety_checker_enabled', 'primary_channel_id',
                    'avatar_path', 'disable_parallel_tool_execution', 'disable_turn_prefetch',
-                   'agent_messaging_enabled', 'workplace_id', 'autopilot_enabled'}
+                   'agent_messaging_enabled', 'workplace_id'}
         updates = {k: v for k, v in data.items() if k in allowed}
         if not updates:
             return False

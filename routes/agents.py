@@ -939,6 +939,79 @@ def api_chat_stream(agent_id):
     )
 
 
+@agents_bp.route('/api/approvals/stream', methods=['GET'])
+def api_approvals_stream():
+    """Global SSE endpoint — pushes ALL approval events (any agent, any session)
+    to every connected client. Unlike the per-session chat stream, there is no
+    session_id filtering — this is exactly the point: approval modals need to
+    appear on Dashboard, Settings, Skills, and any other page, not just /agents/:id.
+    """
+    from backend.event_stream import event_stream
+
+    q = queue.Queue(maxsize=200)
+
+    _TRANSFORMS = {
+        'approval_required': ('approval_required', lambda d: {
+            'approval_id': d.get('approval_id', ''),
+            'agent_id': d.get('agent_id', ''),
+            'source_agent_id': d.get('source_agent_id', ''),
+            'source_agent_name': d.get('source_agent_name', ''),
+            'tool': d.get('tool_name', ''),
+            'args': d.get('tool_args', {}),
+            'approval_info': d.get('approval_info', {}),
+            'reasons': d.get('reasons', []),
+            'score': d.get('score'),
+        }),
+        'approval_resolved': ('approval_resolved', lambda d: {
+            'approval_id': d.get('approval_id', ''),
+            'decision': d.get('decision', ''),
+            'timed_out': d.get('timed_out', False),
+        }),
+    }
+
+    def _make_handler(sse_event_name, transform):
+        def handler(data):
+            try:
+                payload = transform(data)
+                if payload is not None:
+                    payload['seq'] = data.get('_seq')
+                    q.put_nowait((sse_event_name, payload, data.get('_seq')))
+            except queue.Full:
+                pass
+        return handler
+
+    handlers = {}
+    for event_name, (sse_name, transform) in _TRANSFORMS.items():
+        h = _make_handler(sse_name, transform)
+        handlers[event_name] = h
+        event_stream.on(event_name, h)
+
+    def generate():
+        try:
+            while True:
+                try:
+                    item = q.get(timeout=30)
+                except queue.Empty:
+                    yield ": heartbeat\n\n"
+                    continue
+                sse_event, payload, seq = item
+                id_line = f"id: {seq}\n" if seq is not None else ''
+                yield f"{id_line}event: {sse_event}\ndata: {json.dumps(payload)}\n\n"
+        finally:
+            for event_name, handler in handlers.items():
+                event_stream.off(event_name, handler)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive',
+        }
+    )
+
+
 @agents_bp.route('/api/agents/<agent_id>/chat/events', methods=['GET'])
 def api_chat_events(agent_id):
     """Fetch missed SSE events by sequence range for gap-detection recovery."""
