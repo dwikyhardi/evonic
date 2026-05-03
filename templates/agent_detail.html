@@ -733,7 +733,34 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=38"></script>
+<!-- WhatsApp QR Modal -->
+<div id="whatsapp-qr-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[380px] shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-gray-800 font-semibold dark:text-gray-100">Connect WhatsApp</h3>
+            <button onclick="closeQRModal()" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5 text-center">
+            <div id="qr-status-text" class="text-sm text-gray-500 dark:text-gray-400 mb-4">Loading QR code...</div>
+            <div id="qr-image-container" class="flex justify-center mb-4">
+                <img id="qr-image" src="" class="hidden w-56 h-56 rounded-lg border border-gray-200" alt="WhatsApp QR Code">
+                <div id="qr-spinner" class="w-56 h-56 flex items-center justify-center">
+                    <div class="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            </div>
+            <p id="qr-instructions" class="text-xs text-gray-400 dark:text-gray-500">Open WhatsApp on your phone, go to Settings > Linked Devices > Link a Device, then scan this QR code.</p>
+            <div id="qr-connected-msg" class="hidden mt-2">
+                <p class="text-green-600 font-semibold">Connected!</p>
+                <p class="text-sm text-gray-500 mt-1">WhatsApp is now linked. You can close this window.</p>
+            </div>
+        </div>
+        <div class="flex justify-end p-5 border-t border-gray-200 dark:border-gray-700">
+            <button onclick="closeQRModal()" class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=39"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 function showToast(message, type = 'success') {
@@ -1722,6 +1749,9 @@ async function loadChannels() {
         const toggleBtn = running
             ? `<button onclick="toggleChannel('${ch.id}', false)" class="text-xs px-3 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100">Stop</button>`
             : `<button onclick="toggleChannel('${ch.id}', true)" class="text-xs px-3 py-1 rounded bg-green-50 text-green-600 hover:bg-green-100">Start</button>`;
+        const qrBtn = (ch.type === 'whatsapp' && running)
+            ? `<button onclick="openQRModal('${ch.id}')" class="text-xs px-3 py-1 rounded bg-green-50 text-green-700 hover:bg-green-100">Scan QR</button>`
+            : '';
         const primaryBtn = isPrimary
             ? `<button onclick="unsetPrimaryChannel('${ch.id}')" class="text-xs px-3 py-1 rounded bg-yellow-50 text-yellow-600 hover:bg-yellow-100" title="Remove as primary">&#9733;</button>`
             : `<button onclick="setPrimaryChannel('${ch.id}')" class="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200" title="Set as primary channel for message routing">&#9734;</button>`;
@@ -1740,6 +1770,7 @@ async function loadChannels() {
             </div>
             <div class="flex items-center gap-2">
                 ${primaryBtn}
+                ${qrBtn}
                 ${toggleBtn}
                 <button onclick="deleteChannel('${ch.id}')" class="text-xs text-red-500 hover:text-red-700">Delete</button>
             </div>
@@ -1763,10 +1794,7 @@ function updateChannelConfigFields() {
             <input type="text" id="channel-bot-token" placeholder="123456:ABC-DEF..." class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">`;
     } else if (type === 'whatsapp') {
         container.innerHTML = `
-            <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Phone Number ID</label>
-            <input type="text" id="channel-phone-id" placeholder="Phone number ID" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
-            <label class="block mb-1 mt-3 text-gray-600 dark:text-gray-300 text-sm font-medium">Access Token</label>
-            <input type="text" id="channel-access-token" placeholder="WhatsApp API token" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">`;
+            <p class="text-sm text-gray-500 dark:text-gray-400">After adding, scan the QR code with WhatsApp on your phone to connect. No API keys required.</p>`;
     } else {
         container.innerHTML = `
             <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Bot Token</label>
@@ -1781,8 +1809,7 @@ async function addChannel() {
     if (type === 'telegram' || type === 'discord') {
         config.bot_token = (document.getElementById('channel-bot-token')?.value || '').trim();
     } else if (type === 'whatsapp') {
-        config.phone_number_id = (document.getElementById('channel-phone-id')?.value || '').trim();
-        config.access_token = (document.getElementById('channel-access-token')?.value || '').trim();
+        // Baileys-based: no API keys needed
     }
     const res = await fetch(`/api/agents/${AGENT_ID}/channels`, {
         method: 'POST',
@@ -1793,6 +1820,69 @@ async function addChannel() {
     if (data.error) return alert(data.error);
     closeChannelModal();
     loadChannels();
+    if (type === 'whatsapp' && data.channel?.id) {
+        openQRModal(data.channel.id);
+    }
+}
+
+// ---- WhatsApp QR Modal ----
+let _qrPollInterval = null;
+let _qrChannelId = null;
+
+function openQRModal(channelId) {
+    _qrChannelId = channelId;
+    document.getElementById('whatsapp-qr-modal').classList.remove('hidden');
+    document.getElementById('qr-image').classList.add('hidden');
+    document.getElementById('qr-spinner').classList.remove('hidden');
+    document.getElementById('qr-connected-msg').classList.add('hidden');
+    document.getElementById('qr-instructions').classList.remove('hidden');
+    document.getElementById('qr-status-text').textContent = 'Loading QR code...';
+    _startQRPolling();
+}
+
+function closeQRModal() {
+    document.getElementById('whatsapp-qr-modal').classList.add('hidden');
+    _stopQRPolling();
+}
+
+function _startQRPolling() {
+    _stopQRPolling();
+    _qrPollInterval = setInterval(_pollQR, 3000);
+    _pollQR(); // immediate first call
+}
+
+function _stopQRPolling() {
+    if (_qrPollInterval) {
+        clearInterval(_qrPollInterval);
+        _qrPollInterval = null;
+    }
+}
+
+async function _pollQR() {
+    if (!_qrChannelId) return;
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_qrChannelId}/qr`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'connected') {
+            _stopQRPolling();
+            document.getElementById('qr-image').classList.add('hidden');
+            document.getElementById('qr-spinner').classList.add('hidden');
+            document.getElementById('qr-instructions').classList.add('hidden');
+            document.getElementById('qr-connected-msg').classList.remove('hidden');
+            document.getElementById('qr-status-text').textContent = '';
+            loadChannels();
+        } else if (data.qr) {
+            document.getElementById('qr-image').src = data.qr;
+            document.getElementById('qr-image').classList.remove('hidden');
+            document.getElementById('qr-spinner').classList.add('hidden');
+            document.getElementById('qr-status-text').textContent = 'Scan with WhatsApp on your phone';
+        } else {
+            document.getElementById('qr-status-text').textContent = 'Waiting for QR code...';
+        }
+    } catch (e) {
+        // ignore poll errors
+    }
 }
 
 async function toggleChannel(channelId, start) {
@@ -2056,13 +2146,15 @@ function setChatBusy(busy) {
 }
 
 // Background poll for busy state set by external sessions (notifier, other channels)
+let _busyPolling = false;
 setInterval(async () => {
-    if (_chatBusy) return; // already tracking via SSE when we initiated the turn
+    if (_chatBusy || _busyPolling) return; // skip if already busy or previous request still in-flight
+    _busyPolling = true;
     try {
         const res = await fetch(`/api/agents/${AGENT_ID}/busy`);
         const data = await res.json();
         updateBusyBadge(data.busy);
-    } catch (e) { /* ignore */ }
+    } catch (e) { /* ignore */ } finally { _busyPolling = false; }
 }, 5000);
 
 function startIdlePoll() {
