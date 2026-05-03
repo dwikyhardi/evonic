@@ -791,6 +791,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
     function handleSubmit(e) {
         e.preventDefault();
+        const $btn = $('#modal-submit');
+        if ($btn.prop('disabled')) return; // prevent double-submit
         const taskId = $('#task-id').val();
         const payload = {
             title: $('#task-title').val().trim(),
@@ -799,17 +801,26 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             assignee: $('#task-assignee').val().trim() || null,
         };
         if (!payload.title) return;
+
+        // Disable button and show spinner immediately
+        const origText = $btn.text();
+        $btn.prop('disabled', true).html(
+            '<svg class="w-4 h-4 animate-spin inline-block mr-1.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>' + origText
+        );
+
         if (taskId) {
             $.ajax({ url: `${API}/tasks/${taskId}`, method: 'PUT',
                 contentType: 'application/json', data: JSON.stringify(payload),
                 success: function() { closeModal(); loadTasks(); },
-                error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to update'); }
+                error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to update'); },
+                complete: function() { $btn.prop('disabled', false).text(origText); }
             });
         } else {
             $.ajax({ url: `${API}/tasks`, method: 'POST',
                 contentType: 'application/json', data: JSON.stringify(payload),
                 success: function() { closeModal(); loadTasks(); },
-                error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to create'); }
+                error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to create'); },
+                complete: function() { $btn.prop('disabled', false).text(origText); }
             });
         }
     }
