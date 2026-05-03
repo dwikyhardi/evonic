@@ -50,7 +50,15 @@ def execute(agent: dict, args: dict) -> dict:
     if not task:
         return {'status': 'error', 'message': f'Task {task_id} not found'}
 
-    # Authorization: any agent can update any task
+    # Authorization: only the assignee (or agent who picked the task)
+    # may update the task's progress status. Other field updates
+    # (title, description, priority) are unrestricted.
+    if new_status is not None:
+        if task.get('assignee') != agent_id and task.get('picked_by') != agent_id:
+            return {
+                'status': 'error',
+                'message': 'You are not authorized to update this task. Only the assignee can change its status.',
+            }
 
     # Build update fields
     fields = {'updated_at': _now()}
