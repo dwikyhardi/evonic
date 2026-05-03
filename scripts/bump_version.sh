@@ -45,7 +45,7 @@ fi
 echo "$NEW_VERSION" > "$VERSION_FILE"
 echo "✅ VERSION updated: $NEW_VERSION"
 
-git ci -am "chore: bump version v$NEW_VERSION"
+git commit -am "chore: bump version v$NEW_VERSION"
 
 # Create git tag
 git tag "v$NEW_VERSION"
