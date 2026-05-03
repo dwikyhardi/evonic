@@ -512,6 +512,41 @@ def api_unset_primary_channel(agent_id, channel_id):
     return jsonify({'success': True})
 
 
+# ==================== WhatsApp Bridge API ====================
+
+@agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/qr', methods=['GET'])
+def api_whatsapp_qr(agent_id, channel_id):
+    """Return QR code data for WhatsApp channel auth."""
+    from backend.channels.registry import channel_manager
+    instance = channel_manager.get_channel_instance(channel_id)
+    if not instance or instance.get_channel_type() != 'whatsapp':
+        return jsonify({'error': 'WhatsApp channel not running'}), 404
+    return jsonify(instance.get_qr())
+
+
+@agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/bridge-status', methods=['GET'])
+def api_whatsapp_bridge_status(agent_id, channel_id):
+    """Return Baileys bridge connection status."""
+    from backend.channels.registry import channel_manager
+    instance = channel_manager.get_channel_instance(channel_id)
+    if not instance or instance.get_channel_type() != 'whatsapp':
+        return jsonify({'status': 'not_running'})
+    return jsonify(instance.get_bridge_status())
+
+
+@agents_bp.route('/api/channels/whatsapp-bridge/<channel_id>/callback', methods=['POST'])
+def api_whatsapp_callback(channel_id):
+    """Receive incoming WhatsApp messages from the Baileys sidecar."""
+    from backend.channels.registry import channel_manager
+    import threading
+    instance = channel_manager.get_channel_instance(channel_id)
+    if not instance or instance.get_channel_type() != 'whatsapp':
+        return jsonify({'error': 'Channel not found'}), 404
+    payload = request.get_json(silent=True) or {}
+    threading.Thread(target=instance.handle_callback, args=(payload,), daemon=True).start()
+    return jsonify({'ok': True})
+
+
 # ==================== Compiled Prompt API ====================
 
 @agents_bp.route('/api/agents/<agent_id>/compiled-prompt', methods=['GET'])

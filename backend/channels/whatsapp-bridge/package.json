@@ -1,0 +1,12 @@
+{
+  "name": "evonic-whatsapp-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6",
+    "express": "^4",
+    "pino": "^9",
+    "qrcode": "^1"
+  }
+}

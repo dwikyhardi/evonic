@@ -287,6 +287,8 @@ def enforce_auth():
     # Always-accessible endpoints (no auth required)
     if request.path == '/api/health':
         return None
+    if request.path.startswith('/api/channels/whatsapp-bridge/'):
+        return None  # Baileys sidecar calls this from localhost
     if request.path == '/api/connector/pair':
         return None  # Evonet pairing is unauthenticated (uses pairing code)
     if request.path == '/ws/connector':
