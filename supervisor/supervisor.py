@@ -102,21 +102,77 @@ def is_windows() -> bool:
 
 
 def get_current_release(app_root: str) -> Optional[str]:
-    """Return the tag name of the currently active release, or None."""
+    """Return the tag name of the currently active release, or None.
+
+    Resolution order:
+    1. ``current`` symlink (Unix) / ``current.slot`` (Windows) — production
+       mode.  The target release directory must exist *and* its ``VERSION``
+       file must match the app root ``VERSION`` for the symlink to be
+       considered authoritative.
+    2. ``VERSION`` file at the app root — fallback for flat-repo /
+       development mode or when the symlink is stale.  The value is
+       normalised to match the git tag format (``v`` prefix added if
+       missing).
+
+    If the symlink is stale (points to a release that no longer exists or
+    whose version differs from the running code), a warning is logged and
+    the VERSION file is used instead.
+    """
+    version_from_file: Optional[str] = None
+    version_file = os.path.join(app_root, 'VERSION')
+    if os.path.exists(version_file):
+        with open(version_file) as f:
+            ver = f.read().strip()
+        if ver:
+            version_from_file = f'v{ver}' if not ver.startswith('v') else ver
+
+    def _check_symlink_tag(tag: str, release_dir: str) -> Optional[str]:
+        """Return the tag if the symlink is authoritative, else None to
+        indicate the VERSION-file fallback should be used."""
+        if not os.path.isdir(release_dir):
+            log.warning(
+                'current points to %s but release dir %s does not exist '
+                '— falling back to VERSION file',
+                tag, release_dir,
+            )
+            return None
+        release_ver_file = os.path.join(release_dir, 'VERSION')
+        if os.path.exists(release_ver_file):
+            with open(release_ver_file) as f2:
+                rv = f2.read().strip()
+            if version_from_file and rv != version_from_file:
+                log.warning(
+                    'current symlink says %s but release VERSION=%s differs '
+                    'from app root VERSION=%s — preferring app root VERSION',
+                    tag, rv, version_from_file,
+                )
+                return None  # fall through to VERSION file
+        return tag
+
     if is_windows():
         slot_file = os.path.join(app_root, 'current.slot')
-        if not os.path.exists(slot_file):
-            return None
-        with open(slot_file) as f:
-            tag = f.read().strip()
-        return tag if tag else None
+        if os.path.exists(slot_file):
+            with open(slot_file) as f:
+                tag = f.read().strip()
+            if tag:
+                release_dir = os.path.join(app_root, 'releases', tag)
+                resolved = _check_symlink_tag(tag, release_dir)
+                if resolved is not None:
+                    return resolved
     else:
         link = os.path.join(app_root, 'current')
-        if not os.path.islink(link):
-            return None
-        target = os.readlink(link)
-        # target is like "releases/v1.2.0" or absolute path
-        return os.path.basename(target.rstrip('/'))
+        if os.path.islink(link):
+            target = os.readlink(link)
+            tag = os.path.basename(target.rstrip('/'))
+            release_dir = os.path.join(app_root, 'releases', tag)
+            resolved = _check_symlink_tag(tag, release_dir)
+            if resolved is not None:
+                return resolved
+
+    if version_from_file is not None:
+        return version_from_file
+
+    return None
 
 
 def atomic_swap(app_root: str, new_release_path: str) -> None:
