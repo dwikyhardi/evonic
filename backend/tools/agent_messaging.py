@@ -115,7 +115,7 @@ _TOOL_DEFS = [
                 "properties": {
                     "target_agent_id": {
                         "type": "string",
-                        "description": "The ID of the agent to send the message to."
+                        "description": "The ID of the agent to send the message to (lowercase snake_case)."
                     },
                     "message": {
                         "type": "string",
@@ -183,15 +183,18 @@ _TOOL_DEFS = [
 # ==================== Executors ====================
 
 def _exec_send_agent_message(args: dict, agent_context: dict) -> dict:
+    import re as _re
     sender_id = agent_context.get('id', '')
     sender_name = agent_context.get('name', sender_id)
-    target_id = args.get('target_agent_id', '').strip()
+    target_id = args.get('target_agent_id', '').strip().lower()
     message = args.get('message', '').strip()
 
     if not target_id:
         return {'error': 'target_agent_id is required.'}
     if not message:
         return {'error': 'message is required.'}
+    if not _re.match(r'^[a-z0-9_]+$', target_id):
+        return {'error': 'Invalid target_agent_id. Must be lowercase snake_case (alphanumeric and underscores only).'}
 
     # Prevent self-messaging
     if target_id == sender_id:

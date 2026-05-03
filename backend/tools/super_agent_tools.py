@@ -67,7 +67,7 @@ _TOOL_DEFS = [
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "Agent ID (alphanumeric and underscores only, unique)"
+                        "description": "Agent ID (lowercase snake_case: alphanumeric and underscores only, unique)"
                     },
                     "name": {
                         "type": "string",
@@ -248,7 +248,7 @@ _TOOL_DEFS = [
                     },
                     "agent_id": {
                         "type": "string",
-                        "description": "Agent ID for the new agent (alphanumeric and underscores only)"
+                        "description": "Agent ID for the new agent (lowercase snake_case: alphanumeric and underscores only)"
                     },
                     "name": {
                         "type": "string",
@@ -323,10 +323,10 @@ def _exec_list_agents(args: dict) -> dict:
 
 def _exec_create_agent(args: dict) -> dict:
     import re as _re
-    agent_id = (args.get('id') or '').strip()
+    agent_id = (args.get('id') or '').strip().lower()
     name = (args.get('name') or '').strip()
-    if not agent_id or not _re.match(r'^[a-zA-Z0-9_]+$', agent_id):
-        return {'error': 'Invalid ID. Use only alphanumeric characters and underscores.'}
+    if not agent_id or not _re.match(r'^[a-z0-9_]+$', agent_id):
+        return {'error': 'Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case).'}
     if not name:
         return {'error': 'Name is required.'}
     if db.get_agent(agent_id):
@@ -469,11 +469,11 @@ def _exec_apply_skillset(args: dict) -> dict:
     from backend.skills_manager import skills_manager
 
     skill_id = (args.get('skill_id') or '').strip()
-    agent_id = (args.get('agent_id') or '').strip()
+    agent_id = (args.get('agent_id') or '').strip().lower()
     if not skill_id:
         return {'error': 'skill_id is required.'}
-    if not agent_id or not _re.match(r'^[a-zA-Z0-9_]+$', agent_id):
-        return {'error': 'Invalid agent_id. Use only alphanumeric characters and underscores.'}
+    if not agent_id or not _re.match(r'^[a-z0-9_]+$', agent_id):
+        return {'error': 'Invalid agent_id. Use only lowercase alphanumeric characters and underscores (snake_case).'}
 
     if db.get_agent(agent_id):
         return {'error': f"Agent ID '{agent_id}' already exists."}

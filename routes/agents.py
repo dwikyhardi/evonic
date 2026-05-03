@@ -18,7 +18,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS_DIR = os.path.join(BASE_DIR, 'agents')
 WORKSPACE_DIR = os.path.join(BASE_DIR, 'shared', 'agents')
 
-SLUG_RE = re.compile(r'^[a-zA-Z0-9_]+$')
+SLUG_RE = re.compile(r'^[a-z0-9_]+$')
 
 
 def _kb_dir(agent_id: str) -> str:
@@ -121,9 +121,9 @@ def api_create_agent():
     if not db.has_super_agent():
         return jsonify({'error': 'Super agent must be set up before creating other agents.', 'setup_required': True}), 400
     data = request.get_json()
-    agent_id = data.get('id', '').strip()
+    agent_id = data.get('id', '').strip().lower()
     if not agent_id or not SLUG_RE.match(agent_id):
-        return jsonify({'error': 'Invalid ID. Use only alphanumeric characters and underscores.'}), 400
+        return jsonify({'error': 'Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case).'}), 400
     if db.get_agent(agent_id):
         return jsonify({'error': 'Agent ID already exists.'}), 400
     # Docker Sandbox only available for local workplace mode

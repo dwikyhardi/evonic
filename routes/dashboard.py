@@ -98,10 +98,10 @@ def api_setup():
 
     # Legacy payload (backward compat): {id, name, description, system_prompt, model}
     from routes.agents import _ensure_kb_dir, _write_system_prompt
-    agent_id = data.get('id', '').strip()
+    agent_id = data.get('id', '').strip().lower()
     name = data.get('name', '').strip()
-    if not agent_id or not re.match(r'^[a-zA-Z0-9_]+$', agent_id):
-        return jsonify({'error': 'Invalid ID. Use only alphanumeric characters and underscores.'}), 400
+    if not agent_id or not re.match(r'^[a-z0-9_]+$', agent_id):
+        return jsonify({'error': 'Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case).'}), 400
     if not name:
         return jsonify({'error': 'Name is required.'}), 400
     if db.get_agent(agent_id):

@@ -1079,8 +1079,9 @@ def agent_add(agent_id, name, description=None, model=None, skillset=None):
         sys.exit(1)
 
     import re
-    if not re.match(r'^[a-zA-Z0-9_]+$', agent_id):
-        print("Error: Invalid ID. Use only alphanumeric characters and underscores.")
+    agent_id = agent_id.strip().lower()
+    if not re.match(r'^[a-z0-9_]+$', agent_id):
+        print("Error: Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case).")
         sys.exit(1)
 
     db = _get_db()
@@ -1532,15 +1533,15 @@ def setup_wizard():
         sys.exit(1)
 
     import re
-    default_id = re.sub(r'[^a-zA-Z0-9_]', '_', agent_name.lower())
+    default_id = re.sub(r'[^a-z0-9_]', '_', agent_name.lower())
     default_id = re.sub(r'_+', '_', default_id).strip('_') or 'admin'
     try:
-        agent_id = input(f"  Agent ID [{default_id}]: ").strip() or default_id
+        agent_id = input(f"  Agent ID [{default_id}]: ").strip().lower() or default_id
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
-    if not re.match(r'^[a-zA-Z0-9_]+$', agent_id):
-        print("  Agent ID must be alphanumeric and underscores only.")
+    if not re.match(r'^[a-z0-9_]+$', agent_id):
+        print("  Agent ID must be lowercase alphanumeric and underscores only (snake_case).")
         sys.exit(1)
 
     # ── Step 7: Communication style ──

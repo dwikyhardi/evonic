@@ -238,7 +238,7 @@ def build_system_prompt(tone_id: str, custom_tone_text: str = None) -> str:
 
 def _derive_agent_id(name: str) -> str:
     """Derive a valid agent ID from a display name."""
-    slug = re.sub(r'[^a-zA-Z0-9_]', '_', name.lower())
+    slug = re.sub(r'[^a-z0-9_]', '_', name.lower())
     slug = re.sub(r'_+', '_', slug).strip('_')
     return slug or 'admin'
 
@@ -286,8 +286,8 @@ def run_setup(
     # Validate
     if not agent_name.strip():
         return {'error': 'Agent name is required'}
-    if not re.match(r'^[a-zA-Z0-9_]+$', agent_id):
-        return {'error': 'Agent ID must be alphanumeric and underscores only'}
+    if not re.match(r'^[a-z0-9_]+$', agent_id):
+        return {'error': 'Agent ID must be lowercase alphanumeric and underscores only (snake_case)'}
     if db.has_super_agent():
         return {'error': 'Super agent already exists'}
     if db.get_agent(agent_id):
