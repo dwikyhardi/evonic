@@ -92,6 +92,13 @@ Each agent has its own system prompt, assigned tools, knowledge base, and worksp
 
 ---
 
+## Channels
+
+Currently only support for Telegram. WhatsApp and Discord soon.
+
+
+---
+
 ## Skills
 
 Skills extend agents with new capabilities. Install via CLI:
