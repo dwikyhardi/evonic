@@ -1,3 +1,4 @@
+import functools
 import os
 from typing import Dict, Any, List, Optional
 
@@ -295,8 +296,11 @@ class ChatDelegationMixin:
 
             return [dict(r) for r in rows], total
 
+    @functools.lru_cache(maxsize=256)
     def _find_agent_for_session(self, session_id: str) -> Optional[str]:
-        """Look up which agent owns a session by scanning agent chat DBs."""
+        """Look up which agent owns a session by scanning agent chat DBs.
+        Result is LRU-cached (max 256 entries) to avoid repeated full agent scans
+        when multiple methods query the same session_id in a single request."""
         agents = self.get_agents()
         for agent in agents:
             chat_db = self._chat_db(agent['id'])
