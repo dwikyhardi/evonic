@@ -369,6 +369,10 @@ export class ChatUI {
         const turn = this.beginTurn($anchor);
         if (startTs) turn._startTime = startTs;
         this._lastLiveTurnId = turn.id; // track for duplicate-bubble detection
+        // A new thinking bubble starting means the agent is now processing any queued
+        // message — clear the "Queued" badge regardless of how we got here (turn:split,
+        // restoreActiveReasoning after /stop, idle poll, etc.).
+        this.markQueuedAsDelivered();
         return turn;
     }
 
