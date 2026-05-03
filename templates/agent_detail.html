@@ -715,7 +715,7 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=37"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=38"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 function showToast(message, type = 'success') {
@@ -1933,6 +1933,12 @@ async function restoreActiveReasoning() {
         const cutIdx = Math.max(lastDoneIdx, lastSplitIdx);
         const replayEvents = cutIdx >= 0 ? events.slice(cutIdx + 1) : events;
         if (!replayEvents.length) return;
+
+        // Stop the idle poll before creating the live bubble. The idle poll may
+        // have fired during our async awaits (before _currentTurn was set) and
+        // created a stale _pollThinkingId that would duplicate the live bubble.
+        // pollForResponse → setChatBusy(false) will restart the idle poll when done.
+        stopIdlePoll();
 
         // Replay trace into a new thinking bubble.
         // Find the last user message to anchor the bubble below it.
