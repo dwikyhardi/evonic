@@ -289,11 +289,20 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                             <option value="high">High</option>
                         </select>
                     </div>
-                    <div class="mb-5">
+                    <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="detail-task-assignee">Assign to Agent (optional)</label>
                         <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="detail-task-assignee">
                             <option value="">-- None --</option>
                         </select>
+                    </div>
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depends on (optional)</label>
+                        <div class="relative">
+                            <input type="text" id="detail-deps-search" autocomplete="off" placeholder="Search tasks…"
+                                class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500">
+                            <ul id="detail-deps-dropdown" class="hidden absolute z-50 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg mt-1 shadow-lg max-h-48 overflow-y-auto text-sm"></ul>
+                        </div>
+                        <ul id="detail-deps-selected" class="mt-2 flex flex-col gap-1"></ul>
                     </div>
                     <div class="flex justify-end gap-2">
                         <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="cancelEditFromDetail()">Cancel</button>
@@ -782,8 +791,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     let _depsAvailable = []; // [{id, title, status}, ...] from server
     let _depsSearchTimer = null;
 
-    function _depsRenderSelected() {
-        const $list = $('#task-deps-selected');
+    function _depsRenderSelected(selectedId = 'task-deps-selected') {
+        const $list = $(`#${selectedId}`);
         $list.empty();
         _depsSelected.forEach(dep => {
             $list.append(
@@ -792,14 +801,14 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                     .append(
                         $('<button>').attr('type', 'button').addClass('text-gray-400 hover:text-red-500 transition ml-auto flex-shrink-0')
                             .html('&times;')
-                            .on('click', () => { _depsSelected = _depsSelected.filter(d => d.id !== dep.id); _depsRenderSelected(); })
+                            .on('click', () => { _depsSelected = _depsSelected.filter(d => d.id !== dep.id); _depsRenderSelected(selectedId); })
                     )
             );
         });
     }
 
-    function _depsRenderDropdown(query) {
-        const $dd = $('#task-deps-dropdown');
+    function _depsRenderDropdown(query, dropdownId = 'task-deps-dropdown', searchId = 'task-deps-search', selectedId = 'task-deps-selected') {
+        const $dd = $(`#${dropdownId}`);
         const q = query.toLowerCase();
         const selectedIds = new Set(_depsSelected.map(d => d.id));
         const matches = _depsAvailable.filter(t =>
@@ -820,8 +829,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                         .on('mousedown', (e) => {
                             e.preventDefault();
                             _depsSelected.push({id: t.id, title: t.title});
-                            _depsRenderSelected();
-                            $('#task-deps-search').val('');
+                            _depsRenderSelected(selectedId);
+                            $(`#${searchId}`).val('');
                             $dd.addClass('hidden');
                         })
                 );
@@ -837,24 +846,24 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         _depsAvailable = data.tasks || [];
     }
 
-    function _depsInitSearch() {
-        const $input = $('#task-deps-search');
-        const $dd = $('#task-deps-dropdown');
+    function _depsInitSearch(searchId = 'task-deps-search', dropdownId = 'task-deps-dropdown', selectedId = 'task-deps-selected') {
+        const $input = $(`#${searchId}`);
+        const $dd = $(`#${dropdownId}`);
         $input.off('input focus blur').on('input', function() {
             clearTimeout(_depsSearchTimer);
-            _depsSearchTimer = setTimeout(() => _depsRenderDropdown($input.val()), 150);
+            _depsSearchTimer = setTimeout(() => _depsRenderDropdown($input.val(), dropdownId, searchId, selectedId), 150);
         }).on('focus', function() {
-            _depsRenderDropdown($input.val());
+            _depsRenderDropdown($input.val(), dropdownId, searchId, selectedId);
         }).on('blur', function() {
             setTimeout(() => $dd.addClass('hidden'), 200);
         });
     }
 
-    async function initDepsWidget(currentTaskId, selectedDeps) {
+    async function initDepsWidget(currentTaskId, selectedDeps, {searchId='task-deps-search', dropdownId='task-deps-dropdown', selectedId='task-deps-selected'} = {}) {
         _depsCurrentTaskId = currentTaskId;
         _depsSelected = [];
-        $('#task-deps-search').val('');
-        $('#task-deps-dropdown').addClass('hidden');
+        $(`#${searchId}`).val('');
+        $(`#${dropdownId}`).addClass('hidden');
         await _depsLoadAvailable(currentTaskId);
         // Pre-populate selected from existing deps (match against available + fallback to tasks list)
         (selectedDeps || []).forEach(depId => {
@@ -862,8 +871,12 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 || (tasks || []).find(t => t.id === depId);
             if (found) _depsSelected.push({id: found.id, title: found.title});
         });
-        _depsRenderSelected();
-        _depsInitSearch();
+        _depsRenderSelected(selectedId);
+        _depsInitSearch(searchId, dropdownId, selectedId);
+    }
+
+    function _depsGetSelectedIds() {
+        return _depsSelected.map(d => d.id);
     }
 
     function openCreateModal() {
@@ -1207,6 +1220,11 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $('#detail-task-desc').val(task.description || '');
         $('#detail-task-priority').val(task.priority || 'low');
         populateAgentSelect('#detail-task-assignee', task.assignee || '');
+        initDepsWidget(task.id, task.deps || [], {
+            searchId: 'detail-deps-search',
+            dropdownId: 'detail-deps-dropdown',
+            selectedId: 'detail-deps-selected',
+        });
 
         $('#panel-details').addClass('hidden');
         $('#panel-edit').removeClass('hidden');
@@ -1222,6 +1240,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             description: $('#detail-task-desc').val().trim(),
             priority: $('#detail-task-priority').val(),
             assignee: $('#detail-task-assignee').val().trim() || null,
+            deps: _depsGetSelectedIds(),
         };
         if (!payload.title) return;
 
