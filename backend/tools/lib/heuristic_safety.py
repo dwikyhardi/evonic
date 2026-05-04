@@ -200,12 +200,27 @@ BASH_DANGEROUS_PATTERNS: list[dict[str, Any]] = [
 ]
 
 
+# F. SQLite Database Access Patterns (requires_approval, score 6-10)
+SQLITE_ACCESS_PATTERNS: list[dict[str, Any]] = [
+    # SQLite command-line tool
+    {"pattern": r"\bsqlite3\b", "weight": 8, "category": "sqlite_access", "description": "SQLite3 command-line tool invocation"},
+    # Python SQLite imports and calls
+    {"pattern": r"\bimport\s+sqlite3\b", "weight": 8, "category": "sqlite_access", "description": "Import sqlite3 module (database access)"},
+    {"pattern": r"\bsqlite3\.connect\b", "weight": 8, "category": "sqlite_access", "description": "sqlite3.connect() call (database access)"},
+    # Specific database file references (higher weight for known project DBs)
+    {"pattern": r"\bchat\.db\b", "weight": 10, "category": "sqlite_db_file", "description": "Access to chat.db (project database)"},
+    # Generic database file references (lower weight — broad match)
+    {"pattern": r"\b\w+\.db\b", "weight": 6, "category": "sqlite_db_file", "description": "Access to .db database file"},
+    {"pattern": r"\b\w+\.sqlite3?\b", "weight": 6, "category": "sqlite_db_file", "description": "Access to .sqlite/.sqlite3 database file"},
+]
+
 # Pre-compiled regex patterns (module-level, avoids recompiling on each call)
 _DESTRUCTIVE_COMPILED = _compile(DESTRUCTIVE_PATTERNS)
 _DANGEROUS_COMPILED = _compile(DANGEROUS_PATTERNS)
 _NETWORK_COMPILED = _compile(NETWORK_PATTERNS)
 _SENSITIVE_FILE_COMPILED = _compile(SENSITIVE_FILE_PATTERNS)
 _BASH_DANGEROUS_COMPILED = _compile(BASH_DANGEROUS_PATTERNS)
+_SQLITE_COMPILED = _compile(SQLITE_ACCESS_PATTERNS)
 
 
 # ============================================================================
@@ -231,14 +246,15 @@ def _layer1_pattern_matching(code: str, tool_type: str = 'python') -> dict:
     
     # Select pre-compiled patterns based on tool type
     if tool_type == 'bash':
-        patterns = _BASH_DANGEROUS_COMPILED
+        patterns = _BASH_DANGEROUS_COMPILED + _SQLITE_COMPILED
     else:
         # Python: combine all pre-compiled pattern lists
         patterns = (
             _DANGEROUS_COMPILED +
             _NETWORK_COMPILED +
             _SENSITIVE_FILE_COMPILED +
-            _DESTRUCTIVE_COMPILED
+            _DESTRUCTIVE_COMPILED +
+            _SQLITE_COMPILED
         )
     
     for p in patterns:
@@ -549,6 +565,9 @@ def _generate_approval_info(
     elif "git_staging" in categories:
         risk_level = "medium"
         description = "This action stages all files which may include unintended changes."
+    elif "sqlite_access" in categories or "sqlite_db_file" in categories:
+        risk_level = "medium"
+        description = "This action accesses local SQLite database files which may contain sensitive data."
     elif "privilege_escalation" in categories or "permission_escalation" in categories:
         risk_level = "medium"
         description = "This action may escalate privileges or change permissions."

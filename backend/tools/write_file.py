@@ -97,6 +97,21 @@ def execute(agent, args: dict) -> dict:
         if ssh_check["blocked"]:
             return {"error": ssh_check["error"]}
 
+    # Heuristic safety check: require approval for SQLite database access
+    if not (agent or {}).get('is_super') and (agent is None or agent.get("safety_checker_enabled", 1)):
+        from backend.tools.safety_checker import check_sqlite_path
+        db_check = check_sqlite_path(file_path, agent)
+        if db_check["blocked"]:
+            return {
+                "error": db_check["error"],
+                "level": "requires_approval",
+                "reasons": [db_check["reason"]],
+                "approval_info": {
+                    "risk_level": "medium",
+                    "description": "Writing to SQLite database files may corrupt or expose sensitive data.",
+                },
+            }
+
     # Normalize booleans in case they arrive as strings from the LLM
     if isinstance(overwrite, str):
         overwrite = overwrite.lower() not in ('false', '0', 'no')

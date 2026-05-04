@@ -130,3 +130,99 @@ def check_ssh_path(file_path: str, agent: dict = None) -> dict:
         pass
 
     return {"blocked": False, "error": None, "reason": None}
+
+
+# ---------------------------------------------------------------------------
+# SQLite Database File Check
+# ---------------------------------------------------------------------------
+
+# SQLite database file extensions
+_SQLITE_EXTENSIONS = frozenset({'.db', '.sqlite', '.sqlite3'})
+
+# Known sensitive database filenames (higher priority)
+_SENSITIVE_DB_FILES = frozenset({
+    'chat.db',       # Project chat/database
+    'database.db',   # Generic but obviously a database
+})
+
+
+def check_sqlite_path(file_path: str, agent: dict = None) -> dict:
+    """
+    Check if a file path targets an SQLite database file.
+
+    Uses multiple heuristics:
+    1. File extension matching (.db, .sqlite, .sqlite3)
+    2. Known sensitive database filenames
+    3. Path component analysis
+
+    Args:
+        file_path: The file path to check (relative or absolute).
+        agent: Optional agent context dict (for future super-agent exemption).
+
+    Returns:
+        {"blocked": bool, "error": str | None, "reason": str | None,
+         "requires_approval": bool}
+    """
+    if not file_path or not isinstance(file_path, str):
+        return {"blocked": False, "error": None, "reason": None, "requires_approval": False}
+
+    normalized = os.path.normpath(file_path.strip())
+
+    # Layer 1: Check extension
+    _, ext = os.path.splitext(normalized)
+    ext_lower = ext.lower()
+
+    if ext_lower in _SQLITE_EXTENSIONS:
+        basename = os.path.basename(normalized)
+        if basename in _SENSITIVE_DB_FILES:
+            return {
+                "blocked": True,
+                "error": f"Safety check: Access to SQLite database denied. '{basename}' is a sensitive project database. Database file access requires approval.",
+                "reason": f"Sensitive database file detected: {basename}",
+                "requires_approval": True,
+            }
+        return {
+            "blocked": True,
+            "error": f"Safety check: Access to SQLite database file denied. '{basename}' is a database file ({ext_lower}). Database access requires approval.",
+            "reason": f"SQLite database file detected: {basename}",
+            "requires_approval": True,
+        }
+
+    # Layer 2: Path component analysis
+    parts = normalized.replace("\\", "/").split("/")
+    for part in parts:
+        _, part_ext = os.path.splitext(part)
+        if part_ext.lower() in _SQLITE_EXTENSIONS:
+            if part in _SENSITIVE_DB_FILES:
+                return {
+                    "blocked": True,
+                    "error": f"Safety check: Access to SQLite database denied. Path references '{part}', a sensitive project database. Database file access requires approval.",
+                    "reason": f"Sensitive database file in path: {part}",
+                    "requires_approval": True,
+                }
+            return {
+                "blocked": True,
+                "error": f"Safety check: Access to SQLite database file denied. Path references '{part}', a database file. Database access requires approval.",
+                "reason": f"Database file in path: {part}",
+                "requires_approval": True,
+            }
+
+    # Layer 3: Canonical path resolution
+    try:
+        if os.path.isabs(normalized) or normalized.startswith("~"):
+            expanded = os.path.expanduser(normalized)
+            if os.path.exists(expanded) or os.path.lexists(expanded):
+                real = os.path.realpath(expanded)
+                _, real_ext = os.path.splitext(real)
+                if real_ext.lower() in _SQLITE_EXTENSIONS:
+                    basename = os.path.basename(real)
+                    return {
+                        "blocked": True,
+                        "error": f"Safety check: Access to SQLite database denied. Canonical path resolves to '{basename}', a database file. Database access requires approval.",
+                        "reason": f"Canonical path resolves to database file: {basename}",
+                        "requires_approval": True,
+                    }
+    except (OSError, ValueError, RuntimeError):
+        pass
+
+    return {"blocked": False, "error": None, "reason": None, "requires_approval": False}

@@ -36,7 +36,7 @@ def execute(agent: dict, args: dict) -> dict:
     # ------------------------------------------------------------------
     from backend.tools.lib.heuristic_safety import check_safety
 
-    if not agent.get('_skip_safety') and agent.get('safety_checker_enabled', 1):
+    if not agent.get('_skip_safety') and agent.get('safety_checker_enabled', 1) and not agent.get('is_super'):
         safety = check_safety(script, tool_type='bash')
     else:
         safety = {'level': 'safe', 'score': 0, 'reasons': [], 'blocked_patterns': [], 'approval_info': {}}
