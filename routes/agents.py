@@ -7,12 +7,28 @@ import re
 import json
 import uuid
 import queue
+from typing import Dict, Any, List
 from flask import Blueprint, render_template, jsonify, request, Response, stream_with_context
 from models.db import db
 from models.chatlog import chatlog_manager, _DISPLAY_TYPES
 from backend.tools import tool_registry
 
 agents_bp = Blueprint('agents', __name__)
+
+_SENSITIVE_AGENT_KEYS = frozenset({'workspace'})
+
+
+def _sanitize_agent(agent: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip sensitive fields (workspace) from an agent dict before API response."""
+    for key in _SENSITIVE_AGENT_KEYS:
+        agent.pop(key, None)
+    return agent
+
+
+def _sanitize_agents(agents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    for a in agents:
+        _sanitize_agent(a)
+    return agents
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS_DIR = os.path.join(BASE_DIR, 'agents')
@@ -95,7 +111,7 @@ def agent_detail(agent_id):
 @agents_bp.route('/api/agents', methods=['GET'])
 def api_list_agents():
     agents = db.get_agents()
-    return jsonify({'agents': agents})
+    return jsonify({'agents': _sanitize_agents(agents)})
 
 
 @agents_bp.route('/api/agents/<agent_id>', methods=['GET'])
@@ -113,7 +129,7 @@ def api_get_agent(agent_id):
         if td.get('id'):
             known_ids.add(td['id'])
     agent['missing_tools'] = [t for t in agent['tools'] if t not in known_ids]
-    return jsonify(agent)
+    return jsonify(_sanitize_agent(agent))
 
 
 @agents_bp.route('/api/agents', methods=['POST'])
@@ -142,7 +158,7 @@ def api_create_agent():
         _write_system_prompt(agent_id, data.get('system_prompt', ''))
         agent = db.get_agent(agent_id)
         agent['system_prompt'] = _read_system_prompt(agent_id, fallback=agent.get('system_prompt', ''))
-        return jsonify({'success': True, 'agent': agent})
+        return jsonify({'success': True, 'agent': _sanitize_agent(agent)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -167,7 +183,7 @@ def api_update_agent(agent_id):
     db.update_agent(agent_id, data)
     agent = db.get_agent(agent_id)
     agent['system_prompt'] = _read_system_prompt(agent_id, fallback=agent.get('system_prompt', ''))
-    return jsonify({'success': True, 'agent': agent})
+    return jsonify({'success': True, 'agent': _sanitize_agent(agent)})
 
 
 @agents_bp.route('/api/agents/<agent_id>', methods=['DELETE'])

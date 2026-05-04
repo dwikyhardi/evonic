@@ -1,5 +1,6 @@
 import os
 import re
+from typing import Dict, Any
 
 from flask import Blueprint, render_template, jsonify, request
 
@@ -7,6 +8,15 @@ import config
 from models.db import db
 
 settings_bp = Blueprint('settings', __name__)
+
+_SENSITIVE_MODEL_KEYS = frozenset({'api_key'})
+
+
+def _sanitize_model(model: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip sensitive fields (api_key) from a model dict before API response."""
+    for key in _SENSITIVE_MODEL_KEYS:
+        model.pop(key, None)
+    return model
 
 
 @settings_bp.route('/settings')
@@ -577,7 +587,7 @@ def api_get_default_model():
     model = db.get_default_model()
     if not model:
         return jsonify({'model': None})
-    return jsonify({'model': model})
+    return jsonify({'model': _sanitize_model(model)})
 
 
 @settings_bp.route('/api/settings/default-model', methods=['POST'])
@@ -597,7 +607,7 @@ def api_set_default_model():
             conn.execute("UPDATE llm_models SET is_default = 0")
             conn.execute("UPDATE llm_models SET is_default = 1 WHERE id = ?", (model_id,))
             conn.commit()
-        return jsonify({'success': True, 'model': db.get_default_model()})
+        return jsonify({'success': True, 'model': _sanitize_model(db.get_default_model())})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

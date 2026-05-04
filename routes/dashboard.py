@@ -157,6 +157,8 @@ def api_dashboard_data():
     """Full dashboard data for client-side rendering"""
     stats = db.get_dashboard_stats()
     recent_agents = db.get_recent_agents(limit=5)
+    for a in recent_agents:
+        a.pop('workspace', None)
     recent_runs = db.get_recent_runs(limit=5)
     leaderboard = db.get_model_leaderboard(limit=5)
     model_usage = db.get_model_usage()
