@@ -162,6 +162,17 @@ class ChannelMixin:
             row = cursor.fetchone()
             return dict(row) if row else None
 
+    def update_pending_user_id(self, pending_id: str, external_user_id: str) -> bool:
+        """Update the external_user_id on a pending approval (for admin-generated codes)."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE channel_pending_approvals SET external_user_id = ? WHERE id = ?",
+                (external_user_id, pending_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
     def approve_pending(self, pending_id: str) -> bool:
         """Approve a pending request: add user to allowed_users in channel config, delete pending."""
         with self._connect() as conn:

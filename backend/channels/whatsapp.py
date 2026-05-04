@@ -279,6 +279,8 @@ class WhatsAppChannel(BaseChannel):
             if raw_code:
                 pending = db.get_pending_approval_by_code(raw_code)
                 if pending:
+                    if not pending.get('external_user_id'):
+                        db.update_pending_user_id(pending['id'], sender)
                     approved_user = db.approve_pending_with_name_needed(pending['id'])
                     if approved_user:
                         self._do_send(sender,

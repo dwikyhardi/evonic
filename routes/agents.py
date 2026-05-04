@@ -584,15 +584,13 @@ def api_generate_pair_code(agent_id, channel_id):
     formatted = format_pair_code(raw_code)
     expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
 
-    pending_id = None
-    if external_user_id:
-        pending_id = db.create_pending_approval(
-            channel_id=channel_id,
-            external_user_id=external_user_id,
-            user_name=data.get('user_name'),
-            pair_code=raw_code,
-            expires_at=expires_at,
-        )
+    pending_id = db.create_pending_approval(
+        channel_id=channel_id,
+        external_user_id=external_user_id or '',
+        user_name=data.get('user_name'),
+        pair_code=raw_code,
+        expires_at=expires_at,
+    )
 
     return jsonify({'success': True, 'pair_code': formatted, 'raw_code': raw_code,
                     'expires_at': expires_at, 'pending_id': pending_id})
