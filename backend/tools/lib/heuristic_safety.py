@@ -207,11 +207,11 @@ SQLITE_ACCESS_PATTERNS: list[dict[str, Any]] = [
     # Python SQLite imports and calls
     {"pattern": r"\bimport\s+sqlite3\b", "weight": 8, "category": "sqlite_access", "description": "Import sqlite3 module (database access)"},
     {"pattern": r"\bsqlite3\.connect\b", "weight": 8, "category": "sqlite_access", "description": "sqlite3.connect() call (database access)"},
-    # Specific database file references (higher weight for known project DBs)
-    {"pattern": r"\bchat\.db\b", "weight": 10, "category": "sqlite_db_file", "description": "Access to chat.db (project database)"},
-    # Generic database file references (lower weight — broad match)
-    {"pattern": r"\b\w+\.db\b", "weight": 6, "category": "sqlite_db_file", "description": "Access to .db database file"},
-    {"pattern": r"\b\w+\.sqlite3?\b", "weight": 6, "category": "sqlite_db_file", "description": "Access to .sqlite/.sqlite3 database file"},
+    # Specific database file references (moderate weight — combined with sqlite_access stays in requires_approval range)
+    {"pattern": r"\bchat\.db\b", "weight": 6, "category": "sqlite_db_file", "description": "Access to chat.db (project database)"},
+    # Generic database file references (lowest weight — broad match, needs another category to hit requires_approval)
+    {"pattern": r"\b\w+\.db\b", "weight": 4, "category": "sqlite_db_file", "description": "Access to .db database file"},
+    {"pattern": r"\b\w+\.sqlite3?\b", "weight": 4, "category": "sqlite_db_file", "description": "Access to .sqlite/.sqlite3 database file"},
 ]
 
 # Pre-compiled regex patterns (module-level, avoids recompiling on each call)
