@@ -286,28 +286,33 @@ class ChatDelegationMixin:
             """
             total = conn.execute(count_sql, params).fetchone()[0]
 
-            if limit <= 0:
-                return [], total
+            if limit > 0:
+                # ---- Data query (with message counts and previews) ----
+                data_sql = f"""
+                    SELECT combined.*, ag.name AS agent_name,
+                           ch.type AS channel_type, ch.name AS channel_name,
+                           peer.name AS peer_agent_name
+                    FROM ({union_body}) combined
+                    JOIN agents ag ON ag.id = combined.agent_id
+                    LEFT JOIN channels ch ON ch.id = combined.channel_id
+                    LEFT JOIN agents peer ON (
+                        combined.external_user_id LIKE '__agent__%'
+                        AND peer.id = substr(combined.external_user_id, 10)
+                    )
+                    WHERE {where_sql}
+                    ORDER BY combined.updated_at DESC
+                    LIMIT ? OFFSET ?
+                """
+                rows = conn.execute(data_sql, params + [limit, offset]).fetchall()
+                result = [dict(r) for r in rows], total
+            else:
+                result = [], total
 
-            # ---- Data query (with message counts and previews) ----
-            data_sql = f"""
-                SELECT combined.*, ag.name AS agent_name,
-                       ch.type AS channel_type, ch.name AS channel_name,
-                       peer.name AS peer_agent_name
-                FROM ({union_body}) combined
-                JOIN agents ag ON ag.id = combined.agent_id
-                LEFT JOIN channels ch ON ch.id = combined.channel_id
-                LEFT JOIN agents peer ON (
-                    combined.external_user_id LIKE '__agent__%'
-                    AND peer.id = substr(combined.external_user_id, 10)
-                )
-                WHERE {where_sql}
-                ORDER BY combined.updated_at DESC
-                LIMIT ? OFFSET ?
-            """
-            rows = conn.execute(data_sql, params + [limit, offset]).fetchall()
+            # Detach all agent databases to prevent attachment leak
+            for _, alias in attached:
+                conn.execute(f'DETACH DATABASE "{alias}"')
 
-            return [dict(r) for r in rows], total
+            return result
 
     @functools.lru_cache(maxsize=256)
     def _find_agent_for_session(self, session_id: str) -> Optional[str]:
