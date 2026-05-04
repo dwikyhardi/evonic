@@ -118,9 +118,9 @@ class ChannelMixin:
 
     @staticmethod
     def _generate_pair_code() -> str:
-        """Generate 8-char pairing code (XXXX-XXXX format, stored without hyphen)."""
-        raw = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-        return raw
+        """Generate 6-char pairing code (formatted as XXX-XXX)."""
+        from backend.pairing import generate_pair_code as _gen
+        return _gen()
 
     def create_pending_approval(self, channel_id: str, external_user_id: str,
                                  user_name: Optional[str], pair_code: str,

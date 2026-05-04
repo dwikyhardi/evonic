@@ -2984,6 +2984,9 @@ def channel_approve(pair_code):
         print("Usage: evonic channel approve <pair_code>")
         sys.exit(1)
 
+    # Accept both XXX-XXX and XXXXXX formats
+    pair_code = pair_code.replace("-", "").strip().upper()
+
     db = _get_db()
     pending = db.get_pending_approval_by_code(pair_code)
 

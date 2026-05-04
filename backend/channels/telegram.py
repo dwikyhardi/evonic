@@ -112,7 +112,8 @@ class TelegramChannel(BaseChannel):
                     user_name = ' '.join(parts) if parts else from_user.username
                 allowed, pair_code = self._check_allowlist(user_id, user_name)
                 if not allowed:
-                    formatted = f"{pair_code[:4]}-{pair_code[4:]}"
+                    from backend.pairing import format_pair_code
+                    formatted = format_pair_code(pair_code)
                     await update.message.reply_text(
                         f"⛔ Access denied. Your pairing code: {formatted}. "
                         "Give this code to the admin to approve."
