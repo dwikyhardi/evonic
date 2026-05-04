@@ -853,9 +853,13 @@ def api_chat_agent_state(agent_id):
 
 @agents_bp.route('/api/agents/<agent_id>/chat/clear', methods=['POST'])
 def api_chat_clear(agent_id):
+    agent = db.get_agent(agent_id)
+    if not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+
     import os, datetime
     data = request.get_json()
-    user_id = data.get('user_id', 'anonymous')
+    user_id = (data.get('user_id') or '').strip() or 'anonymous'
 
     from backend.agent_runtime import agent_runtime
     agent_runtime.clear_session(agent_id, user_id)
