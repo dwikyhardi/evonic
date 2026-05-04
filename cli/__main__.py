@@ -55,6 +55,7 @@ from cli.commands import (
     skillset_list, skillset_get, skillset_apply,
     agent_list, agent_get, agent_add, agent_enable, agent_disable, agent_remove,
     model_list, model_get, model_add, model_rm,
+    channel_approve,
     update_server, setup_wizard, pass_setup,
     doctor_command,
     reconfigure_wizard,
@@ -491,6 +492,27 @@ def main():
         help="Model ID to remove",
     )
 
+    # --- channel ---
+    channel_parser = subparsers.add_parser(
+        "channel",
+        help="Manage channel pairing approvals",
+        description="Manage Evonic channels. Available subcommands: approve.",
+    )
+    channel_subparsers = channel_parser.add_subparsers(
+        dest="channel_command", help="Channel management commands"
+    )
+
+    # channel approve
+    channel_approve_subparser = channel_subparsers.add_parser(
+        "approve",
+        help="Approve a pending channel pairing by code",
+        description="Approve a pending channel pairing request using the 8-character pair code.",
+    )
+    channel_approve_subparser.add_argument(
+        "pair_code",
+        help="8-character pairing code (e.g. ABCDEFGH)",
+    )
+
     # --- Plugin CLI commands (discovered dynamically) ---
     # Plugins can register CLI subcommands. The core CLI discovers them from
     # enabled plugins via plugin_manager.get_cli_commands().
@@ -645,6 +667,12 @@ def main():
             )
         elif args.model_command == "rm":
             model_rm(args.model_id)
+    elif args.command == "channel":
+        if args.channel_command is None:
+            channel_parser.print_help()
+            sys.exit(0)
+        elif args.channel_command == "approve":
+            channel_approve(args.pair_code)
     else:
         # Dispatch to plugin CLI commands
         if args.command in plugin_cli_commands:

@@ -2972,3 +2972,28 @@ def doctor_command(quick=False):
 
     print()
     return 0 if failed == 0 else 1
+
+
+# ─── Channel Management ───────────────────────────────────────────────────────
+
+
+def channel_approve(pair_code):
+    """Approve a pending channel pairing request by pair code."""
+    if not pair_code:
+        print("Error: pair_code is required.")
+        print("Usage: evonic channel approve <pair_code>")
+        sys.exit(1)
+
+    db = _get_db()
+    pending = db.get_pending_approval_by_code(pair_code)
+
+    if pending is None:
+        print("❌ Pairing code invalid or expired.")
+        sys.exit(1)
+
+    success = db.approve_pending(pending["id"])
+    if success:
+        print(f"✅ User {pending['external_user_id']} berhasil ditambahkan ke allowlist")
+    else:
+        print("❌ Failed to approve pairing request.")
+        sys.exit(1)
