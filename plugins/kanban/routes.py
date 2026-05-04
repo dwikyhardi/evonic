@@ -147,6 +147,18 @@ def create_blueprint():
             task['deps_met'] = all(d in done_ids for d in deps)
         return jsonify({'tasks': tasks})
 
+    @bp.route('/api/kanban/tasks/available-deps', methods=['GET'])
+    def kanban_api_available_deps():
+        """Return tasks eligible as dependencies (todo or in-progress), excluding a given task."""
+        exclude_id = request.args.get('exclude', type=int)
+        tasks = kanban_db.get_all()
+        result = [
+            {'id': t['id'], 'title': t['title'], 'status': t['status']}
+            for t in tasks
+            if t.get('status') in ('todo', 'in-progress') and t['id'] != exclude_id
+        ]
+        return jsonify({'tasks': result})
+
     @bp.route('/api/kanban/tasks', methods=['POST'])
     def kanban_api_create():
         is_allowed, error = _check_write_access(None, action='create')

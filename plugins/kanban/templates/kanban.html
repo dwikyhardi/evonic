@@ -172,9 +172,13 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 </select>
             </div>
             <div class="mb-5">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="task-deps">Depends on (optional)</label>
-                <select multiple class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="task-deps" size="4"></select>
-                <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple tasks. Selected tasks must be done before this task can start.</p>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depends on (optional)</label>
+                <div class="relative">
+                    <input type="text" id="task-deps-search" autocomplete="off" placeholder="Search tasks…"
+                        class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500">
+                    <ul id="task-deps-dropdown" class="hidden absolute z-50 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg mt-1 shadow-lg max-h-48 overflow-y-auto text-sm"></ul>
+                </div>
+                <ul id="task-deps-selected" class="mt-2 flex flex-col gap-1"></ul>
             </div>
             <div class="flex justify-end gap-2">
                 <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="closeModal()">Cancel</button>
@@ -772,16 +776,94 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
     // ── Create/Edit Modal ─────────────────────────────────────────────────────
 
-    function populateDepsSelect(currentTaskId, selectedDeps) {
-        const $sel = $('#task-deps');
-        $sel.empty();
-        (tasks || []).forEach(t => {
-            if (t.id == currentTaskId) return; // exclude self
-            const label = `#${t.id} ${t.title}`;
-            const opt = $('<option>').val(t.id).text(label);
-            if (selectedDeps && selectedDeps.includes(t.id)) opt.prop('selected', true);
-            $sel.append(opt);
+    // ── Deps autocomplete state ───────────────────────────────────────────────
+    let _depsCurrentTaskId = null;
+    let _depsSelected = []; // [{id, title}, ...]
+    let _depsAvailable = []; // [{id, title, status}, ...] from server
+    let _depsSearchTimer = null;
+
+    function _depsRenderSelected() {
+        const $list = $('#task-deps-selected');
+        $list.empty();
+        _depsSelected.forEach(dep => {
+            $list.append(
+                $('<li>').addClass('flex items-center justify-between gap-2 px-2.5 py-1 bg-gray-100 dark:bg-gray-600 rounded text-xs text-gray-700 dark:text-gray-200')
+                    .append($('<span>').text(`#${dep.id} ${dep.title}`))
+                    .append(
+                        $('<button>').attr('type', 'button').addClass('text-gray-400 hover:text-red-500 transition ml-auto flex-shrink-0')
+                            .html('&times;')
+                            .on('click', () => { _depsSelected = _depsSelected.filter(d => d.id !== dep.id); _depsRenderSelected(); })
+                    )
+            );
         });
+    }
+
+    function _depsRenderDropdown(query) {
+        const $dd = $('#task-deps-dropdown');
+        const q = query.toLowerCase();
+        const selectedIds = new Set(_depsSelected.map(d => d.id));
+        const matches = _depsAvailable.filter(t =>
+            !selectedIds.has(t.id) &&
+            (`#${t.id} ${t.title}`.toLowerCase().includes(q))
+        );
+        $dd.empty();
+        if (!matches.length) {
+            $dd.append($('<li>').addClass('px-3 py-2 text-gray-400 dark:text-gray-500').text('No tasks found'));
+        } else {
+            matches.forEach(t => {
+                const statusBadge = t.status === 'in-progress'
+                    ? '<span class="ml-1 text-[9px] uppercase font-semibold text-blue-500">in-progress</span>'
+                    : '';
+                $dd.append(
+                    $('<li>').addClass('px-3 py-2 cursor-pointer hover:bg-indigo-50 dark:hover:bg-gray-600 flex items-center gap-1')
+                        .html(`<span class="text-gray-500 dark:text-gray-400 font-medium">#${t.id}</span> <span>${esc(t.title)}</span>${statusBadge}`)
+                        .on('mousedown', (e) => {
+                            e.preventDefault();
+                            _depsSelected.push({id: t.id, title: t.title});
+                            _depsRenderSelected();
+                            $('#task-deps-search').val('');
+                            $dd.addClass('hidden');
+                        })
+                );
+            });
+        }
+        $dd.removeClass('hidden');
+    }
+
+    async function _depsLoadAvailable(excludeId) {
+        const url = `${API}/tasks/available-deps` + (excludeId ? `?exclude=${excludeId}` : '');
+        const res = await fetch(url);
+        const data = await res.json();
+        _depsAvailable = data.tasks || [];
+    }
+
+    function _depsInitSearch() {
+        const $input = $('#task-deps-search');
+        const $dd = $('#task-deps-dropdown');
+        $input.off('input focus blur').on('input', function() {
+            clearTimeout(_depsSearchTimer);
+            _depsSearchTimer = setTimeout(() => _depsRenderDropdown($input.val()), 150);
+        }).on('focus', function() {
+            _depsRenderDropdown($input.val());
+        }).on('blur', function() {
+            setTimeout(() => $dd.addClass('hidden'), 200);
+        });
+    }
+
+    async function initDepsWidget(currentTaskId, selectedDeps) {
+        _depsCurrentTaskId = currentTaskId;
+        _depsSelected = [];
+        $('#task-deps-search').val('');
+        $('#task-deps-dropdown').addClass('hidden');
+        await _depsLoadAvailable(currentTaskId);
+        // Pre-populate selected from existing deps (match against available + fallback to tasks list)
+        (selectedDeps || []).forEach(depId => {
+            const found = _depsAvailable.find(t => t.id === depId)
+                || (tasks || []).find(t => t.id === depId);
+            if (found) _depsSelected.push({id: found.id, title: found.title});
+        });
+        _depsRenderSelected();
+        _depsInitSearch();
     }
 
     function openCreateModal() {
@@ -791,7 +873,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $('#modal-title').text('Add Task');
         $('#modal-submit').text('Create Task');
         populateAgentSelect('#task-assignee');
-        populateDepsSelect(null, []);
+        initDepsWidget(null, []);
         $('#kb-modal').removeClass('hidden').addClass('flex');
     }
 
@@ -803,7 +885,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $('#task-desc').val(task.description || '');
         $('#task-priority').val(task.priority || 'low');
         populateAgentSelect('#task-assignee', task.assignee || '');
-        populateDepsSelect(task.id, task.deps || []);
+        initDepsWidget(task.id, task.deps || []);
         $('#modal-title').text('Edit Task');
         $('#modal-submit').text('Save Changes');
         $('#kb-modal').removeClass('hidden').addClass('flex');
@@ -818,13 +900,12 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         const $btn = $('#modal-submit');
         if ($btn.prop('disabled')) return; // prevent double-submit
         const taskId = $('#task-id').val();
-        const selectedDeps = $('#task-deps').val() || [];
         const payload = {
             title: $('#task-title').val().trim(),
             description: $('#task-desc').val().trim(),
             priority: $('#task-priority').val(),
             assignee: $('#task-assignee').val().trim() || null,
-            deps: selectedDeps.map(Number),
+            deps: _depsSelected.map(d => d.id),
         };
         if (!payload.title) return;
 
