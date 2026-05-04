@@ -35,6 +35,26 @@ AGENTS_DIR = os.path.join(BASE_DIR, 'agents')
 WORKSPACE_DIR = os.path.join(BASE_DIR, 'shared', 'agents')
 
 SLUG_RE = re.compile(r'^[a-z0-9_]+$')
+USER_ID_RE = re.compile(r'^[a-zA-Z0-9_\-\.@]{1,128}$')
+
+
+def _validate_user_id(user_id: str) -> str:
+    """Validate and normalize a user_id parameter.
+
+    Rejects empty/whitespace-only, excessively long, or unsafe user_id values.
+    Returns the normalized string on success.
+    """
+    user_id = (user_id or '').strip()
+    if not user_id:
+        raise ValueError('user_id must not be empty')
+    if len(user_id) > 128:
+        raise ValueError('user_id must not exceed 128 characters')
+    if not USER_ID_RE.match(user_id):
+        raise ValueError(
+            'user_id contains invalid characters; '
+            'allowed: alphanumeric, underscore, hyphen, dot, @'
+        )
+    return user_id
 
 
 def _kb_dir(agent_id: str) -> str:
@@ -903,7 +923,11 @@ def api_chat_clear(agent_id):
 @agents_bp.route('/api/agents/<agent_id>/chat/session', methods=['GET'])
 def api_chat_session(agent_id):
     """Return the session_id for a given agent + user, creating it if needed."""
-    user_id = request.args.get('user_id', 'anonymous')
+    raw_user_id = request.args.get('user_id', 'anonymous')
+    try:
+        user_id = _validate_user_id(raw_user_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     session_id = db.get_or_create_session(agent_id, user_id)
     return jsonify({'session_id': session_id})
 
