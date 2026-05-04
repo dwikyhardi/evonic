@@ -1108,12 +1108,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             contentType: 'application/json',
             data: JSON.stringify(payload),
             success: function() {
-                // Cast to number to match API response types (t.id is a number)
                 const taskIdNum = Number(taskId);
-                const task = tasks.find(t => t.id === taskIdNum);
-                if (task) {
-                    Object.assign(task, payload);
-                }
+                loadTasks();
                 $('#panel-edit').addClass('hidden');
                 $('#panel-details').removeClass('hidden');
                 openDetailModal(taskIdNum);
