@@ -1,16 +1,32 @@
 import requests
 import uuid
+from typing import Dict, Any, List
 from flask import Blueprint, jsonify, request
 from models.db import db
 
 models_bp = Blueprint('models', __name__)
+
+_SENSITIVE_MODEL_KEYS = frozenset({'api_key'})
+
+
+def _sanitize_model(model: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip sensitive fields (api_key) from a model dict before API response."""
+    for key in _SENSITIVE_MODEL_KEYS:
+        model.pop(key, None)
+    return model
+
+
+def _sanitize_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    for m in models:
+        _sanitize_model(m)
+    return models
 
 
 @models_bp.route('/api/models', methods=['GET'])
 def api_list_models():
     """List all models."""
     models = db.get_llm_models()
-    return jsonify({'models': models})
+    return jsonify({'models': _sanitize_models(models)})
 
 
 @models_bp.route('/api/models/<model_id>', methods=['GET'])
@@ -19,7 +35,7 @@ def api_get_model(model_id):
     model = db.get_model_by_id(model_id)
     if not model:
         return jsonify({'error': 'Model not found'}), 404
-    return jsonify(model)
+    return jsonify(_sanitize_model(model))
 
 
 @models_bp.route('/api/models', methods=['POST'])
@@ -173,6 +189,8 @@ def api_get_agent_model(agent_id):
         return jsonify({'error': 'Agent not found'}), 404
 
     model = db.get_agent_default_model(agent_id)
+    if model:
+        _sanitize_model(model)
     return jsonify({
         'agent_id': agent_id,
         'default_model_id': agent.get('default_model_id'),
