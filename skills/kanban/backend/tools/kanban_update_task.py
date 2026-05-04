@@ -78,7 +78,20 @@ def execute(agent: dict, args: dict) -> dict:
             fields['paused_at'] = None
 
     if new_assignee is not None:
-        fields['assignee'] = new_assignee if new_assignee.strip() else None
+        stripped = new_assignee.strip() or None
+        # Regular agents cannot reassign tasks to super agents
+        if stripped and not agent.get('is_super'):
+            try:
+                from models.db import db
+                target = db.get_agent(stripped)
+                if target and target.get('is_super'):
+                    return {
+                        'status': 'error',
+                        'message': 'You cannot assign tasks to the super agent. Only the super agent can manage their own tasks.'
+                    }
+            except Exception:
+                pass  # fail open if DB is not available
+        fields['assignee'] = stripped
 
     if new_title is not None:
         fields['title'] = new_title
