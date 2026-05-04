@@ -266,6 +266,25 @@ class TelegramChannel(BaseChannel):
                     pass
 
         self._app = ApplicationBuilder().token(bot_token).build()
+
+        async def handle_error(update: object, context) -> None:
+            from telegram.error import Conflict
+            if isinstance(context.error, Conflict):
+                _logger.warning(
+                    "Telegram channel %s: bot token conflict — another bot instance is already "
+                    "running with this token. Stopping polling. "
+                    "Make sure only one instance uses this bot token.",
+                    channel_id,
+                )
+                self._running = False
+                # Stop polling asynchronously so we don't deadlock
+                import asyncio
+                asyncio.ensure_future(self._app.updater.stop())
+            else:
+                _logger.error("Telegram error: %s", context.error, exc_info=context.error)
+
+        self._app.add_error_handler(handle_error)
+
         # Handle text, photos, and image documents (PNG, WebP)
         # Note: we intentionally do NOT exclude COMMAND filter so that
         # slash commands (/clear, /help, /summary) reach our backend handler.
@@ -402,9 +421,26 @@ class TelegramChannel(BaseChannel):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             self._loop = loop  # save reference so send_message/send_typing can use it
-            loop.run_until_complete(self._app.initialize())
-            loop.run_until_complete(self._app.start())
-            loop.run_until_complete(self._app.updater.start_polling())
+            try:
+                loop.run_until_complete(self._app.initialize())
+                loop.run_until_complete(self._app.start())
+                loop.run_until_complete(self._app.updater.start_polling())
+            except Exception as exc:
+                # Check for Telegram Conflict error (another instance using the same token)
+                exc_type = type(exc).__name__
+                exc_module = type(exc).__module__
+                if 'Conflict' in exc_type or (exc_module.startswith('telegram') and 'conflict' in str(exc).lower()):
+                    _logger.warning(
+                        "Telegram channel %s: bot token conflict — another bot instance is already "
+                        "running with this token. Polling will not start. "
+                        "Make sure only one instance uses this bot token.",
+                        channel_id,
+                    )
+                else:
+                    _logger.error("Telegram channel %s: failed to start polling: %s", channel_id, exc, exc_info=True)
+                self._running = False
+                loop.close()
+                return
             self._running = True
             loop.run_forever()
 

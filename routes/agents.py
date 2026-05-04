@@ -467,6 +467,19 @@ def api_update_channel(agent_id, channel_id):
         db.update_channel(channel_id, data)
     except ValueError as e:
         return jsonify({'error': str(e)}), 409
+
+    # Sync running state with enabled flag if it was changed
+    if 'enabled' in data:
+        from backend.channels.registry import channel_manager
+        if data['enabled']:
+            try:
+                channel_manager.start_channel(channel_id)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error("Failed to start channel %s: %s", channel_id, e)
+        else:
+            channel_manager.stop_channel(channel_id)
+
     return jsonify({'success': True, 'channel': db.get_channel(channel_id)})
 
 
@@ -482,6 +495,7 @@ def api_delete_channel(agent_id, channel_id):
 @agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/start', methods=['POST'])
 def api_start_channel(agent_id, channel_id):
     from backend.channels.registry import channel_manager
+    db.update_channel(channel_id, {'enabled': True})
     try:
         channel_manager.start_channel(channel_id)
         return jsonify({'success': True, 'running': True})
@@ -492,6 +506,7 @@ def api_start_channel(agent_id, channel_id):
 @agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/stop', methods=['POST'])
 def api_stop_channel(agent_id, channel_id):
     from backend.channels.registry import channel_manager
+    db.update_channel(channel_id, {'enabled': False})
     channel_manager.stop_channel(channel_id)
     return jsonify({'success': True, 'running': False})
 
