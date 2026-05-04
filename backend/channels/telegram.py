@@ -104,21 +104,68 @@ class TelegramChannel(BaseChannel):
                 text = strip_system_tags(update.message.text or update.message.caption or '')
                 image_url = None
 
-                # Allowlist check — restricted channels reject unregistered users
+                # Allowlist check with pairing-code auto-approve (mirrors WhatsApp pattern)
                 from_user = update.message.from_user
                 user_name = None
                 if from_user:
                     parts = [p for p in [from_user.first_name, from_user.last_name] if p]
                     user_name = ' '.join(parts) if parts else from_user.username
-                allowed, pair_code = self._check_allowlist(user_id, user_name)
-                if not allowed:
-                    from backend.pairing import format_pair_code
-                    formatted = format_pair_code(pair_code)
-                    await update.message.reply_text(
-                        f"⛔ Access denied. Your pairing code: {formatted}. "
-                        "Give this code to the admin to approve."
-                    )
-                    return
+                from models.db import db
+
+                # Step 1: Fully approved user? (in allowlist AND has name set)
+                if db.is_user_allowed(self.channel_id, user_id):
+                    if db.needs_name(self.channel_id, user_id):
+                        name_candidate = text.strip() if text else ''
+                        if name_candidate and len(name_candidate) <= 100:
+                            db.set_user_display_name(self.channel_id, user_id, name_candidate)
+                            await update.message.reply_text(
+                                f"Thanks, {name_candidate}! You're all set. How can I help you today?"
+                            )
+                        elif text:
+                            await update.message.reply_text(
+                                "That name is too long. Please share a shorter name (max 100 characters)."
+                            )
+                        else:
+                            await update.message.reply_text(
+                                "Please tell me your name to continue (e.g. 'My name is Budi')."
+                            )
+                        return
+                    # User is fully approved — fall through to normal processing
+                else:
+                    # Step 2: User NOT in allowlist — try pairing-code auto-approve
+                    from backend.pairing import extract_pair_code, format_pair_code as fmt_code
+                    raw_code = extract_pair_code(text) if text else None
+                    if raw_code:
+                        pending = db.get_pending_approval_by_code(raw_code)
+                        if pending:
+                            approved_user = db.approve_pending_with_name_needed(pending['id'])
+                            if approved_user:
+                                await update.message.reply_text(
+                                    "✅ You're now approved! Welcome aboard.\n\n"
+                                    "Before we chat, please tell me your name (e.g. 'My name is Budi')."
+                                )
+                            return
+                        else:
+                            await update.message.reply_text(
+                                "❌ That pairing code is invalid or has expired. "
+                                "Please ask the administrator for a new one."
+                            )
+                            return
+                    else:
+                        # No pairing code in message — check if pending approval already exists
+                        existing = db.get_pending_approvals(self.channel_id)
+                        already_pending = any(
+                            p.get('external_user_id') == user_id for p in existing
+                        )
+                        if not already_pending:
+                            allowed, pair_code = self._check_allowlist(user_id, user_name)
+                            if not allowed and pair_code:
+                                formatted = fmt_code(pair_code)
+                                await update.message.reply_text(
+                                    "👋 You're not yet approved to chat here. "
+                                    "Please ask the administrator for a pairing code, then send it in this chat."
+                                )
+                        return
 
                 # Handle photo/image messages if agent has vision enabled
                 IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp'}
