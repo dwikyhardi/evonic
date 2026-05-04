@@ -4,7 +4,7 @@ _workspace.py — shared workspace path resolution for file tools.
 
 import os
 
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _AGENTS_DIR = os.path.join(_BASE_DIR, 'agents')
 _SELF_PREFIX = '/_self/'
 
