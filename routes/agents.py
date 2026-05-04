@@ -518,6 +518,49 @@ def api_unset_primary_channel(agent_id, channel_id):
     return jsonify({'success': True})
 
 
+# ==================== Pending Approvals API ====================
+
+
+@agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/pending-approvals', methods=['GET'])
+def api_list_pending_approvals(agent_id, channel_id):
+    """Return non-expired pending approvals for a channel."""
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    channel = db.get_channel(channel_id)
+    if not channel or channel['agent_id'] != agent_id:
+        return jsonify({'error': 'Channel not found for this agent'}), 404
+    approvals = db.get_pending_approvals(channel_id)
+    return jsonify({'pending_approvals': approvals})
+
+
+@agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/pending-approvals/<pending_id>/approve', methods=['POST'])
+def api_approve_pending(agent_id, channel_id, pending_id):
+    """Approve a pending approval: add user to allowed_users and remove the pending record."""
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    channel = db.get_channel(channel_id)
+    if not channel or channel['agent_id'] != agent_id:
+        return jsonify({'error': 'Channel not found for this agent'}), 404
+    success = db.approve_pending(pending_id)
+    if not success:
+        return jsonify({'error': 'Pending approval not found or already processed'}), 404
+    return jsonify({'success': True})
+
+
+@agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/pending-approvals/<pending_id>/reject', methods=['POST'])
+def api_reject_pending(agent_id, channel_id, pending_id):
+    """Reject a pending approval: remove the pending record."""
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    channel = db.get_channel(channel_id)
+    if not channel or channel['agent_id'] != agent_id:
+        return jsonify({'error': 'Channel not found for this agent'}), 404
+    success = db.reject_pending(pending_id)
+    if not success:
+        return jsonify({'error': 'Pending approval not found or already processed'}), 404
+    return jsonify({'success': True})
+
+
 # ==================== WhatsApp Bridge API ====================
 
 @agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/qr', methods=['GET'])
