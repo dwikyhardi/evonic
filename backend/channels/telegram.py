@@ -104,6 +104,21 @@ class TelegramChannel(BaseChannel):
                 text = strip_system_tags(update.message.text or update.message.caption or '')
                 image_url = None
 
+                # Allowlist check — restricted channels reject unregistered users
+                from_user = update.message.from_user
+                user_name = None
+                if from_user:
+                    parts = [p for p in [from_user.first_name, from_user.last_name] if p]
+                    user_name = ' '.join(parts) if parts else from_user.username
+                allowed, pair_code = self._check_allowlist(user_id, user_name)
+                if not allowed:
+                    formatted = f"{pair_code[:4]}-{pair_code[4:]}"
+                    await update.message.reply_text(
+                        f"⛔ Access denied. Your pairing code: {formatted}. "
+                        "Give this code to the admin to approve."
+                    )
+                    return
+
                 # Handle photo/image messages if agent has vision enabled
                 IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp'}
                 has_photo = update.message.photo

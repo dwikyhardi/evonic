@@ -90,6 +90,20 @@ html.dark #tab-skills .border-amber-200 { border-color: #92400e !important; }
 html.dark #tab-skills .text-amber-800 { color: #fcd34d !important; }
 html.dark #tab-skills .text-amber-600 { color: #fbbf24 !important; }
 html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
+/* Dark mode: Channel detail modal */
+html.dark #channel-detail-modal .bg-gray-50 { background: #374151 !important; }
+html.dark #channel-detail-modal .border-gray-100 { border-color: #4b5563 !important; }
+html.dark #channel-detail-modal .text-gray-700 { color: #e5e7eb !important; }
+html.dark #channel-detail-modal .text-gray-800 { color: #f3f4f6 !important; }
+html.dark #channel-detail-modal .text-gray-500 { color: #9ca3af !important; }
+html.dark #channel-detail-modal .text-gray-400 { color: #6b7280 !important; }
+html.dark #channel-detail-modal .bg-amber-50 { background: #451a03 !important; }
+html.dark #channel-detail-modal .border-amber-200 { border-color: #92400e !important; }
+html.dark #channel-detail-modal .text-amber-700 { color: #fcd34d !important; }
+html.dark #channel-detail-modal .bg-amber-100 { background: #451a03 !important; }
+html.dark #channel-detail-modal .bg-indigo-50 { background: #1e1b4b !important; }
+html.dark #channel-detail-modal .text-indigo-600 { color: #a5b4fc !important; }
+html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e81 !important; }
 </style>
 <div class="px-2 py-1 md:py-4 flex-1 min-h-0 flex flex-col h-[calc(100vh-3rem)]">
     <!-- Header -->
@@ -756,6 +770,54 @@ html.dark #tab-skills .text-amber-500 { color: #fbbf24 !important; }
         </div>
         <div class="flex justify-end p-5 border-t border-gray-200 dark:border-gray-700">
             <button onclick="closeQRModal()" class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Channel Detail Modal (pending approvals + allowlist) -->
+<div id="channel-detail-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[550px] shadow-xl max-h-[90vh] flex flex-col">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+            <h3 class="text-gray-800 dark:text-gray-100 font-semibold" id="channel-detail-title">Channel Detail</h3>
+            <button onclick="closeChannelDetail()" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800 dark:hover:text-gray-200">&times;</button>
+        </div>
+        <div class="p-5 overflow-y-auto flex-1">
+            <!-- Channel Info -->
+            <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div class="flex items-center gap-2 mb-2">
+                    <span id="cd-channel-name" class="text-sm font-semibold text-gray-800 dark:text-gray-100"></span>
+                    <span id="cd-channel-type-badge" class="text-xs px-2 py-0.5 rounded font-medium"></span>
+                    <span id="cd-channel-mode-badge" class="text-xs px-2 py-0.5 rounded font-medium"></span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span id="cd-channel-status-dot" class="inline-block w-2 h-2 rounded-full"></span>
+                    <span id="cd-channel-status-text" class="text-xs text-gray-400"></span>
+                </div>
+            </div>
+
+            <!-- Pending Approvals -->
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Pending Approvals</h4>
+                    <span id="cd-pending-count" class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full"></span>
+                </div>
+                <div id="cd-pending-list" class="space-y-2">
+                    <p class="text-xs text-gray-400 text-center py-3">No pending approvals.</p>
+                </div>
+            </div>
+
+            <!-- Allowlist -->
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Allowed Users</h4>
+                <div id="cd-allowlist" class="space-y-1.5 mb-3">
+                    <p class="text-xs text-gray-400 text-center py-2">No users in allowlist.</p>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="cd-add-user-input" placeholder="Enter external_user_id..."
+                        class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600">
+                    <button onclick="addAllowedUser()" class="px-3 py-2 bg-indigo-500 text-white rounded-md text-sm hover:bg-indigo-600 flex-shrink-0">Add</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1769,6 +1831,7 @@ async function loadChannels() {
                 </div>
             </div>
             <div class="flex items-center gap-2">
+                <button onclick="showChannelDetail('${ch.id}')" class="text-xs px-3 py-1 rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100">Detail</button>
                 ${primaryBtn}
                 ${qrBtn}
                 ${toggleBtn}
@@ -1915,6 +1978,171 @@ async function unsetPrimaryChannel(channelId) {
     const data = await res.json();
     if (data.error) return alert(data.error);
     loadChannels();
+}
+
+// ==================== Channel Detail Modal ====================
+let _cdChannelId = null;
+let _cdPollInterval = null;
+
+function _cdGetChannelConfig() {
+    // Fetch fresh channel data from API
+    return fetch(`/api/agents/${AGENT_ID}/channels`).then(r => r.json()).then(d => {
+        const ch = (d.channels || []).find(c => c.id === _cdChannelId);
+        return ch || null;
+    });
+}
+
+async function showChannelDetail(channelId) {
+    _cdChannelId = channelId;
+    document.getElementById('channel-detail-modal').classList.remove('hidden');
+    await _cdRefresh();
+    // Auto-refresh pending approvals every 30s
+    _cdPollInterval = setInterval(_cdRefreshPending, 30000);
+}
+
+function closeChannelDetail() {
+    document.getElementById('channel-detail-modal').classList.add('hidden');
+    _cdChannelId = null;
+    if (_cdPollInterval) {
+        clearInterval(_cdPollInterval);
+        _cdPollInterval = null;
+    }
+}
+
+async function _cdRefresh() {
+    const ch = await _cdGetChannelConfig();
+    if (!ch) return;
+    const config = ch.config || {};
+    const mode = config.mode || 'open';
+
+    // Channel info
+    document.getElementById('cd-channel-name').textContent = ch.name || 'Unnamed';
+    const badge = ch.type === 'telegram' ? 'bg-blue-100 text-blue-700' :
+                  ch.type === 'whatsapp' ? 'bg-green-100 text-green-700' :
+                  'bg-purple-100 text-purple-700';
+    document.getElementById('cd-channel-type-badge').textContent = ch.type;
+    document.getElementById('cd-channel-type-badge').className = `text-xs px-2 py-0.5 rounded font-medium ${badge}`;
+    const modeBadge = mode === 'restricted' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600';
+    document.getElementById('cd-channel-mode-badge').textContent = mode;
+    document.getElementById('cd-channel-mode-badge').className = `text-xs px-2 py-0.5 rounded font-medium ${modeBadge}`;
+    const running = ch.running;
+    document.getElementById('cd-channel-status-dot').className = `inline-block w-2 h-2 rounded-full ${running ? 'bg-green-500' : 'bg-gray-300'}`;
+    document.getElementById('cd-channel-status-text').textContent = running ? 'Running' : 'Stopped';
+
+    await _cdRefreshPending();
+    _cdRenderAllowlist(config.allowed_users || []);
+}
+
+async function _cdRefreshPending() {
+    if (!_cdChannelId) return;
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_cdChannelId}/pending-approvals`);
+        const data = await res.json();
+        const approvals = data.pending_approvals || [];
+        _cdRenderPending(approvals);
+    } catch(e) {
+        // ignore network errors silently
+    }
+}
+
+function _cdRenderPending(approvals) {
+    const container = document.getElementById('cd-pending-list');
+    const countEl = document.getElementById('cd-pending-count');
+    countEl.textContent = approvals.length > 0 ? `${approvals.length} pending` : '';
+    if (approvals.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-400 text-center py-3">No pending approvals.</p>';
+        return;
+    }
+    container.innerHTML = approvals.map(a => {
+        const pairDisplay = a.pair_code ? `${a.pair_code.slice(0,4)}-${a.pair_code.slice(4)}` : '-';
+        const userName = a.user_name || '-';
+        const createdAt = a.created_at ? new Date(a.created_at + 'Z').toLocaleString() : '-';
+        return `
+        <div class="flex items-center justify-between p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+            <div class="min-w-0 flex-1 mr-2">
+                <div class="text-xs font-medium text-gray-800 dark:text-gray-100 truncate">${userName}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">ID: ${a.external_user_id}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Code: ${pairDisplay}</div>
+                <div class="text-xs text-gray-400">${createdAt}</div>
+            </div>
+            <div class="flex gap-1.5 flex-shrink-0">
+                <button onclick="approvePending('${a.id}')" class="px-2.5 py-1 text-xs rounded bg-green-500 text-white hover:bg-green-600">Approve</button>
+                <button onclick="rejectPending('${a.id}')" class="px-2.5 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600">Reject</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function _cdRenderAllowlist(users) {
+    const container = document.getElementById('cd-allowlist');
+    if (!users || users.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No users in allowlist.</p>';
+        return;
+    }
+    container.innerHTML = users.map(u => `
+        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-100 dark:border-gray-600">
+            <span class="text-xs text-gray-700 dark:text-gray-300 truncate font-mono">${u}</span>
+            <button onclick="removeAllowedUser('${u}')" class="text-xs text-red-500 hover:text-red-700 flex-shrink-0 ml-2">Remove</button>
+        </div>
+    `).join('');
+}
+
+async function approvePending(pendingId) {
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_cdChannelId}/pending-approvals/${pendingId}/approve`, {method: 'POST'});
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast('User approved!', 'success');
+    await _cdRefresh();
+}
+
+async function rejectPending(pendingId) {
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_cdChannelId}/pending-approvals/${pendingId}/reject`, {method: 'POST'});
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast('User rejected.', 'success');
+    await _cdRefresh();
+}
+
+async function removeAllowedUser(userId) {
+    if (!await showConfirm({title: 'Remove user', message: `Remove ${userId} from allowlist?`, confirmText: 'Remove'})) return;
+    const ch = await _cdGetChannelConfig();
+    if (!ch) return;
+    const config = ch.config || {};
+    let users = config.allowed_users || [];
+    users = users.filter(u => u !== userId);
+    config.allowed_users = users;
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_cdChannelId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({config})
+    });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast('User removed from allowlist.', 'success');
+    _cdRenderAllowlist(users);
+}
+
+async function addAllowedUser() {
+    const input = document.getElementById('cd-add-user-input');
+    const userId = input.value.trim();
+    if (!userId) { showToast('Please enter a user ID.', 'error'); return; }
+    const ch = await _cdGetChannelConfig();
+    if (!ch) return;
+    const config = ch.config || {};
+    let users = config.allowed_users || [];
+    if (users.includes(userId)) { showToast('User already in allowlist.', 'error'); return; }
+    users.push(userId);
+    config.allowed_users = users;
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_cdChannelId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({config})
+    });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast('User added to allowlist!', 'success');
+    input.value = '';
+    _cdRenderAllowlist(users);
 }
 
 // ==================== Chat ====================

@@ -252,6 +252,18 @@ class WhatsAppChannel(BaseChannel):
         image_data = payload.get('image')
         quoted_text = payload.get('quoted_text')
 
+        # Allowlist check — restricted channels reject unregistered users
+        user_name = payload.get('pushName') or payload.get('name') or sender
+        allowed, pair_code = self._check_allowlist(sender, user_name)
+        if not allowed:
+            formatted = f"{pair_code[:4]}-{pair_code[4:]}"
+            self._do_send(
+                sender,
+                f"⛔ Access denied. Your pairing code: {formatted}. "
+                "Give this code to the admin to approve."
+            )
+            return
+
         image_url = None
 
         if image_data:
