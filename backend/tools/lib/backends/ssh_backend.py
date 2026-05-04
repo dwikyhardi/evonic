@@ -9,13 +9,17 @@ Authentication priority:
 """
 
 import base64
+import logging
 import os
 import shlex
 import time
 
 from backend.tools.lib.exec_backend import ExecutionBackend, truncate
 
+logger = logging.getLogger(__name__)
+
 _MAX_OUTPUT_BYTES = 64 * 1024  # 64 KB
+_MAX_RETRIES = 5
 
 
 class SSHBackend(ExecutionBackend):
@@ -48,7 +52,7 @@ class SSHBackend(ExecutionBackend):
             hostname=self._host,
             port=self._port,
             username=self._username,
-            timeout=30,
+            timeout=300,
         )
 
         if self._password:
@@ -69,20 +73,20 @@ class SSHBackend(ExecutionBackend):
             kwargs['allow_agent'] = True
 
         self._client.connect(**kwargs)
+        self._client.get_transport().set_keepalive(15)
         self._connected_at = time.time()
         self._last_used = time.time()
+        logger.info(
+            "[ssh_connect] Connected host=%s port=%s user=%s keepalive=15s",
+            self._host, self._port, self._username,
+        )
 
-    def _exec(self, command: str, stdin_data: str, timeout: int) -> dict:
-        """Run a command over SSH, feeding stdin_data via stdin channel."""
-        import paramiko
-
-        # Health check — reconnect if the transport is dead
+    def _exec_once(self, command: str, stdin_data: str, timeout: int) -> dict:
+        """Single execution attempt. Returns _connection_lost=True when transport dies mid-run."""
+        # Health check before exec
         transport = self._client.get_transport()
         if transport is None or not transport.is_active():
-            try:
-                self._connect()
-            except Exception as e:
-                return {'error': f'SSH reconnect failed: {e}', 'exit_code': -1}
+            return {'error': 'Transport not active before exec', 'exit_code': -1, '_connection_lost': True}
 
         t0 = time.time()
         try:
@@ -91,29 +95,110 @@ class SSHBackend(ExecutionBackend):
                 stdin.write(stdin_data)
                 stdin.channel.shutdown_write()
 
-            # Wait for exit with timeout
             channel = stdout.channel
             deadline = t0 + timeout
+            poll_count = 0
+            last_transport_log = t0
+
             while not channel.exit_status_ready():
-                if time.time() > deadline:
+                now = time.time()
+
+                # Detect silent connection drop — keepalive marks transport inactive within ~15s
+                tr = self._client.get_transport()
+                if tr is None or not tr.is_active():
+                    elapsed_so_far = round(now - t0, 1)
+                    logger.warning(
+                        "[ssh_exec] Transport died mid-execution host=%s elapsed=%.1fs poll_count=%d",
+                        self._host, elapsed_so_far, poll_count,
+                    )
+                    channel.close()
+                    return {'error': 'SSH connection lost during execution', 'exit_code': -1, '_connection_lost': True}
+
+                # Periodic heartbeat log every 10s
+                if now - last_transport_log >= 10:
+                    logger.warning(
+                        "[ssh_exec] Still waiting host=%s elapsed=%.1fs channel_closed=%s "
+                        "poll_count=%d deadline_in=%.1fs",
+                        self._host, round(now - t0, 1), channel.closed, poll_count, deadline - now,
+                    )
+                    last_transport_log = now
+
+                if now > deadline:
+                    logger.error(
+                        "[ssh_exec] TIMEOUT host=%s after %ss", self._host, timeout,
+                    )
                     channel.close()
                     return {'error': f'Execution timed out after {timeout}s', 'exit_code': -1}
+
+                poll_count += 1
                 time.sleep(0.05)
 
             exit_code = channel.recv_exit_status()
             out = truncate(stdout.read().decode('utf-8', errors='replace'), _MAX_OUTPUT_BYTES)
             err = truncate(stderr.read().decode('utf-8', errors='replace'), _MAX_OUTPUT_BYTES)
+
         except Exception as e:
+            elapsed = round(time.time() - t0, 3)
+            logger.error(
+                "[ssh_exec] EXCEPTION host=%s after %.3fs err=%r type=%s",
+                self._host, elapsed, str(e), type(e).__name__,
+            )
             return {'error': str(e), 'exit_code': -1}
 
         elapsed = round(time.time() - t0, 3)
         self._last_used = time.time()
+        logger.debug("[ssh_exec] DONE host=%s exit_code=%s elapsed=%ss", self._host, exit_code, elapsed)
         return {
             'stdout': out,
             'stderr': err,
             'exit_code': exit_code,
             'execution_time': elapsed,
         }
+
+    def _exec(self, command: str, stdin_data: str, timeout: int) -> dict:
+        """Run a command over SSH with transparent reconnect + exponential backoff on connection loss.
+
+        The caller (and the agent's LLM loop) never sees a mid-run disconnect — this method
+        blocks through reconnects and re-runs the command on the fresh connection.
+        Up to _MAX_RETRIES (5) reconnect attempts; backoff: 1, 2, 4, 8, 16 seconds.
+        """
+        for attempt in range(_MAX_RETRIES + 1):
+            result = self._exec_once(command, stdin_data, timeout)
+
+            if not result.pop('_connection_lost', False):
+                # Success or non-connection error (timeout, bad exit code, etc.) — return as-is
+                return result
+
+            # Connection lost — decide whether to retry
+            if attempt >= _MAX_RETRIES:
+                logger.error(
+                    "[ssh_exec] Connection lost, max retries (%d) exhausted host=%s",
+                    _MAX_RETRIES, self._host,
+                )
+                return {'error': f'SSH connection lost after {_MAX_RETRIES} reconnect attempts', 'exit_code': -1}
+
+            wait = 2 ** attempt  # 1, 2, 4, 8, 16s
+            logger.warning(
+                "[ssh_exec] Connection lost — reconnecting in %ds (attempt %d/%d) host=%s",
+                wait, attempt + 1, _MAX_RETRIES, self._host,
+            )
+            time.sleep(wait)
+
+            try:
+                self._connect()
+                logger.info(
+                    "[ssh_exec] Reconnected, retrying command (attempt %d/%d) host=%s",
+                    attempt + 1, _MAX_RETRIES, self._host,
+                )
+            except Exception as e:
+                logger.error(
+                    "[ssh_exec] Reconnect attempt %d/%d failed host=%s err=%s",
+                    attempt + 1, _MAX_RETRIES, self._host, e,
+                )
+                # Loop continues — next iteration will hit the transport-dead check immediately
+                # and retry reconnect after a longer backoff
+
+        return {'error': f'SSH connection lost after {_MAX_RETRIES} reconnect attempts', 'exit_code': -1}
 
     def run_bash(self, script: str, timeout: int, env: dict) -> dict:
         # Prepend env exports before the script
