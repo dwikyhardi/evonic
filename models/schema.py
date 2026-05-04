@@ -471,6 +471,20 @@ class SchemaMixin:
                 )
             """)
 
+            # Channel pending approvals (pairing code allowlist)
+            cursor.execute("""\
+                CREATE TABLE IF NOT EXISTS channel_pending_approvals (
+                    id TEXT PRIMARY KEY,
+                    channel_id TEXT NOT NULL,
+                    external_user_id TEXT NOT NULL,
+                    user_name TEXT,
+                    pair_code TEXT NOT NULL UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
+                )
+            """)
+
             # App-level settings (key-value store)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS app_settings (
@@ -560,6 +574,8 @@ class SchemaMixin:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_individual_results_run ON individual_test_results(run_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_individual_results_test ON individual_test_results(test_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_channels_agent ON channels(agent_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_channel_pending_pair_code ON channel_pending_approvals(pair_code)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_channel_pending_channel ON channel_pending_approvals(channel_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_primary_channel ON agents(primary_channel_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_last_active ON agents(last_active_at)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_runs_model_score ON evaluation_runs(model_name, overall_score, completed_at)")
