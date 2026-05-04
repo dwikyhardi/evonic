@@ -612,6 +612,33 @@ def create_blueprint():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @bp.route('/api/kanban/eligible-agents', methods=['GET'])
+    def kanban_eligible_agents():
+        """Return the list of eligible agents (id + name) from plugin config."""
+        try:
+            from plugins.kanban.handler import _load_config, _parse_eligible_agents
+            from models.db import db as main_db
+
+            config = _load_config()
+            eligible_ids = _parse_eligible_agents(config)
+
+            if not eligible_ids:
+                return jsonify({'agents': []})
+
+            eligible_set = set(eligible_ids)
+            all_agents = main_db.get_agents()
+            agents = [
+                {'id': a['id'], 'name': a.get('name', a['id'])}
+                for a in all_agents
+                if a['id'] in eligible_set
+            ]
+            # Preserve config order
+            agents.sort(key=lambda a: eligible_ids.index(a['id']))
+
+            return jsonify({'agents': agents})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     @bp.route('/api/kanban/agent/auto_assign', methods=['POST'])
     def kanban_agent_auto_assign():
         """Use LLM to match unassigned tasks to best-fit eligible agents."""

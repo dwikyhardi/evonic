@@ -1415,7 +1415,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
         const now = Date.now();
         if (!_agentCache || (now - _agentCacheTime) > 60000) {
-            $.get('/api/agents', function(data) {
+            $.get('/api/kanban/eligible-agents', function(data) {
                 _agentCache = (data.agents || []).map(a => ({id: a.id, name: a.name || a.id}));
                 _agentCacheTime = now;
                 _renderTriggerAgents();
@@ -1604,7 +1604,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     function populateAgentSelect(selector, selectedValue) {
         const now = Date.now();
         if (!_agentCache || (now - _agentCacheTime) > 60000) {
-            $.get('/api/agents', function(data) {
+            $.get('/api/kanban/eligible-agents', function(data) {
                 _agentCache = (data.agents || []).map(a => ({id: a.id, name: a.name || a.id}));
                 _agentCacheTime = now;
                 _doPopulateAgentSelect(selector, selectedValue);
