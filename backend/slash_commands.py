@@ -377,11 +377,28 @@ def _register_builtins():
             except Exception:
                 pass
 
+            # Resolve the correct restart target:
+            # - Release mode (BASE_DIR inside releases/): follow current symlink
+            # - Dev mode: restart from project root (BASE_DIR)
+            import config as _config
+            _base = os.path.realpath(_config.BASE_DIR)
+            _rel_marker = os.sep + 'releases' + os.sep
+            if _rel_marker in _base:
+                _project_root = _base.split(_rel_marker)[0]
+                _current = os.path.join(_project_root, 'current')
+                _target = os.path.realpath(_current) if os.path.islink(_current) else _base
+            else:
+                _target = _base
+            _app_py = os.path.join(_target, 'app.py')
+            _venv_python = os.path.join(_target, '.venv', 'bin', 'python')
+            _python = _venv_python if os.path.exists(_venv_python) else sys.executable
+
             # Spawn a new process to handle the restart.
             # close_fds=True ensures no leftover FDs leak into the child.
             # The parent can exit cleanly (watchdog won't kill us).
             subprocess.Popen(
-                [sys.executable] + sys.argv,
+                [_python, _app_py],
+                cwd=_target,
                 close_fds=True,
             )
             os._exit(0)  # Exit parent immediately so child runs independently
