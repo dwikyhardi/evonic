@@ -775,7 +775,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     function populateDepsSelect(currentTaskId, selectedDeps) {
         const $sel = $('#task-deps');
         $sel.empty();
-        (tasks || []).forEach(t => {
+        (tasks || []).filter(t => t.status !== 'done').forEach(t => {
             if (t.id == currentTaskId) return; // exclude self
             const label = `#${t.id} ${t.title}`;
             const opt = $('<option>').val(t.id).text(label);
