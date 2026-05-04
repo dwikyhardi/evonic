@@ -1863,7 +1863,13 @@ class ChatUI {
             turn._onTrigger = (evtName, data) => {
                 origTrigger(evtName, data);
                 if (evtName === 'turn:split') {
-                    const $anchor = opts.userMsgEl ? $(opts.userMsgEl) : turn.$anchor;
+                    // Always anchor after the CURRENT last user message in the DOM.
+                    // opts.userMsgEl is the message that started this turn, but the
+                    // split is triggered by a newly injected message that was appended
+                    // to the container AFTER opts.userMsgEl. Using the stale anchor
+                    // would insert the new bubble above the injected message.
+                    const $lastUser = this.$container.find('[data-msg-role="user"]').last();
+                    const $anchor = $lastUser.length ? $lastUser : (opts.userMsgEl ? $(opts.userMsgEl) : turn.$anchor);
                     const newTurn = this.beginTurn($anchor);
                     this._lastLiveTurnId = newTurn.id;
                     this.markQueuedAsDelivered();

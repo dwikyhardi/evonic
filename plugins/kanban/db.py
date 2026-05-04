@@ -33,6 +33,7 @@ class KanbanDB:
         self._migrate_archived_at()
         self._migrate_paused_at()
         self._migrate_started_at()
+        self._migrate_task_dependencies()
         self._migrate_from_json()
 
     def _connect(self) -> sqlite3.Connection:
@@ -161,6 +162,127 @@ class KanbanDB:
             cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
             if 'started_at' not in cols:
                 conn.execute("ALTER TABLE tasks ADD COLUMN started_at TEXT")
+
+    def _migrate_task_dependencies(self):
+        """Create task_dependencies table if it doesn't exist."""
+        with self._connect() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS task_dependencies (
+                    task_id    INTEGER NOT NULL,
+                    depends_on INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (task_id, depends_on),
+                    FOREIGN KEY (task_id)    REFERENCES tasks(id) ON DELETE CASCADE,
+                    FOREIGN KEY (depends_on) REFERENCES tasks(id) ON DELETE CASCADE
+                )
+            """)
+
+    # ── Dependencies ─────────────────────────────────────────────────────────
+
+    def _detect_cycle(self, task_id: int, new_dep_ids: list) -> bool:
+        """Return True if adding new_dep_ids as dependencies of task_id would create a cycle.
+
+        Uses BFS: starting from each new dep, walks the dependency graph.
+        If we reach task_id, a cycle exists.
+        """
+        with self._connect() as conn:
+            def deps_of(tid):
+                rows = conn.execute(
+                    "SELECT depends_on FROM task_dependencies WHERE task_id = ?", (tid,)
+                ).fetchall()
+                return [r[0] for r in rows]
+
+            visited = set()
+            queue = list(new_dep_ids)
+            while queue:
+                current = queue.pop()
+                if current == task_id:
+                    return True
+                if current in visited:
+                    continue
+                visited.add(current)
+                queue.extend(deps_of(current))
+        return False
+
+    def set_dependencies(self, task_id: int, dep_ids: list) -> None:
+        """Replace all dependencies for task_id with dep_ids.
+
+        Raises ValueError on cycle detection or if a dep task doesn't exist.
+        """
+        dep_ids = [int(d) for d in dep_ids]
+        # Remove self-references
+        dep_ids = [d for d in dep_ids if d != task_id]
+        if not dep_ids:
+            with self._connect() as conn:
+                conn.execute("DELETE FROM task_dependencies WHERE task_id = ?", (task_id,))
+            return
+        # Validate all dep tasks exist
+        with self._connect() as conn:
+            for dep_id in dep_ids:
+                row = conn.execute("SELECT id FROM tasks WHERE id = ?", (dep_id,)).fetchone()
+                if not row:
+                    raise ValueError(f"Dependency task #{dep_id} does not exist.")
+        if self._detect_cycle(task_id, dep_ids):
+            raise ValueError(f"Adding these dependencies would create a circular dependency.")
+        now = _now()
+        with self._connect() as conn:
+            conn.execute("DELETE FROM task_dependencies WHERE task_id = ?", (task_id,))
+            for dep_id in dep_ids:
+                conn.execute(
+                    "INSERT OR IGNORE INTO task_dependencies (task_id, depends_on, created_at) VALUES (?, ?, ?)",
+                    (task_id, dep_id, now),
+                )
+
+    def get_dependencies(self, task_id: int) -> list:
+        """Return list of task IDs that task_id depends on."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT depends_on FROM task_dependencies WHERE task_id = ? ORDER BY depends_on",
+                (task_id,),
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_dependents(self, task_id: int) -> list:
+        """Return list of task IDs that depend on task_id."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT task_id FROM task_dependencies WHERE depends_on = ? ORDER BY task_id",
+                (task_id,),
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_unmet_dependencies(self, task_id: int) -> list:
+        """Return list of dependency task dicts that are NOT in 'done' status."""
+        with self._connect() as conn:
+            rows = conn.execute("""
+                SELECT t.* FROM tasks t
+                JOIN task_dependencies td ON td.depends_on = t.id
+                WHERE td.task_id = ? AND t.status != 'done'
+                ORDER BY t.id
+            """, (task_id,)).fetchall()
+        return [self._row_to_dict(r) for r in rows]
+
+    def has_unmet_dependencies(self, task_id: int) -> bool:
+        """Return True if task_id has at least one dependency not in 'done' status."""
+        with self._connect() as conn:
+            row = conn.execute("""
+                SELECT 1 FROM tasks t
+                JOIN task_dependencies td ON td.depends_on = t.id
+                WHERE td.task_id = ? AND t.status != 'done'
+                LIMIT 1
+            """, (task_id,)).fetchone()
+        return row is not None
+
+    def get_all_dependencies(self) -> dict:
+        """Return {task_id: [dep_id, ...]} for all tasks that have dependencies."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT task_id, depends_on FROM task_dependencies ORDER BY task_id, depends_on"
+            ).fetchall()
+        result = {}
+        for row in rows:
+            result.setdefault(row[0], []).append(row[1])
+        return result
 
     def _migrate_from_json(self):
         """Import tasks.json into DB on first run, then rename it."""

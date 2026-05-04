@@ -128,7 +128,8 @@ class Scheduler:
         from models.db import db
         schedules = db.get_schedules(owner_type=owner_type, owner_id=owner_id,
                                      enabled_only=enabled_only)
-        return [self._enrich_next_run(s) for s in schedules]
+        job_map = self._build_next_run_map() if self._started else {}
+        return [self._enrich_next_run(s, job_map) for s in schedules]
 
     def get_schedule(self, schedule_id: str) -> Optional[dict]:
         from models.db import db
@@ -363,15 +364,32 @@ class Scheduler:
     # Internal: Enrich schedule dict with live APScheduler next_run_time
     # ------------------------------------------------------------------
 
-    def _enrich_next_run(self, schedule: dict) -> dict:
+    def _build_next_run_map(self) -> dict:
+        """Build a {schedule_id: next_run_time_iso} dict via a single get_jobs() call."""
+        job_map = {}
+        try:
+            for job in self._scheduler.get_jobs():
+                if job.next_run_time:
+                    job_map[job.id] = job.next_run_time.isoformat()
+        except Exception:
+            pass
+        return job_map
+
+    def _enrich_next_run(self, schedule: dict, job_map: dict = None) -> dict:
         """Overlay live APScheduler next_run_time onto next_run_at, if available."""
         if not self._started:
             return schedule
         try:
-            job = self._scheduler.get_job(schedule['id'])
-            if job and job.next_run_time:
-                schedule = dict(schedule)
-                schedule['next_run_at'] = job.next_run_time.isoformat()
+            if job_map is not None:
+                next_iso = job_map.get(schedule['id'])
+                if next_iso:
+                    schedule = dict(schedule)
+                    schedule['next_run_at'] = next_iso
+            else:
+                job = self._scheduler.get_job(schedule['id'])
+                if job and job.next_run_time:
+                    schedule = dict(schedule)
+                    schedule['next_run_at'] = job.next_run_time.isoformat()
         except Exception:
             pass
         return schedule

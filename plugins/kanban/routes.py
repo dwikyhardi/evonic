@@ -137,6 +137,14 @@ def create_blueprint():
         mine = request.args.get('mine', '').lower() in ('1', 'true')
         if mine and agent_id and not _is_super_agent(agent_id):
             tasks = [t for t in tasks if t.get('assignee') == agent_id]
+        # Enrich tasks with dependency info
+        all_deps = kanban_db.get_all_dependencies()
+        done_ids = {t['id'] for t in kanban_db.get_all() if t.get('status') == 'done'}
+        for task in tasks:
+            tid = task['id']
+            deps = all_deps.get(tid, [])
+            task['deps'] = deps
+            task['deps_met'] = all(d in done_ids for d in deps)
         return jsonify({'tasks': tasks})
 
     @bp.route('/api/kanban/tasks', methods=['POST'])
@@ -165,6 +173,16 @@ def create_blueprint():
         }
         task = kanban_db.create(new_task)
         kanban_db.log_task_created(task['id'])
+        # Handle dependencies
+        deps = data.get('deps')
+        if deps and isinstance(deps, list):
+            try:
+                kanban_db.set_dependencies(task['id'], deps)
+            except ValueError as e:
+                kanban_db.delete(task['id'])
+                return jsonify({'error': str(e)}), 400
+        task['deps'] = kanban_db.get_dependencies(task['id'])
+        task['deps_met'] = not kanban_db.has_unmet_dependencies(task['id'])
         _emit('kanban_task_created', task)
         return jsonify({'task': task}), 201
 
@@ -296,6 +314,17 @@ def create_blueprint():
 
         fields['updated_at'] = _now()
         updated = kanban_db.update(task_id, fields)
+        # Handle dependencies if provided
+        if 'deps' in data:
+            deps = data['deps']
+            if not isinstance(deps, list):
+                return jsonify({'error': "'deps' must be a list of task IDs"}), 400
+            try:
+                kanban_db.set_dependencies(task_id, deps)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+        updated['deps'] = kanban_db.get_dependencies(task_id)
+        updated['deps_met'] = not kanban_db.has_unmet_dependencies(task_id)
         _emit('kanban_task_updated', updated)
         return jsonify({'task': updated})
 

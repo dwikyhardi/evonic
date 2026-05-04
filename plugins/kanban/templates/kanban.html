@@ -165,11 +165,16 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                     <option value="high">High</option>
                 </select>
             </div>
-            <div class="mb-5">
+            <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="task-assignee">Assign to Agent (optional)</label>
                 <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="task-assignee">
                     <option value="">-- None --</option>
                 </select>
+            </div>
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="task-deps">Depends on (optional)</label>
+                <select multiple class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="task-deps" size="4"></select>
+                <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple tasks. Selected tasks must be done before this task can start.</p>
             </div>
             <div class="flex justify-end gap-2">
                 <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition" onclick="closeModal()">Cancel</button>
@@ -229,6 +234,10 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                         <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Duration</div>
                         <div class="text-sm text-gray-700 dark:text-gray-300 font-medium" id="detail-durasi"></div>
                     </div>
+                </div>
+                <div id="detail-deps-section" class="hidden mt-4">
+                    <div class="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500 mb-1">Depends On</div>
+                    <div class="text-sm text-gray-700 dark:text-gray-300" id="detail-deps"></div>
                 </div>
 
                 <div class="flex justify-between items-center mb-3 mt-10">
@@ -594,6 +603,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         <div class="bg-white dark:bg-gray-700 rounded-lg p-3 shadow-sm hover:shadow-md dark:shadow-gray-900/30 transition border border-gray-200 dark:border-gray-700 cursor-grab active:cursor-grabbing" data-id="${task.id}" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)">
             <div class="text-xs font-semibold text-gray-800 dark:text-gray-100 mb-1 break-words cursor-pointer" onclick="openDetailModal(${task.id})"><span class="text-gray-500 dark:text-gray-400 font-semibold">#${task.id} &bull;</span> ${esc(decodeHtmlEntities(task.title))}</div>
             ${task.description ? `<div class="text-[11px] text-gray-500 dark:text-gray-400 mb-2 line-clamp-2 break-words cursor-pointer" onclick="openDetailModal(${task.id})">${esc(decodeHtmlEntities(stripMarkdown(task.description)))}</div>` : ''}
+            ${(task.deps && task.deps.length > 0 && !task.deps_met) ? `<div class="text-[10px] text-amber-600 dark:text-amber-400 mb-1.5 flex items-center gap-1">&#128274; blocked by ${task.deps.map(d => '#' + d).join(', ')}</div>` : ''}
             <div class="flex items-center gap-1.5 mb-1.5 flex-wrap">
                 <span class="text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 ${pBadge}">${esc(task.priority || 'low')}</span>
                 ${rocketBtn}
@@ -762,6 +772,18 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
     // ── Create/Edit Modal ─────────────────────────────────────────────────────
 
+    function populateDepsSelect(currentTaskId, selectedDeps) {
+        const $sel = $('#task-deps');
+        $sel.empty();
+        (tasks || []).forEach(t => {
+            if (t.id == currentTaskId) return; // exclude self
+            const label = `#${t.id} ${t.title}`;
+            const opt = $('<option>').val(t.id).text(label);
+            if (selectedDeps && selectedDeps.includes(t.id)) opt.prop('selected', true);
+            $sel.append(opt);
+        });
+    }
+
     function openCreateModal() {
         $('#task-id').val('');
         $('#task-form')[0].reset();
@@ -769,6 +791,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $('#modal-title').text('Add Task');
         $('#modal-submit').text('Create Task');
         populateAgentSelect('#task-assignee');
+        populateDepsSelect(null, []);
         $('#kb-modal').removeClass('hidden').addClass('flex');
     }
 
@@ -780,6 +803,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $('#task-desc').val(task.description || '');
         $('#task-priority').val(task.priority || 'low');
         populateAgentSelect('#task-assignee', task.assignee || '');
+        populateDepsSelect(task.id, task.deps || []);
         $('#modal-title').text('Edit Task');
         $('#modal-submit').text('Save Changes');
         $('#kb-modal').removeClass('hidden').addClass('flex');
@@ -794,11 +818,13 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         const $btn = $('#modal-submit');
         if ($btn.prop('disabled')) return; // prevent double-submit
         const taskId = $('#task-id').val();
+        const selectedDeps = $('#task-deps').val() || [];
         const payload = {
             title: $('#task-title').val().trim(),
             description: $('#task-desc').val().trim(),
             priority: $('#task-priority').val(),
             assignee: $('#task-assignee').val().trim() || null,
+            deps: selectedDeps.map(Number),
         };
         if (!payload.title) return;
 
@@ -889,6 +915,22 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $('#detail-created').text(fmt(task.created_at));
         $('#detail-updated').text(fmt(task.updated_at));
         $('#detail-durasi').text(fmtDuration(task));
+
+        // Dependencies
+        if (task.deps && task.deps.length > 0) {
+            const depLabels = task.deps.map(depId => {
+                const depTask = tasks.find(t => t.id === depId);
+                const done = depTask && depTask.status === 'done';
+                const label = depTask ? `#${depId} ${esc(depTask.title)}` : `#${depId}`;
+                const cls = done ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400';
+                const icon = done ? '✓' : '⏳';
+                return `<span class="${cls}">${icon} ${label}</span>`;
+            });
+            $('#detail-deps').html(depLabels.join('<br>'));
+            $('#detail-deps-section').removeClass('hidden');
+        } else {
+            $('#detail-deps-section').addClass('hidden');
+        }
 
         switchTab('details');
         $('#kb-detail-modal').removeClass('hidden').addClass('flex');
