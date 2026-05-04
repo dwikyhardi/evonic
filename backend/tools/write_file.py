@@ -123,6 +123,15 @@ def execute(agent, args: dict) -> dict:
     if content is None:
         return {'error': "Missing required argument: 'content'"}
 
+    # /_self/ path: always route to the agent's local directory on the evonic server.
+    from backend.tools._workspace import is_self_path, resolve_self_path
+    agent_id = (agent or {}).get('id')
+    if agent_id and is_self_path(file_path):
+        local_path = resolve_self_path(agent_id, file_path)
+        if not local_path:
+            return {'error': "Access denied — path escapes agent directory."}
+        return write_file(local_path, content, overwrite=overwrite, create_dirs=create_dirs)
+
     # When sandbox is enabled, route file I/O through the execution backend
     # (Docker container, SSH remote, etc.) instead of the host filesystem.
     sandbox_enabled = (agent or {}).get('sandbox_enabled', 1)

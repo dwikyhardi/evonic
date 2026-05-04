@@ -4,6 +4,30 @@ _workspace.py — shared workspace path resolution for file tools.
 
 import os
 
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_AGENTS_DIR = os.path.join(_BASE_DIR, 'agents')
+_SELF_PREFIX = '/_self/'
+
+
+def is_self_path(file_path: str) -> bool:
+    """Return True if file_path uses the /_self/ virtual prefix."""
+    return bool(file_path) and (file_path.startswith(_SELF_PREFIX) or file_path == '/_self')
+
+
+def resolve_self_path(agent_id: str, file_path: str) -> str | None:
+    """Resolve /_self/... to the agent's local directory on the evonic server.
+
+    Returns the absolute local path, or None if the resolved path escapes
+    the agent's directory (path traversal / symlink attack prevention).
+    """
+    rel = file_path[len(_SELF_PREFIX):] if file_path.startswith(_SELF_PREFIX) else ''
+    abs_path = os.path.normpath(os.path.join(_AGENTS_DIR, agent_id, rel))
+    safe_root = os.path.realpath(os.path.join(_AGENTS_DIR, agent_id))
+    resolved = os.path.realpath(abs_path)
+    if not resolved.startswith(safe_root + os.sep) and resolved != safe_root:
+        return None
+    return resolved
+
 
 def resolve_workspace_path(agent, file_path: str, fallback_workspace: str) -> str:
     """Resolve a file path to an absolute path, honoring the agent's workspace.

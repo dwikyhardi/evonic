@@ -484,6 +484,15 @@ def execute(agent, args: dict) -> dict:
         if ssh_check["blocked"]:
             return {"error": ssh_check["error"]}
 
+    # /_self/ path: always route to the agent's local directory on the evonic server.
+    from backend.tools._workspace import is_self_path, resolve_self_path
+    agent_id = (agent or {}).get('id')
+    if agent_id and is_self_path(file_path):
+        local_path = resolve_self_path(agent_id, file_path)
+        if not local_path:
+            return {'error': "Access denied — path escapes agent directory."}
+        return apply_patch(local_path, patch_text)
+
     # When sandbox is enabled, route file I/O through the execution backend.
     sandbox_enabled = (agent or {}).get('sandbox_enabled', 1)
     if sandbox_enabled:

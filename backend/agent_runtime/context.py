@@ -130,6 +130,19 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
         for skill_id, desc in skills_with_system_md:
             parts.append(f"- `{skill_id}` - {desc}")
 
+    # Inform remote agents about /_self/ access to their local config directory
+    if agent.get('workplace_id'):
+        parts.append("\n## Agent Workspace")
+        parts.append(
+            "Your workplace is remote, but you can still access your local agent directory "
+            "on the evonic server using the `/_self/` path prefix with any file tool."
+        )
+        parts.append(
+            f"- `/_self/SYSTEM.md` — your system prompt\n"
+            f"- `/_self/kb/` — your knowledge base files\n"
+            f"- `/_self/sessions/` — your session data"
+        )
+
     return "\n".join(parts) if parts else "You are a helpful assistant."
 
 
@@ -165,6 +178,10 @@ def _cache_key_valid(agent: Dict[str, Any], cache_entry: Dict[str, Any]) -> bool
 
     # Check context.py mtime (for injected sections like slash commands)
     if _get_mtime(__file__) != cache_entry.get('ctx_mtime', 0.0):
+        return False
+
+    # Check workplace_id (affects /_self/ section in system prompt)
+    if agent.get('workplace_id') != cache_entry.get('workplace_id'):
         return False
 
     return True
@@ -207,6 +224,7 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
             'skills_mtimes': skills_mtimes,
             'tools_hash': str(sorted(assigned_ids)),
             'ctx_mtime': _get_mtime(__file__),
+            'workplace_id': agent.get('workplace_id'),
         }
 
     prompt = static_prompt

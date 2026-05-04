@@ -116,6 +116,18 @@ def execute(agent, args: dict) -> dict:
     if not old_str:
         return {'error': "'old_str' must not be empty"}
 
+    # /_self/ path: always route to the agent's local directory on the evonic server.
+    from backend.tools._workspace import is_self_path, resolve_self_path
+    agent_id = (agent or {}).get('id')
+    if agent_id and is_self_path(file_path):
+        local_path = resolve_self_path(agent_id, file_path)
+        if not local_path:
+            return {'error': "Access denied — path escapes agent directory."}
+        result = str_replace(local_path, old_str, new_str, count=count)
+        if 'error' in result and display_path != local_path:
+            result['error'] = result['error'].replace(local_path, display_path)
+        return result
+
     # When sandbox is enabled, route file I/O through the execution backend.
     sandbox_enabled = (agent or {}).get('sandbox_enabled', 1)
     if sandbox_enabled:
