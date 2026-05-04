@@ -561,6 +561,43 @@ def api_reject_pending(agent_id, channel_id, pending_id):
     return jsonify({'success': True})
 
 
+@agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/generate-pair-code', methods=['POST'])
+def api_generate_pair_code(agent_id, channel_id):
+    """Generate a new pairing code for a channel (admin-initiated).
+
+    Creates a pending approval for a user_id specified in the request body,
+    or returns a standalone code that the admin can hand out.
+    """
+    if not db.get_agent(agent_id):
+        return jsonify({'error': 'Agent not found'}), 404
+    channel = db.get_channel(channel_id)
+    if not channel or channel['agent_id'] != agent_id:
+        return jsonify({'error': 'Channel not found for this agent'}), 404
+
+    from backend.pairing import generate_pair_code, format_pair_code
+    from datetime import datetime, timedelta
+
+    data = request.get_json(silent=True) or {}
+    external_user_id = (data.get('user_id') or '').strip()
+
+    raw_code = generate_pair_code()
+    formatted = format_pair_code(raw_code)
+    expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+
+    pending_id = None
+    if external_user_id:
+        pending_id = db.create_pending_approval(
+            channel_id=channel_id,
+            external_user_id=external_user_id,
+            user_name=data.get('user_name'),
+            pair_code=raw_code,
+            expires_at=expires_at,
+        )
+
+    return jsonify({'success': True, 'pair_code': formatted, 'raw_code': raw_code,
+                    'expires_at': expires_at, 'pending_id': pending_id})
+
+
 # ==================== WhatsApp Bridge API ====================
 
 @agents_bp.route('/api/agents/<agent_id>/channels/<channel_id>/qr', methods=['GET'])

@@ -225,3 +225,99 @@ class ChannelMixin:
         allowed = config.get("allowed_users", [])
         return external_user_id in allowed
 
+    def _update_channel_config(self, channel_id: str, config: Dict[str, Any]) -> bool:
+        """Low-level helper: persist channel config dict to DB."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE channels SET config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(config), channel_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def _get_channel_config(self, channel_id: str) -> Optional[Dict[str, Any]]:
+        """Low-level helper: read and parse channel config."""
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT config FROM channels WHERE id = ?", (channel_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+        return json.loads(row[0]) if row[0] else {}
+
+    def get_user_display_name(self, channel_id: str, external_user_id: str) -> str:
+        """Get display name for an allowed user. Returns 'unknown' if not set."""
+        config = self._get_channel_config(channel_id)
+        if not config:
+            return "unknown"
+        user_names = config.get("user_names", {})
+        return user_names.get(external_user_id, "unknown")
+
+    def set_user_display_name(self, channel_id: str, external_user_id: str, name: str) -> bool:
+        """Store display name for a user and remove from names_needed list."""
+        config = self._get_channel_config(channel_id)
+        if not config:
+            return False
+        user_names = config.get("user_names", {})
+        user_names[external_user_id] = name
+        config["user_names"] = user_names
+        names_needed = config.get("names_needed", [])
+        if external_user_id in names_needed:
+            names_needed.remove(external_user_id)
+            config["names_needed"] = names_needed
+        return self._update_channel_config(channel_id, config)
+
+    def needs_name(self, channel_id: str, external_user_id: str) -> bool:
+        """Check if user has been approved but still needs to provide their name."""
+        config = self._get_channel_config(channel_id)
+        if not config:
+            return False
+        names_needed = config.get("names_needed", [])
+        return external_user_id in names_needed
+
+    def mark_name_needed(self, channel_id: str, external_user_id: str) -> bool:
+        """Mark a newly approved user as needing to provide their name."""
+        config = self._get_channel_config(channel_id)
+        if not config:
+            return False
+        names_needed = config.get("names_needed", [])
+        if external_user_id not in names_needed:
+            names_needed.append(external_user_id)
+            config["names_needed"] = names_needed
+        return self._update_channel_config(channel_id, config)
+
+    def approve_pending_with_name_needed(self, pending_id: str) -> Optional[str]:
+        """Approve a pending request AND mark the user as needing to provide their name.
+
+        Returns the external_user_id of the approved user, or None on failure.
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM channel_pending_approvals WHERE id = ?", (pending_id,))
+            pending = cursor.fetchone()
+            if not pending:
+                return None
+            channel_id = pending["channel_id"]
+            external_user_id = pending["external_user_id"]
+            cursor.execute("SELECT * FROM channels WHERE id = ?", (channel_id,))
+            channel = cursor.fetchone()
+            if not channel:
+                return None
+            config = json.loads(channel["config"]) if channel["config"] else {}
+            allowed = config.get("allowed_users", [])
+            if external_user_id not in allowed:
+                allowed.append(external_user_id)
+            config["allowed_users"] = allowed
+            names_needed = config.get("names_needed", [])
+            if external_user_id not in names_needed:
+                names_needed.append(external_user_id)
+            config["names_needed"] = names_needed
+            cursor.execute(
+                "UPDATE channels SET config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(config), channel_id)
+            )
+            cursor.execute("DELETE FROM channel_pending_approvals WHERE id = ?", (pending_id,))
+            conn.commit()
+            return external_user_id

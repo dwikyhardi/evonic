@@ -810,6 +810,17 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                 </div>
             </div>
 
+            <!-- Pairing Code Generator -->
+            <div class="mb-4">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pairing Code</h4>
+                <div class="flex gap-2 items-center">
+                    <button onclick="generatePairCode()" class="px-3 py-2 bg-indigo-500 text-white rounded-md text-sm hover:bg-indigo-600 flex-shrink-0">Generate</button>
+                    <span id="cd-pair-code-display" class="text-sm font-mono font-bold text-indigo-600 dark:text-indigo-400 flex-1 text-center"></span>
+                    <button onclick="copyPairCode()" id="cd-pair-copy-btn" class="hidden px-2 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-md text-xs hover:bg-gray-200 dark:hover:bg-gray-600 flex-shrink-0" title="Copy code">📋</button>
+                </div>
+                <p class="text-[10px] text-gray-400 mt-1">Share this 6-character code with users so they can auto-approve via WhatsApp.<br>Codes expire after 5 minutes. Format: XXX-XXX (hyphen optional when user sends it).</p>
+            </div>
+
             <!-- Allowlist -->
             <div>
                 <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Allowed Users</h4>
@@ -2158,6 +2169,33 @@ async function addAllowedUser() {
     showToast('User added to allowlist!', 'success');
     input.value = '';
     _cdRenderAllowlist(users, config.user_names || {}, config.names_needed || []);
+}
+
+// ==================== Pairing Code Generator ====================
+
+async function generatePairCode() {
+    try {
+        const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_cdChannelId}/generate-pair-code`, { method: 'POST' });
+        const data = await res.json();
+        if (data.error) { showToast(data.error, 'error'); return; }
+        const display = document.getElementById('cd-pair-code-display');
+        const copyBtn = document.getElementById('cd-pair-copy-btn');
+        display.textContent = data.pair_code;
+        copyBtn.classList.remove('hidden');
+        showToast('Pairing code generated! Valid for 5 minutes.', 'success');
+    } catch(e) {
+        showToast('Failed to generate pairing code.', 'error');
+    }
+}
+
+function copyPairCode() {
+    const code = document.getElementById('cd-pair-code-display').textContent;
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+        showToast('Code copied to clipboard!', 'success');
+    }).catch(() => {
+        showToast('Failed to copy code.', 'error');
+    });
 }
 
 async function toggleChannelMode(enabled) {
