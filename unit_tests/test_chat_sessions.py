@@ -23,11 +23,33 @@ def _auth(client):
 
 
 @pytest.fixture
-def agent_id():
-    """Create a test agent and return its ID."""
+def agent_id(tmp_path):
+    """Create a test agent and return its ID.
+
+    Self-isolating: saves/restores ``db.db_path`` so it never touches the
+    production database even if the ``use_test_database`` autouse fixture
+    fails to isolate correctly.
+    """
     aid = f"test_agent_{uuid.uuid4().hex[:8]}"
+
+    # Save the current db_path (already patched by use_test_database, or
+    # the original production path if that fixture didn't run).
+    original_path = db.db_path
+
+    # Point the singleton at a fresh temp DB just for this fixture.
+    db.db_path = str(tmp_path / f"{aid}_db.sqlite")
+    # Nuke the thread-local cached connection so _connect() opens the new
+    # path instead of reusing a stale handle pointing at the old path.
+    db._tlocal.conn = None
+    db._init_tables()
+
     db.create_agent({'id': aid, 'name': 'Test Agent', 'system_prompt': 'You are a test bot.'})
     yield aid
+
+    # Teardown: restore the original path and clear the connection again
+    # so the next test's fixture gets a clean slate.
+    db._tlocal.conn = None
+    db.db_path = original_path
 
 
 @pytest.fixture
