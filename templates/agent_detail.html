@@ -252,7 +252,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                     </div>
                     <div>
                         <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Raw Tail Size</label>
-                        <input type="number" id="agent-summarize-tail" min="1" value="{{ agent.summarize_tail if agent.summarize_tail is not none else 1 }}" class="w-32 p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                        <input type="number" id="agent-summarize-tail" min="1" value="{{ agent.summarize_tail if agent.summarize_tail is not none else 5 }}" class="w-32 p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
                         <p class="text-xs text-gray-400 mt-1">Number of recent messages kept in raw form (not summarized).</p>
                     </div>
                     <div>
@@ -1150,7 +1150,7 @@ async function saveAdvanced() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             summarize_threshold: parseInt(document.getElementById('agent-summarize-threshold').value) || 0,
-            summarize_tail: parseInt(document.getElementById('agent-summarize-tail').value) || 1,
+            summarize_tail: parseInt(document.getElementById('agent-summarize-tail').value) || 5,
             summarize_prompt: document.getElementById('agent-summarize-prompt').value || null,
             message_buffer_seconds: parseFloat(document.getElementById('agent-buffer-seconds').value) || 0,
             send_intermediate_responses: document.getElementById('agent-send-intermediate').checked ? 1 : 0,

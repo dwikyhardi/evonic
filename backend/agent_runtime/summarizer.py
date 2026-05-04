@@ -83,7 +83,7 @@ def _do_summarize(agent: dict, session_id: str, llm_lock: threading.Lock) -> Non
     from models.chatlog import chatlog_manager, _SUMMARY_COUNT_TYPES
     agent_id = agent['id']
     threshold = agent.get('summarize_threshold', 3)
-    tail_size = agent.get('summarize_tail', 2)
+    tail_size = agent.get('summarize_tail', 5)
 
     chatlog = chatlog_manager.get(agent_id, session_id)
     _has_jsonl = chatlog.get_last_entry() is not None

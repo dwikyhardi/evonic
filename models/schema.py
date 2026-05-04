@@ -350,7 +350,7 @@ class SchemaMixin:
             # Migration: add summarization and buffering settings
             for col, defn in [
                 ("summarize_threshold", "INTEGER DEFAULT 3"),
-                ("summarize_tail", "INTEGER DEFAULT 1"),
+                ("summarize_tail", "INTEGER DEFAULT 5"),
                 ("summarize_prompt", "TEXT"),
                 ("message_buffer_seconds", "REAL DEFAULT 2"),
                 ("inject_agent_id", "BOOLEAN DEFAULT 1"),

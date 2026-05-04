@@ -26,8 +26,8 @@ class AgentMixin:
             cursor.execute("""
                 INSERT INTO agents (id, name, description, system_prompt, model, is_super, enabled,
                     vision_enabled, inject_agent_id, inject_datetime, send_intermediate_responses, enable_agent_state,
-                    workspace, agent_messaging_enabled, sandbox_enabled)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    workspace, agent_messaging_enabled, sandbox_enabled, summarize_tail)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 agent['id'], agent.get('name', agent['id']),
                 agent.get('description', ''), agent.get('system_prompt', ''),
@@ -42,6 +42,7 @@ class AgentMixin:
                 agent.get('workspace'),
                 1 if agent.get('agent_messaging_enabled') is not False else 0,
                 1 if agent.get('sandbox_enabled') else 0,
+                agent.get('summarize_tail', 5),
             ))
             conn.commit()
         return agent['id']
