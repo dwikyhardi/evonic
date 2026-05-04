@@ -818,7 +818,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                     <span id="cd-pair-code-display" class="text-sm font-mono font-bold text-indigo-600 dark:text-indigo-400 flex-1 text-center"></span>
                     <button onclick="copyPairCode()" id="cd-pair-copy-btn" class="hidden px-2 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-md text-xs hover:bg-gray-200 dark:hover:bg-gray-600 flex-shrink-0" title="Copy code">📋</button>
                 </div>
-                <p class="text-[10px] text-gray-400 mt-1">Share this 6-character code with users so they can auto-approve via WhatsApp.<br>Codes expire after 5 minutes. Format: XXX-XXX (hyphen optional when user sends it).</p>
+                <p class="text-[10px] text-gray-400 mt-1">Share this 6-character code with users so they can auto-approve via WhatsApp/Telegram.<br>Codes expire after 5 minutes.</p>
             </div>
 
             <!-- Allowlist -->
@@ -2071,7 +2071,7 @@ function _cdRenderPending(approvals) {
         return;
     }
     container.innerHTML = approvals.map(a => {
-        const pairDisplay = a.pair_code ? `${a.pair_code.slice(0,4)}-${a.pair_code.slice(4)}` : '-';
+        const pairDisplay = a.pair_code || '-';
         const userName = a.user_name || '-';
         const createdAt = a.created_at ? new Date(a.created_at + 'Z').toLocaleString() : '-';
         return `

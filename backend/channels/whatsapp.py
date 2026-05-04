@@ -274,7 +274,7 @@ class WhatsAppChannel(BaseChannel):
             # User is fully approved — fall through to normal processing
         else:
             # Step 2: User NOT in allowlist — try pairing-code auto-approve
-            from backend.pairing import extract_pair_code, format_pair_code as fmt_code
+            from backend.channels.pairing import extract_pair_code, format_pair_code as fmt_code
             raw_code = extract_pair_code(text) if text else None
             if raw_code:
                 pending = db.get_pending_approval_by_code(raw_code)

@@ -574,7 +574,7 @@ def api_generate_pair_code(agent_id, channel_id):
     if not channel or channel['agent_id'] != agent_id:
         return jsonify({'error': 'Channel not found for this agent'}), 404
 
-    from backend.pairing import generate_pair_code, format_pair_code
+    from backend.channels.pairing import generate_pair_code, format_pair_code
     from datetime import datetime, timedelta
 
     data = request.get_json(silent=True) or {}
