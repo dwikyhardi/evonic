@@ -137,6 +137,14 @@ def create_blueprint():
         mine = request.args.get('mine', '').lower() in ('1', 'true')
         if mine and agent_id and not _is_super_agent(agent_id):
             tasks = [t for t in tasks if t.get('assignee') == agent_id]
+        # Enrich tasks with dependency info
+        all_deps = kanban_db.get_all_dependencies()
+        done_ids = {t['id'] for t in kanban_db.get_all() if t.get('status') == 'done'}
+        for task in tasks:
+            tid = task['id']
+            deps = all_deps.get(tid, [])
+            task['deps'] = deps
+            task['deps_met'] = all(d in done_ids for d in deps)
         return jsonify({'tasks': tasks})
 
     @bp.route('/api/kanban/tasks', methods=['POST'])
