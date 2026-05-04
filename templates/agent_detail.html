@@ -787,7 +787,11 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                 <div class="flex items-center gap-2 mb-2">
                     <span id="cd-channel-name" class="text-sm font-semibold text-gray-800 dark:text-gray-100"></span>
                     <span id="cd-channel-type-badge" class="text-xs px-2 py-0.5 rounded font-medium"></span>
-                    <span id="cd-channel-mode-badge" class="text-xs px-2 py-0.5 rounded font-medium"></span>
+                    <label class="flex items-center gap-1 cursor-pointer ml-auto select-none" title="Toggle channel mode">
+                        <span class="text-[10px] text-gray-400" id="cd-mode-label-open">Open</span>
+                        {{ toggle_widget(id='cd-mode-toggle', onchange='toggleChannelMode(this.checked)') }}
+                        <span class="text-[10px] text-gray-400" id="cd-mode-label-restricted">Restricted</span>
+                    </label>
                 </div>
                 <div class="flex items-center gap-1.5">
                     <span id="cd-channel-status-dot" class="inline-block w-2 h-2 rounded-full"></span>
@@ -1806,6 +1810,8 @@ async function loadChannels() {
         const running = ch.running;
         const statusDot = running ? 'bg-green-500' : 'bg-gray-300';
         const statusText = running ? 'Running' : 'Stopped';
+        const chMode = (ch.config && ch.config.mode) || 'open';
+        const modeBadgeCls = chMode === 'restricted' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600';
         const isPrimary = ch.is_primary;
         const primaryIcon = isPrimary ? '<span class="text-yellow-500" title="Primary channel">&#9733;</span>' : '';
         const toggleBtn = running
@@ -1824,7 +1830,10 @@ async function loadChannels() {
                     <span class="text-sm font-medium text-gray-800">${ch.name || 'Unnamed'}</span>
                     ${primaryIcon}
                 </div>
-                <div class="mb-1"><span class="text-xs px-2 py-0.5 rounded font-medium ${typeBadge}">${ch.type}</span></div>
+                <div class="flex items-center gap-1.5 mb-1">
+                    <span class="text-xs px-2 py-0.5 rounded font-medium ${typeBadge}">${ch.type}</span>
+                    <span class="text-xs px-2 py-0.5 rounded font-medium ${modeBadgeCls}">${chMode}</span>
+                </div>
                 <div class="flex items-center gap-1.5">
                     <span class="inline-block w-2 h-2 rounded-full ${statusDot}"></span>
                     <span class="text-xs text-gray-400">${statusText}</span>
@@ -2021,9 +2030,7 @@ async function _cdRefresh() {
                   'bg-purple-100 text-purple-700';
     document.getElementById('cd-channel-type-badge').textContent = ch.type;
     document.getElementById('cd-channel-type-badge').className = `text-xs px-2 py-0.5 rounded font-medium ${badge}`;
-    const modeBadge = mode === 'restricted' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600';
-    document.getElementById('cd-channel-mode-badge').textContent = mode;
-    document.getElementById('cd-channel-mode-badge').className = `text-xs px-2 py-0.5 rounded font-medium ${modeBadge}`;
+    document.getElementById('cd-mode-toggle').checked = (mode === 'restricted');
     const running = ch.running;
     document.getElementById('cd-channel-status-dot').className = `inline-block w-2 h-2 rounded-full ${running ? 'bg-green-500' : 'bg-gray-300'}`;
     document.getElementById('cd-channel-status-text').textContent = running ? 'Running' : 'Stopped';
@@ -2142,6 +2149,25 @@ async function addAllowedUser() {
     showToast('User added to allowlist!', 'success');
     input.value = '';
     _cdRenderAllowlist(users);
+}
+
+async function toggleChannelMode(enabled) {
+    const newMode = enabled ? 'restricted' : 'open';
+    const ch = await _cdGetChannelConfig();
+    if (!ch) return;
+    const config = ch.config || {};
+    config.mode = newMode;
+    const res = await fetch(`/api/agents/${AGENT_ID}/channels/${_cdChannelId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({config})
+    });
+    const data = await res.json();
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`Channel mode set to ${newMode}`, 'success');
+    // Refresh both the channels list and detail modal
+    loadChannels();
+    _cdRefresh();
 }
 
 // ==================== Chat ====================
