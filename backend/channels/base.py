@@ -140,7 +140,13 @@ class BaseChannel(ABC):
         if db.is_user_allowed(self.channel_id, external_user_id):
             return True, None
 
-        # Generate pairing code and create pending approval (expires in 5 min)
+        # Check for existing non-expired pending approval for this user
+        existing = db.get_pending_approvals(self.channel_id)
+        for approval in existing:
+            if approval.get('external_user_id') == external_user_id:
+                return False, approval['pair_code']
+
+        # No existing pending approval — generate new pair code and create record
         pair_code = db._generate_pair_code()
         expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
         db.create_pending_approval(
