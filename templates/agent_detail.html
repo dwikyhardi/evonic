@@ -2036,7 +2036,7 @@ async function _cdRefresh() {
     document.getElementById('cd-channel-status-text').textContent = running ? 'Running' : 'Stopped';
 
     await _cdRefreshPending();
-    _cdRenderAllowlist(config.allowed_users || []);
+    _cdRenderAllowlist(config.allowed_users || [], config.user_names || {}, config.names_needed || []);
 }
 
 async function _cdRefreshPending() {
@@ -2079,18 +2079,27 @@ function _cdRenderPending(approvals) {
     }).join('');
 }
 
-function _cdRenderAllowlist(users) {
+function _cdRenderAllowlist(users, userNames, namesNeeded) {
     const container = document.getElementById('cd-allowlist');
     if (!users || users.length === 0) {
         container.innerHTML = '<p class="text-xs text-gray-400 text-center py-2">No users in allowlist.</p>';
         return;
     }
-    container.innerHTML = users.map(u => `
+    container.innerHTML = users.map(u => {
+        const name = userNames[u] || '';
+        const needsName = namesNeeded && namesNeeded.includes(u);
+        const nameDisplay = needsName
+            ? '<span class="text-amber-600 dark:text-amber-400 italic">(name pending...)</span>'
+            : (name ? `<span class="text-gray-600 dark:text-gray-400">— ${name}</span>` : '<span class="text-gray-400 italic">unknown</span>');
+        return `
         <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-100 dark:border-gray-600">
-            <span class="text-xs text-gray-700 dark:text-gray-300 truncate font-mono">${u}</span>
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="text-xs text-gray-700 dark:text-gray-300 font-mono flex-shrink-0">${u}</span>
+                <span class="text-xs truncate">${nameDisplay}</span>
+            </div>
             <button onclick="removeAllowedUser('${u}')" class="text-xs text-red-500 hover:text-red-700 flex-shrink-0 ml-2">Remove</button>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 async function approvePending(pendingId) {
@@ -2125,7 +2134,7 @@ async function removeAllowedUser(userId) {
     const data = await res.json();
     if (data.error) { showToast(data.error, 'error'); return; }
     showToast('User removed from allowlist.', 'success');
-    _cdRenderAllowlist(users);
+    _cdRenderAllowlist(users, config.user_names || {}, config.names_needed || []);
 }
 
 async function addAllowedUser() {
@@ -2148,7 +2157,7 @@ async function addAllowedUser() {
     if (data.error) { showToast(data.error, 'error'); return; }
     showToast('User added to allowlist!', 'success');
     input.value = '';
-    _cdRenderAllowlist(users);
+    _cdRenderAllowlist(users, config.user_names || {}, config.names_needed || []);
 }
 
 async function toggleChannelMode(enabled) {
