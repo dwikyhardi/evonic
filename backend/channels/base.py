@@ -123,6 +123,35 @@ class BaseChannel(ABC):
         """
         return None
 
+    def _check_allowlist(self, external_user_id: str, user_name: str | None = None) -> tuple:
+        """Check if user is allowed to chat. Returns (allowed: bool, pair_code: str|None).
+
+        In 'restricted' mode, unregistered users get a pairing code that an admin
+        must approve. In 'open' mode (default), everyone is allowed.
+        """
+        from models.db import db
+        from datetime import datetime, timedelta
+
+        channel = db.get_channel(self.channel_id)
+        if not channel:
+            return True, None
+
+        # is_user_allowed handles both 'open' mode (always True) and allowlist check
+        if db.is_user_allowed(self.channel_id, external_user_id):
+            return True, None
+
+        # Generate pairing code and create pending approval (expires in 5 min)
+        pair_code = db._generate_pair_code()
+        expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+        db.create_pending_approval(
+            channel_id=self.channel_id,
+            external_user_id=external_user_id,
+            user_name=user_name,
+            pair_code=pair_code,
+            expires_at=expires_at,
+        )
+        return False, pair_code
+
     @property
     def is_running(self) -> bool:
         return self._running
