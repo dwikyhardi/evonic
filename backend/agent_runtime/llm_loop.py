@@ -146,7 +146,7 @@ def run_tool_loop(agent: Dict[str, Any],
                 'max_tokens': model.get('max_tokens', 32768),
                 'temperature': model.get('temperature'),
             }
-            _logger.info("%s using model: %s (%s)", agent.get('name', agent_id), model.get('name'), model.get('model_name'))
+            _logger.info("%s using model: %s (%s)", agent_id, model.get('name'), model.get('model_name'))
         else:
             _logger.info("No model configured for agent %s, using config.py defaults", agent_id)
     except Exception as e:
