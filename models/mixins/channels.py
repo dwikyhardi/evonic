@@ -47,6 +47,7 @@ class ChannelMixin:
         chan_id = channel.get('id') or str(uuid.uuid4())
         cfg = channel.get('config', {})
         if isinstance(cfg, dict):
+            cfg.setdefault('mode', 'restricted')
             cfg = json.dumps(cfg)
         with self._connect() as conn:
             cursor = conn.cursor()

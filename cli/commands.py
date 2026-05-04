@@ -1679,7 +1679,7 @@ def setup_wizard():
                     "agent_id": agent_id,
                     "type": "telegram",
                     "name": "Telegram Bot",
-                    "config": {"bot_token": bot_token},
+                    "config": {"bot_token": bot_token, "mode": "restricted"},
                     "enabled": True,
                 })
                 print("  Telegram bot connected successfully.")

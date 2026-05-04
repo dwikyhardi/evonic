@@ -126,8 +126,8 @@ class BaseChannel(ABC):
     def _check_allowlist(self, external_user_id: str, user_name: str | None = None) -> tuple:
         """Check if user is allowed to chat. Returns (allowed: bool, pair_code: str|None).
 
-        In 'restricted' mode, unregistered users get a pairing code that an admin
-        must approve. In 'open' mode (default), everyone is allowed.
+        In 'restricted' mode (default for new channels), unregistered users get
+        a pairing code that an admin must approve. In 'open' mode, everyone is allowed.
         """
         from models.db import db
         from datetime import datetime, timedelta

@@ -1900,7 +1900,7 @@ async function addChannel() {
     const res = await fetch(`/api/agents/${AGENT_ID}/channels`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({type, name, config})
+        body: JSON.stringify({type, name, config: {...config, mode: 'restricted'}})
     });
     const data = await res.json();
     if (data.error) return alert(data.error);
