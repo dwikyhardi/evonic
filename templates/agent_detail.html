@@ -2036,6 +2036,7 @@ async function _cdRefresh() {
 
     // Channel info
     document.getElementById('cd-channel-name').textContent = ch.name || 'Unnamed';
+    document.getElementById('channel-detail-title').textContent = `Channel: ${ch.name || 'Unnamed'} - ${AGENT_ID}`;
     const badge = ch.type === 'telegram' ? 'bg-blue-100 text-blue-700' :
                   ch.type === 'whatsapp' ? 'bg-green-100 text-green-700' :
                   'bg-purple-100 text-purple-700';
