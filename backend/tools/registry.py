@@ -256,9 +256,13 @@ class ToolRegistry:
 def _builtin_read_factory(agent_context: dict):
     """Factory for the built-in 'read' tool scoped to an agent's KB directory."""
     agent_id = agent_context.get('id', '')
-    base_dir = os.path.join(
-        os.path.dirname(__file__), '..', '..', 'agents', agent_id, 'kb'
-    )
+    agent_workspace = agent_context.get('workspace')
+    if agent_workspace:
+        base_dir = os.path.normpath(os.path.join(agent_workspace, 'kb'))
+    else:
+        base_dir = os.path.normpath(os.path.join(
+            os.path.dirname(__file__), '..', '..', 'agents', agent_id, 'kb'
+        ))
     base_dir = os.path.normpath(base_dir)
 
     tool_def = {
