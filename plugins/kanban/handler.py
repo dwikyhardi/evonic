@@ -852,6 +852,21 @@ def _scan_and_notify(sdk=None) -> dict:
             })
             continue
 
+        try:
+            from plugins.kanban.db import kanban_db as _kdb_dep
+            if _kdb_dep.has_unmet_dependencies(task_id):
+                _log(f'Skipping task {task_id} (has unmet dependencies)', 'info', sdk)
+                results['details'].append({
+                    'task_id': task_id,
+                    'title': title,
+                    'agent_id': assignee,
+                    'success': False,
+                    'reason': 'blocked_by_dependency',
+                })
+                continue
+        except Exception:
+            pass
+
         notify_result = _notify_agent(assignee, task, channel_type, sdk)
         if notify_result.get('success'):
             results['notified'] += 1
@@ -1106,6 +1121,22 @@ def _state_handler(agent_id: str, session_id: str, agent_state, label: str, data
                     f"to complete it first."
                 ),
             }
+        # Block pick if task has unmet dependencies
+        try:
+            from plugins.kanban.db import kanban_db as _kdb_pick
+            unmet = _kdb_pick.get_unmet_dependencies(task_id)
+            if unmet:
+                blocking = ', '.join(f"#{t['id']} '{t['title']}'" for t in unmet)
+                return {
+                    'result': 'error',
+                    'message': (
+                        f"Cannot pick task #{task_id} — it has unmet dependencies. "
+                        f"The following tasks must be completed first: {blocking}. "
+                        f"Please work on those tasks first."
+                    ),
+                }
+        except Exception:
+            pass
         _pending_tasks[agent_id] = task_id
         _task_state_since[agent_id] = time.time()
         _awaiting_approval.discard(agent_id)
@@ -1147,6 +1178,22 @@ def _state_handler(agent_id: str, session_id: str, agent_state, label: str, data
                 'result': 'error',
                 'message': "Missing task_id. Call state('kanban:activate', {'task_id': '<id>'}).",
             }
+        # Block activate if task has unmet dependencies
+        try:
+            from plugins.kanban.db import kanban_db as _kdb_act
+            unmet = _kdb_act.get_unmet_dependencies(task_id)
+            if unmet:
+                blocking = ', '.join(f"#{t['id']} '{t['title']}'" for t in unmet)
+                return {
+                    'result': 'error',
+                    'message': (
+                        f"Cannot activate task #{task_id} — it has unmet dependencies. "
+                        f"The following tasks must be completed first: {blocking}. "
+                        f"Please work on those tasks first."
+                    ),
+                }
+        except Exception:
+            pass
         # Gate: autopilot=OFF requires explicit user approval before activation
         autopilot = _is_autopilot(agent_id)
         if not autopilot and _approval_granted.get(agent_id) != task_id:

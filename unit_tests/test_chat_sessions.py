@@ -23,11 +23,36 @@ def _auth(client):
 
 
 @pytest.fixture
-def agent_id():
-    """Create a test agent and return its ID."""
+def agent_id(tmp_path):
+    """Create a test agent and return its ID.
+
+    Self-isolating: saves/restores ``db.db_path`` so it never touches the
+    production database even if the ``use_test_database`` autouse fixture
+    fails to isolate correctly.
+    """
     aid = f"test_agent_{uuid.uuid4().hex[:8]}"
+
+    # Save the current db_path (already patched by use_test_database, or
+    # the original production path if that fixture didn't run).
+    original_path = db.db_path
+
+    # Point the singleton at a fresh temp DB just for this fixture.
+    db.db_path = str(tmp_path / f"{aid}_db.sqlite")
+    # Nuke the thread-local cached connection so _connect() opens the new
+    # path instead of reusing a stale handle pointing at the old path.
+    db._tlocal.conn = None
+    db._init_tables()
+
     db.create_agent({'id': aid, 'name': 'Test Agent', 'system_prompt': 'You are a test bot.'})
+    # Ensure a super agent exists so Flask's enforce_auth doesn't return 503.
+    if not db.has_super_agent():
+        db.create_agent({'id': 'test_super', 'name': 'Super', 'system_prompt': '', 'is_super': True})
     yield aid
+
+    # Teardown: restore the original path and clear the connection again
+    # so the next test's fixture gets a clean slate.
+    db._tlocal.conn = None
+    db.db_path = original_path
 
 
 @pytest.fixture
@@ -265,6 +290,19 @@ class TestBotToggle:
 
 
 class TestGetAllSessions:
+    """Tests for get_all_sessions which discovers chat DBs on disk via AGENTS_DIR."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_agents_dir(self, monkeypatch, agent_id, chat_db, tmp_path):
+        """Place the chat DB at the filesystem path get_all_sessions expects."""
+        import models.mixins.chat_delegation as cd_mod
+        agent_dir = tmp_path / agent_id
+        agent_dir.mkdir(exist_ok=True)
+        # Symlink (or copy) the chat DB to where get_all_sessions looks for it
+        expected_path = agent_dir / 'chat.db'
+        os.symlink(chat_db.db_path, str(expected_path))
+        monkeypatch.setattr(cd_mod, 'AGENTS_DIR', str(tmp_path))
+
     def test_lists_sessions_across_agents(self, chat_db, agent_id):
         db.get_or_create_session(agent_id, 'user1')
         db.get_or_create_session(agent_id, 'user2')

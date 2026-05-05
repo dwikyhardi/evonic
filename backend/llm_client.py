@@ -347,17 +347,22 @@ class LLMClient:
             processed_messages = [merged] + processed_messages[n_sys:]
 
         # Handle reasoning_content field based on thinking mode:
-        # - Thinking ON: some APIs (e.g. DeepSeek) require the field on every assistant
-        #   message, even when the model returned no reasoning for that turn. Ensure it
-        #   is always present (use empty string when nothing was captured).
-        # - Thinking OFF: other APIs reject the field entirely — strip it.
+        # - Thinking ON (self.thinking=True, enable_thinking=True): add the field on every
+        #   assistant message — some APIs (e.g. DeepSeek) require it even when the model
+        #   returned no reasoning for that particular turn.
+        # - Thinking model but disabled for this call (self.thinking=True, enable_thinking=False):
+        #   keep existing reasoning_content so it is passed back correctly (required by
+        #   DeepSeek-R1 after tool calls), but do NOT add empty strings to messages that
+        #   have none — and do NOT add the thinking parameter to the payload below.
+        # - Thinking OFF (self.thinking=False): other APIs reject the field entirely — strip it.
         if self.thinking and enable_thinking:
             for _msg in processed_messages:
-                if _msg.get("role") == "assistant" and "reasoning_content" not in _msg:
-                    _msg["reasoning_content"] = ""
-        else:
+                if _msg.get('role') == 'assistant' and 'reasoning_content' not in _msg:
+                    _msg['reasoning_content'] = ''
+        elif not self.thinking:
             for _msg in processed_messages:
-                _msg.pop("reasoning_content", None)
+                _msg.pop('reasoning_content', None)
+        # else: self.thinking=True, enable_thinking=False → leave reasoning_content as-is
 
         if is_ollama_fmt:
             payload = {

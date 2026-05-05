@@ -65,17 +65,17 @@
         <div>
             <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
                 <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Tools <span id="tool-count" class="text-sm font-normal text-gray-400"></span></h3>
+                    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Tools <span id="tool-count" class="text-sm font-normal text-gray-400 dark:text-gray-500"></span></h3>
                 </div>
                 <div class="mb-3">
                     <input type="text" id="tool-filter" placeholder="Filter tools..."
                            oninput="filterTools()"
-                           class="w-full p-2 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                           class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
                 </div>
                 <div id="tools-list" class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-                    <p class="text-sm text-gray-400">Loading...</p>
+                    <p class="text-sm text-gray-400 dark:text-gray-500">Loading...</p>
                 </div>
-                <div id="tools-empty-filter" class="hidden text-center py-6 text-gray-400">
+                <div id="tools-empty-filter" class="hidden text-center py-6 text-gray-400 dark:text-gray-500">
                     <p class="text-sm">No tools match your filter</p>
                 </div>
             </div>
@@ -236,17 +236,17 @@ function renderTools(tools) {
 
     emptyFilter.classList.add('hidden');
     list.innerHTML = tools.map(t => `
-        <div class="tool-item flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-600 hover:bg-indigo-50 rounded-lg cursor-pointer transition-colors group"
+        <div class="tool-item flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg cursor-pointer transition-colors group"
              data-name="${esc(t.name)}" data-desc="${esc(t.description || '')}"
              onclick="openToolModal('${esc(t.name)}')">
-            <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 group-hover:bg-indigo-200 rounded-lg flex items-center justify-center mt-0.5 transition-colors">
-                <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 rounded-lg flex items-center justify-center mt-0.5 transition-colors">
+                <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             </div>
             <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-800 font-mono group-hover:text-indigo-700 transition-colors">${esc(t.name)}</p>
-                <p class="text-xs text-gray-500 mt-0.5">${esc(t.description || '')}</p>
+                <p class="text-sm font-medium text-gray-800 dark:text-gray-200 font-mono group-hover:text-indigo-700 dark:group-hover:text-indigo-400 transition-colors">${esc(t.name)}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${esc(t.description || '')}</p>
             </div>
-            <svg class="w-4 h-4 text-gray-300 group-hover:text-indigo-400 flex-shrink-0 mt-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <svg class="w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-indigo-400 dark:group-hover:text-indigo-400 flex-shrink-0 mt-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </div>
     `).join('');
 }
