@@ -357,11 +357,11 @@ class LLMClient:
         # - Thinking OFF (self.thinking=False): other APIs reject the field entirely — strip it.
         if self.thinking and enable_thinking:
             for _msg in processed_messages:
-                if _msg.get('role') == 'assistant' and 'reasoning_content' not in _msg:
-                    _msg['reasoning_content'] = ''
+                if _msg.get("role") == "assistant" and "reasoning_content" not in _msg:
+                    _msg["reasoning_content"] = ""
         elif not self.thinking:
             for _msg in processed_messages:
-                _msg.pop('reasoning_content', None)
+                _msg.pop("reasoning_content", None)
         # else: self.thinking=True, enable_thinking=False → leave reasoning_content as-is
 
         if is_ollama_fmt:

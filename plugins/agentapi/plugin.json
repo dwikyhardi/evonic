@@ -1,0 +1,21 @@
+{
+  "id": "agentapi",
+  "name": "Agent API",
+  "version": "1.0.0",
+  "description": "Expose Evonic agents via an OpenAI-compatible REST API. Bearer-token-authenticated chat completions with quota and model-scoping.",
+  "author": "Evonic",
+  "enabled": true,
+  "events": ["turn_complete"],
+  "nav_items": [
+    {"label": "Agent API", "path": "/api/agentapi/admin"}
+  ],
+  "variables": [
+    {
+      "name": "MODEL_AGENT_MAP",
+      "label": "Model → Agent Mapping",
+      "type": "textarea",
+      "default": "{\n  \"gpt-4-assistant\": \"linus\"\n}",
+      "description": "JSON mapping public model names (keys) to internal agent IDs (values). Used by /v1/models and /v1/chat/completions."
+    }
+  ]
+}

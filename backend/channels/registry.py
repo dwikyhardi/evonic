@@ -21,12 +21,22 @@ class ChannelManager:
         self._active: Dict[str, BaseChannel] = {}  # channel_id -> instance
 
     def start_channel(self, channel_id: str) -> bool:
-        """Start a channel by its DB ID."""
+        """Start a channel by its DB ID. Skips disabled channels."""
         if channel_id in self._active and self._active[channel_id].is_running:
             return True  # already running
 
         channel_data = db.get_channel(channel_id)
         if not channel_data:
+            return False
+
+        if not channel_data.get('enabled'):
+            _logger.debug("Skipping disabled channel %s", channel_id)
+            return False
+
+        # Don't start channels for disabled agents
+        agent = db.get_agent(channel_data['agent_id'])
+        if agent and not agent.get('enabled', True):
+            _logger.debug("Skipping channel %s — agent %s is disabled", channel_id, channel_data['agent_id'])
             return False
 
         chan_type = channel_data.get('type')
@@ -62,9 +72,12 @@ class ChannelManager:
         return instance.is_running if instance else False
 
     def start_all_enabled(self):
-        """Start all enabled channels from DB (called at app startup)."""
+        """Start all enabled channels from DB (called at app startup).
+        Skips channels belonging to disabled agents."""
         agents = db.get_agents()
         for agent in agents:
+            if not agent.get('enabled', True):
+                continue  # skip disabled agents entirely
             channels = db.get_channels(agent['id'])
             for ch in channels:
                 if ch.get('enabled'):

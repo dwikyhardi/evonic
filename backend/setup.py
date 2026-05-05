@@ -411,7 +411,7 @@ def run_setup(
         _write_system_prompt(agent_id, system_prompt)
 
         # 4.5 Copy default knowledge base file
-        _default_kb = os.path.join(config.BASE_DIR, "defaults", "super_agent_kb.md")
+        _default_kb = os.path.join(config.BASE_DIR, 'defaults', 'super_agent_kb_evonic.md')
         if os.path.isfile(_default_kb):
             _kb_dir = os.path.join(config.BASE_DIR, "agents", agent_id, "kb")
             os.makedirs(_kb_dir, exist_ok=True)
