@@ -476,15 +476,19 @@ class LLMClient:
                 if is_ollama_fmt:
                     ollama_message = result.get("message", {})
                     ollama_content = ollama_message.get("content", "")
+                    ollama_reasoning = ollama_message.get("reasoning_content", "")
                     prompt_eval = result.get("prompt_eval_count", 0)
                     eval_count = result.get("eval_count", 0)
+                    transformed_message = {
+                        "role": "assistant",
+                        "content": ollama_content,
+                    }
+                    if ollama_reasoning:
+                        transformed_message["reasoning_content"] = ollama_reasoning
                     result = {
                         "choices": [
                             {
-                                "message": {
-                                    "role": "assistant",
-                                    "content": ollama_content,
-                                },
+                                "message": transformed_message,
                                 "finish_reason": "stop",
                             }
                         ],
