@@ -52,7 +52,6 @@ WORKER_JOIN_TIMEOUT_SECONDS = 5.0   # Max time to wait for worker threads to fin
 WORKER_JOIN_MIN_TIMEOUT = 0.1       # Minimum timeout per worker join iteration (seconds)
 DEFAULT_BUFFER_SECONDS = 2          # Default message buffering delay when agent has no config (seconds)
 SESSION_BUFFER_CLEANUP_DELAY = 30.0 # Delay before cleaning up SSE session buffers (seconds)
-NOTIFICATION_CHECK_INTERVAL = 60    # Interval for agent-free notification scheduler checks (1 minute)
 
 
 def _llm_log_path(agent_id: str) -> str:
@@ -1552,41 +1551,27 @@ class AgentRuntime:
             return False
         # Only trigger if last assistant message was a busy rejection
         last_msg = db.get_last_assistant_message(session_id, agent_id=agent_id)
-        if not last_msg or not (last_msg.get('metadata') or {}).get('busy_rejection'):
+        meta = last_msg.get('metadata') or {} if last_msg else {}
+        if not last_msg or not (meta.get('busy_rejection') or meta.get('busy_ack')):
             return False
-        self._create_free_notification(agent_id, session_id, external_user_id, channel_id)
+        self._queue_free_notification(agent_id, session_id, external_user_id, channel_id)
         return True
 
-    def _create_free_notification(self, agent_id: str, session_id: str,
-                                   external_user_id: str, channel_id: Optional[str]) -> None:
-        """Create a scheduler that pings the user when the agent becomes free."""
-        try:
-            # Lazy import: scheduler imports agent_runtime at module level (circular dep)
-            from backend.scheduler import scheduler
-            schedule_name = f'agent_free_notify:{agent_id}:{session_id}'
-            # Cancel any existing notify schedule for this session
-            for s in scheduler.list_schedules(owner_type='agent', owner_id=agent_id):
-                if s.get('name') == schedule_name:
-                    scheduler.cancel_schedule(s['id'])
-            scheduler.create_schedule(
-                name=schedule_name,
-                owner_type='agent',
-                owner_id=agent_id,
-                trigger_type='interval',
-                trigger_config={'seconds': NOTIFICATION_CHECK_INTERVAL},
-                action_type='emit_event',
-                action_config={
-                    'event_name': 'agent_free_check',
-                    'payload': {
-                        'agent_id': agent_id,
-                        'session_id': session_id,
-                        'external_user_id': external_user_id,
-                        'channel_id': channel_id,
-                    },
-                },
-            )
-        except Exception as e:
-            _logger.error("Failed to create free-notification schedule: %s", e, exc_info=True)
+    # Pending free-notifications: agent_id → {session_id, external_user_id, channel_id}
+    # Consumed by _on_agent_busy_changed when agent becomes free.
+    _free_notify_pending: dict = {}
+    _free_notify_lock = threading.Lock()
+
+    @classmethod
+    def _queue_free_notification(cls, agent_id: str, session_id: str,
+                                  external_user_id: str, channel_id: Optional[str]) -> None:
+        """Queue a one-shot notification for when the agent becomes free."""
+        with cls._free_notify_lock:
+            cls._free_notify_pending[agent_id] = {
+                'session_id': session_id,
+                'external_user_id': external_user_id,
+                'channel_id': channel_id,
+            }
 
     def clear_session(self, agent_id: str, external_user_id: str, channel_id: Optional[str] = None) -> None:
         """Clear chat history for a user's session."""
