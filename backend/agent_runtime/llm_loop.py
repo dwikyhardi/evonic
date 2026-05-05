@@ -202,6 +202,11 @@ def run_tool_loop(agent: Dict[str, Any],
 
     _iteration = 0
     _injection_count = 0  # total injections in this loop run (capped to prevent infinite loops)
+    # Track whether we've already done a thinking-enabled LLM call with tool calls.
+    # Some APIs (e.g. DeepSeek-R1) require that thinking is ONLY enabled on the
+    # first call; subsequent calls (after tool results) must NOT re-enable thinking,
+    # otherwise the API rejects with "reasoning_content must be passed back".
+    _had_tool_call_iteration = False
     while _iteration < MAX_TOOL_ITERATIONS:
         _iteration += 1
         # Drain injected user messages from mid-loop injection queue.
@@ -223,6 +228,7 @@ def run_tool_loop(agent: Dict[str, Any],
                 _injection_count += 1
                 if _injection_count <= MAX_INJECTIONS_PER_LOOP:
                     _iteration = 0
+                    _had_tool_call_iteration = False  # fresh reasoning context after injection
                 else:
                     _logger.warning("Injection cap reached (%d), iteration counter will no longer reset — loop will terminate at MAX_TOOL_ITERATIONS.", MAX_INJECTIONS_PER_LOOP)
                 _logger.debug("Injected %d user message(s) into loop for session %s (injection #%d)",
@@ -268,12 +274,16 @@ def run_tool_loop(agent: Dict[str, Any],
                 messages.insert(insert_at, sk_msg)
 
         # LOCK ORDERING: Main path — llm_lock only. No other locks held here.
+        # Disable thinking after the first tool-call iteration so the API doesn't
+        # see "thinking enabled" while tool_calls + reasoning_content are already
+        # in the history (causes DeepSeek-R1 "reasoning_content must be passed back").
+        _enable_thinking_this_call = not _had_tool_call_iteration
         with llm_lock:
             result = llm.chat_completion(
                 messages=messages,
                 tools=tools if tools else None,
                 temperature=None,
-                enable_thinking=True,
+                enable_thinking=_enable_thinking_this_call,
                 max_tokens=None,
                 log_file=llm_log_path
             )
@@ -687,6 +697,9 @@ def run_tool_loop(agent: Dict[str, Any],
         if reasoning_text:
             _asst_tc_msg["reasoning_content"] = reasoning_text
         messages.append(_asst_tc_msg)
+        # Mark that we've done a tool-call iteration so subsequent LLM calls
+        # don't re-enable thinking (some APIs reject thinking + existing tool history).
+        _had_tool_call_iteration = True
 
         # ── Hybrid tool execution: parallel for read-only, serial for writes ──
         # Phase 1: Parse all tool call arguments and emit 'tool_call_started'.
