@@ -27,7 +27,7 @@ func TestResolvePath_AbsolutePathGetsJoined(t *testing.T) {
 	// Absolute paths are joined to workDir, not returned raw.
 	want := "/home/user/etc/shadow"
 	if got != want {
-		t.Errorf("got %q, want %q (absolute path must be joined, not returned raw)", got)
+		t.Errorf("got %q, want %q (absolute path must be joined, not returned raw)", got, want)
 	}
 }
 
@@ -41,9 +41,15 @@ func TestResolvePath_TraversalEscape(t *testing.T) {
 
 func TestResolvePath_PartialPrefixMatch(t *testing.T) {
 	wd := filepath.Clean("/home/user") + string(os.PathSeparator)
-	_, err := resolvePath("/home/user2/secret", wd)
-	if err == nil {
-		t.Fatal("expected error for partial prefix match (/home/user vs /home/user2), got nil")
+	// Absolute paths are joined to workDir, so /home/user2/secret becomes
+	// /home/user/home/user2/secret — safely inside workDir, no error expected.
+	got, err := resolvePath("/home/user2/secret", wd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "/home/user/home/user2/secret"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
@@ -53,9 +59,10 @@ func TestResolvePath_WorkDirExact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Path exactly equals workDir (after clean) should be allowed.
-	if got != "/home/user" {
-		t.Errorf("got %q, want /home/user", got)
+	// Absolute paths are joined to workDir, so /home/user becomes /home/user/home/user.
+	want := "/home/user/home/user"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
@@ -65,7 +72,7 @@ func TestNew_RejectsRoot(t *testing.T) {
 			t.Error("expected panic for root workDir, got none")
 		}
 	}()
-	New("/")
+	New("/", false)
 }
 
 func TestNew_RejectsEmpty(t *testing.T) {
@@ -74,11 +81,11 @@ func TestNew_RejectsEmpty(t *testing.T) {
 			t.Error("expected panic for empty workDir, got none")
 		}
 	}()
-	New("")
+	New("", false)
 }
 
 func TestNew_NormalizesPath(t *testing.T) {
-	e := New("/home/user")
+	e := New("/home/user", false)
 	if e.workDir[len(e.workDir)-1] != '/' {
 		t.Errorf("workDir must end with separator, got %q", e.workDir)
 	}

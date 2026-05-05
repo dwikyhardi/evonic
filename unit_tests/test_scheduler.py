@@ -395,15 +395,6 @@ class TestSchedulerActions:
 class TestSchedulerAPI:
 
     @pytest.fixture(autouse=True)
-    def setup_super_agent(self):
-        """Create a minimal super agent so enforce_super_agent_setup passes."""
-        db.create_agent({
-            'id': 'test-super', 'name': 'Test Super Agent',
-            'system_prompt': 'You are a test bot.', 'is_super': True,
-        })
-        yield
-
-    @pytest.fixture(autouse=True)
     def bypass_auth(self):
         """Bypass Flask auth middleware so API routes return data, not 401/302."""
         from app import app

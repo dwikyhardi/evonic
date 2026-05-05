@@ -147,6 +147,18 @@ def create_blueprint():
             task['deps_met'] = all(d in done_ids for d in deps)
         return jsonify({'tasks': tasks})
 
+    @bp.route('/api/kanban/tasks/available-deps', methods=['GET'])
+    def kanban_api_available_deps():
+        """Return tasks eligible as dependencies (todo or in-progress), excluding a given task."""
+        exclude_id = request.args.get('exclude', type=int)
+        tasks = kanban_db.get_all()
+        result = [
+            {'id': t['id'], 'title': t['title'], 'status': t['status']}
+            for t in tasks
+            if t.get('status') in ('todo', 'in-progress') and t['id'] != exclude_id
+        ]
+        return jsonify({'tasks': result})
+
     @bp.route('/api/kanban/tasks', methods=['POST'])
     def kanban_api_create():
         is_allowed, error = _check_write_access(None, action='create')
@@ -173,6 +185,16 @@ def create_blueprint():
         }
         task = kanban_db.create(new_task)
         kanban_db.log_task_created(task['id'])
+        # Handle dependencies
+        deps = data.get('deps')
+        if deps and isinstance(deps, list):
+            try:
+                kanban_db.set_dependencies(task['id'], deps)
+            except ValueError as e:
+                kanban_db.delete(task['id'])
+                return jsonify({'error': str(e)}), 400
+        task['deps'] = kanban_db.get_dependencies(task['id'])
+        task['deps_met'] = not kanban_db.has_unmet_dependencies(task['id'])
         _emit('kanban_task_created', task)
         return jsonify({'task': task}), 201
 
@@ -304,6 +326,17 @@ def create_blueprint():
 
         fields['updated_at'] = _now()
         updated = kanban_db.update(task_id, fields)
+        # Handle dependencies if provided
+        if 'deps' in data:
+            deps = data['deps']
+            if not isinstance(deps, list):
+                return jsonify({'error': "'deps' must be a list of task IDs"}), 400
+            try:
+                kanban_db.set_dependencies(task_id, deps)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+        updated['deps'] = kanban_db.get_dependencies(task_id)
+        updated['deps_met'] = not kanban_db.has_unmet_dependencies(task_id)
         _emit('kanban_task_updated', updated)
         return jsonify({'task': updated})
 
@@ -576,6 +609,33 @@ def create_blueprint():
                 })
 
             return jsonify({'proposals': proposals, 'eligible_agents': eligible})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @bp.route('/api/kanban/eligible-agents', methods=['GET'])
+    def kanban_eligible_agents():
+        """Return the list of eligible agents (id + name) from plugin config."""
+        try:
+            from plugins.kanban.handler import _load_config, _parse_eligible_agents
+            from models.db import db as main_db
+
+            config = _load_config()
+            eligible_ids = _parse_eligible_agents(config)
+
+            if not eligible_ids:
+                return jsonify({'agents': []})
+
+            eligible_set = set(eligible_ids)
+            all_agents = main_db.get_agents()
+            agents = [
+                {'id': a['id'], 'name': a.get('name', a['id'])}
+                for a in all_agents
+                if a['id'] in eligible_set
+            ]
+            # Preserve config order
+            agents.sort(key=lambda a: eligible_ids.index(a['id']))
+
+            return jsonify({'agents': agents})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
