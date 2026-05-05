@@ -1907,7 +1907,7 @@ def _busy_message_provider(agent_id: str, agent_state) -> str | None:
             }.get(task.get('status', ''), 'working on')
             return (
                 f"Sorry, I'm {status_text} #{task_id}: {task['title']}. "
-                f"Wait until it's done, or want me to let you know when it's finished?"
+                f"Wait until it's done."
             )
     except Exception:
         pass
