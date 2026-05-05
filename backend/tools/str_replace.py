@@ -267,7 +267,7 @@ def test_execute():
     import sys, os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
     p = make_file('test content\n')
-    r = execute({'workspace': os.path.dirname(p)},
+    r = execute({'workspace': os.path.dirname(p), 'sandbox_enabled': 0},
                 {'file_path': p, 'old_str': 'test content', 'new_str': 'replaced'})
     assert r['result'] == 'success', r
     passed += 1

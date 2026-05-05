@@ -279,9 +279,9 @@ def test_execute():
     # ------------------------------------------------------------------
     print('Test 12: String boolean args normalised (LLM may send strings)')
     p6 = path('strflag.txt')
-    r = execute(None, {'file_path': p6, 'content': 'ok', 'overwrite': 'true', 'create_dirs': 'true'})
+    r = execute({'sandbox_enabled': 0}, {'file_path': p6, 'content': 'ok', 'overwrite': 'true', 'create_dirs': 'true'})
     assert r['result'] == 'success', r
-    r2 = execute(None, {'file_path': p6, 'content': 'blocked', 'overwrite': 'false'})
+    r2 = execute({'sandbox_enabled': 0}, {'file_path': p6, 'content': 'blocked', 'overwrite': 'false'})
     assert 'error' in r2, r2
     passed += 1
 

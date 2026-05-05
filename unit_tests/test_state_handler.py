@@ -158,8 +158,10 @@ class TestKanbanStateHandler:
         fake_task = {'id': task_id, 'status': task_status}
         autopilot_value = '1' if autopilot else '0'
         with mock.patch('plugins.kanban.db.kanban_db') as mock_db, \
-             mock.patch('models.db.db') as mock_db2:
+             mock.patch('models.db.db') as mock_db2, \
+             mock.patch.object(self._h, '_load_config', return_value={}):
             mock_db.get.return_value = fake_task
+            mock_db.get_unmet_dependencies.return_value = []
             mock_db2.get_setting.return_value = autopilot_value
             return self._h._state_handler(agent_id, 'sess1', ms, label, data)
 
@@ -252,6 +254,7 @@ class TestKanbanStateHandler:
         with mock.patch('plugins.kanban.db.kanban_db') as mock_db, \
              mock.patch('models.db.db') as mock_db2:
             mock_db.get.side_effect = Exception('db unavailable')
+            mock_db.get_unmet_dependencies.side_effect = Exception('db unavailable')
             mock_db2.get_setting.return_value = '1'  # autopilot=ON
             result = self._h._state_handler('agent1', 'sess1', ms, 'kanban:activate', {'task_id': 'task-1'})
         assert result['result'] == 'success'
@@ -293,7 +296,8 @@ class TestKanbanStateHandler:
         """DB unavailable → allow finish (fail open)."""
         from backend.agent_state import AgentState
         ms = AgentState(mode='execute')
-        with mock.patch('plugins.kanban.db.kanban_db') as mock_db:
+        with mock.patch('plugins.kanban.db.kanban_db') as mock_db, \
+             mock.patch.object(self._h, '_load_config', return_value={}):
             mock_db.get.side_effect = Exception('db gone')
             result = self._h._state_handler('agent1', 'sess1', ms, 'kanban:finish', {'task_id': 'task-1'})
         assert result['result'] == 'success'

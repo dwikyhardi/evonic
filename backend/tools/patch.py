@@ -453,11 +453,26 @@ def apply_patch(file_path: str, patch_text: str) -> dict:
         open(file_path, 'w').close()
 
     if shutil.which('patch'):
+        # Read original content so we can restore on partial failure.
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace', newline='') as f:
+                original_content = f.read()
+        except OSError:
+            original_content = None
+
         result = _apply_with_binary(file_path, patch_text, hunks)
         if 'error' not in result:
             return result
-        # Binary patch failed (e.g. mismatched hunk counts from LLM) — fall
-        # through to the Python implementation which is more lenient.
+
+        # Binary patch failed (e.g. mismatched hunk counts from LLM) — restore
+        # the original file before falling through to the Python implementation
+        # which is more lenient. The binary may have partially applied hunks.
+        if original_content is not None:
+            try:
+                with open(file_path, 'w', encoding='utf-8', newline='') as f:
+                    f.write(original_content)
+            except OSError:
+                pass
 
     return apply_hunks(file_path, patch_text)
 
