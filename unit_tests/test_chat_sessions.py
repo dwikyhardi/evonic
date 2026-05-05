@@ -44,6 +44,9 @@ def agent_id(tmp_path):
     db._init_tables()
 
     db.create_agent({'id': aid, 'name': 'Test Agent', 'system_prompt': 'You are a test bot.'})
+    # Ensure a super agent exists so Flask's enforce_auth doesn't return 503.
+    if not db.has_super_agent():
+        db.create_agent({'id': 'test_super', 'name': 'Super', 'system_prompt': '', 'is_super': True})
     yield aid
 
     # Teardown: restore the original path and clear the connection again
@@ -287,6 +290,19 @@ class TestBotToggle:
 
 
 class TestGetAllSessions:
+    """Tests for get_all_sessions which discovers chat DBs on disk via AGENTS_DIR."""
+
+    @pytest.fixture(autouse=True)
+    def _patch_agents_dir(self, monkeypatch, agent_id, chat_db, tmp_path):
+        """Place the chat DB at the filesystem path get_all_sessions expects."""
+        import models.mixins.chat_delegation as cd_mod
+        agent_dir = tmp_path / agent_id
+        agent_dir.mkdir(exist_ok=True)
+        # Symlink (or copy) the chat DB to where get_all_sessions looks for it
+        expected_path = agent_dir / 'chat.db'
+        os.symlink(chat_db.db_path, str(expected_path))
+        monkeypatch.setattr(cd_mod, 'AGENTS_DIR', str(tmp_path))
+
     def test_lists_sessions_across_agents(self, chat_db, agent_id):
         db.get_or_create_session(agent_id, 'user1')
         db.get_or_create_session(agent_id, 'user2')

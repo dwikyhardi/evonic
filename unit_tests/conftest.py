@@ -53,15 +53,17 @@ def use_test_database(monkeypatch, tmp_path):
     # Store original path
     original_path = db_module.db.db_path
     
-    # Set test database path
+    # Set test database path and clear cached connection so _connect() uses the new path
     db_module.db.db_path = test_db_path
-    
+    db_module.db._tlocal = _threading.local()
+
     # Reinitialize tables in test database
     db_module.db._init_tables()
     
     yield
-    
-    # Restore original path (though not strictly necessary due to test isolation)
+
+    # Restore original path and reset connection cache
+    db_module.db._tlocal = _threading.local()
     db_module.db.db_path = original_path
 
 
