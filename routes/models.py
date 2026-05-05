@@ -1,12 +1,14 @@
-import requests
 import uuid
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
+import requests
 from flask import Blueprint, jsonify, request
+
 from models.db import db
 
-models_bp = Blueprint('models', __name__)
+models_bp = Blueprint("models", __name__)
 
-_SENSITIVE_MODEL_KEYS = frozenset({'api_key'})
+_SENSITIVE_MODEL_KEYS = frozenset({"api_key"})
 
 
 def _sanitize_model(model: Dict[str, Any]) -> Dict[str, Any]:
@@ -22,194 +24,234 @@ def _sanitize_models(models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return models
 
 
-@models_bp.route('/api/models', methods=['GET'])
+@models_bp.route("/api/models", methods=["GET"])
 def api_list_models():
     """List all models."""
     models = db.get_llm_models()
-    return jsonify({'models': _sanitize_models(models)})
+    return jsonify({"models": _sanitize_models(models)})
 
 
-@models_bp.route('/api/models/<model_id>', methods=['GET'])
+@models_bp.route("/api/models/<model_id>", methods=["GET"])
 def api_get_model(model_id):
     """Get a single model."""
     model = db.get_model_by_id(model_id)
     if not model:
-        return jsonify({'error': 'Model not found'}), 404
+        return jsonify({"error": "Model not found"}), 404
     return jsonify(_sanitize_model(model))
 
 
-@models_bp.route('/api/models', methods=['POST'])
+@models_bp.route("/api/models", methods=["POST"])
 def api_create_model():
     """Create a new model."""
     data = request.get_json()
-    if not data or not data.get('name') or not data.get('type') or not data.get('provider') or not data.get('model_name'):
-        return jsonify({'success': False, 'error': 'name, type, provider, and model_name are required'}), 400
+    if (
+        not data
+        or not data.get("name")
+        or not data.get("type")
+        or not data.get("provider")
+        or not data.get("model_name")
+    ):
+        return jsonify(
+            {
+                "success": False,
+                "error": "name, type, provider, and model_name are required",
+            }
+        ), 400
 
     # Validate type
-    if data['type'] not in ('remote', 'local'):
-        return jsonify({'success': False, 'error': 'type must be remote or local'}), 400
+    if data["type"] not in ("remote", "local"):
+        return jsonify({"success": False, "error": "type must be remote or local"}), 400
 
     # Validate provider
-    valid_providers = ('openrouter', 'togetherai', 'ollama', 'llama.cpp', 'custom')
-    if data['provider'] not in valid_providers:
-        return jsonify({'success': False, 'error': f'provider must be one of {valid_providers}'}), 400
+    valid_providers = ("openrouter", "togetherai", "ollama", "ollama_cloud", "llama.cpp", "custom")
+    if data["provider"] not in valid_providers:
+        return jsonify(
+            {"success": False, "error": f"provider must be one of {valid_providers}"}
+        ), 400
 
-    model_id = data.get('id') or str(uuid.uuid4())
-    new_id = db.create_model({
-        'id': model_id,
-        'name': data['name'],
-        'type': data['type'],
-        'provider': data['provider'],
-        'base_url': data.get('base_url'),
-        'api_key': data.get('api_key'),
-        'model_name': data['model_name'],
-        'max_tokens': data.get('max_tokens', 32768),
-        'timeout': data.get('timeout', 60),
-        'thinking': data.get('thinking', 0),
-        'thinking_budget': data.get('thinking_budget', 0),
-        'temperature': data.get('temperature'),
-        'enabled': data.get('enabled', 1),
-        'is_default': data.get('is_default', 0),
-        'model_max_concurrent': data.get('model_max_concurrent', 1),
-    })
+    model_id = data.get("id") or str(uuid.uuid4())
+    new_id = db.create_model(
+        {
+            "id": model_id,
+            "name": data["name"],
+            "type": data["type"],
+            "provider": data["provider"],
+            "base_url": data.get("base_url"),
+            "api_key": data.get("api_key"),
+            "model_name": data["model_name"],
+            "max_tokens": data.get("max_tokens", 32768),
+            "timeout": data.get("timeout", 60),
+            "thinking": data.get("thinking", 0),
+            "thinking_budget": data.get("thinking_budget", 0),
+            "temperature": data.get("temperature"),
+            "enabled": data.get("enabled", 1),
+            "is_default": data.get("is_default", 0),
+            "model_max_concurrent": data.get("model_max_concurrent", 1),
+        }
+    )
 
     # If this is set as default, unset other defaults
-    if data.get('is_default'):
+    if data.get("is_default"):
         with db._connect() as conn:
             conn.execute("UPDATE llm_models SET is_default = 0")
             conn.execute("UPDATE llm_models SET is_default = 1 WHERE id = ?", (new_id,))
             conn.commit()
 
-    return jsonify({'success': True, 'model_id': new_id})
+    return jsonify({"success": True, "model_id": new_id})
 
 
-@models_bp.route('/api/models/<model_id>', methods=['PUT'])
+@models_bp.route("/api/models/<model_id>", methods=["PUT"])
 def api_update_model(model_id):
     """Update a model."""
     data = request.get_json()
     if not data:
-        return jsonify({'success': False, 'error': 'No data provided'}), 400
+        return jsonify({"success": False, "error": "No data provided"}), 400
 
     # If setting as default, unset other defaults
-    if data.get('is_default'):
+    if data.get("is_default"):
         with db._connect() as conn:
             conn.execute("UPDATE llm_models SET is_default = 0")
-            conn.execute("UPDATE llm_models SET is_default = 1 WHERE id = ?", (model_id,))
+            conn.execute(
+                "UPDATE llm_models SET is_default = 1 WHERE id = ?", (model_id,)
+            )
             conn.commit()
 
     success = db.update_model(model_id, data)
     if not success:
-        return jsonify({'success': False, 'error': 'Model not found or no changes made'}), 404
+        return jsonify(
+            {"success": False, "error": "Model not found or no changes made"}
+        ), 404
 
-    if 'model_max_concurrent' in data:
+    if "model_max_concurrent" in data:
         try:
             from backend.agent_runtime.runtime import AgentRuntime
+
             if AgentRuntime._concurrency_mgr:
                 AgentRuntime._concurrency_mgr.refresh_model_limit(model_id)
         except Exception:
             pass
 
-    return jsonify({'success': True})
+    return jsonify({"success": True})
 
 
-@models_bp.route('/api/models/<model_id>', methods=['DELETE'])
+@models_bp.route("/api/models/<model_id>", methods=["DELETE"])
 def api_delete_model(model_id):
     """Delete a model."""
     success = db.delete_model(model_id)
     if not success:
-        return jsonify({'success': False, 'error': 'Model not found'}), 404
-    return jsonify({'success': True})
+        return jsonify({"success": False, "error": "Model not found"}), 404
+    return jsonify({"success": True})
 
 
-@models_bp.route('/api/models/<model_id>/set-default', methods=['POST'])
+@models_bp.route("/api/models/<model_id>/set-default", methods=["POST"])
 def api_set_default_model(model_id):
     """Set a model as global default."""
     model = db.get_model_by_id(model_id)
     if not model:
-        return jsonify({'error': 'Model not found'}), 404
+        return jsonify({"error": "Model not found"}), 404
 
     with db._connect() as conn:
         conn.execute("UPDATE llm_models SET is_default = 0")
         conn.execute("UPDATE llm_models SET is_default = 1 WHERE id = ?", (model_id,))
         conn.commit()
 
-    return jsonify({'success': True})
+    return jsonify({"success": True})
 
 
-@models_bp.route('/api/models/<model_id>/test', methods=['POST'])
+@models_bp.route("/api/models/<model_id>/test", methods=["POST"])
 def api_test_model(model_id):
     """Test connection to model endpoint."""
     model = db.get_model_by_id(model_id)
     if not model:
-        return jsonify({'error': 'Model not found'}), 404
+        return jsonify({"error": "Model not found"}), 404
 
     try:
         # Try to reach the base URL
-        base_url = model.get('base_url')
+        base_url = model.get("base_url")
         if not base_url:
-            return jsonify({'success': False, 'error': 'No base_url configured'}), 400
+            return jsonify({"success": False, "error": "No base_url configured"}), 400
 
-        # Try /v1/models endpoint
-        models_url = f"{base_url}/models"
+        # Choose the correct endpoint based on API format
+        api_format = model.get("api_format", "openai")
+        if api_format == "ollama":
+            models_url = f"{base_url}/tags"
+        else:
+            models_url = f"{base_url}/models"
         headers = {"Content-Type": "application/json"}
-        if model.get('api_key'):
+        if model.get("api_key"):
             headers["Authorization"] = f"Bearer {model['api_key']}"
 
         response = requests.get(models_url, headers=headers, timeout=10)
 
         if response.status_code == 200:
             data = response.json()
-            models_list = data.get('data') or data.get('models') or []
-            return jsonify({
-                'success': True,
-                'message': f'Connected to {base_url}',
-                'available_models': len(models_list),
-                'response_headers': dict(response.headers)
-            })
+            if api_format == "ollama":
+                models_list = data.get("models") or []
+            else:
+                models_list = data.get("data") or data.get("models") or []
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Connected to {base_url}",
+                    "available_models": len(models_list),
+                    "response_headers": dict(response.headers),
+                }
+            )
         else:
-            return jsonify({
-                'success': False,
-                'error': f'HTTP {response.status_code}: {response.text[:200]}',
-                'status_code': response.status_code
-            })
+            return jsonify(
+                {
+                    "success": False,
+                    "error": f"HTTP {response.status_code}: {response.text[:200]}",
+                    "status_code": response.status_code,
+                }
+            )
 
     except requests.exceptions.Timeout:
-        return jsonify({'success': False, 'error': f'Connection timed out to {model.get("base_url")}'}), 408
+        return jsonify(
+            {
+                "success": False,
+                "error": f"Connection timed out to {model.get('base_url')}",
+            }
+        ), 408
     except requests.exceptions.ConnectionError as e:
-        return jsonify({'success': False, 'error': f'Connection error: {str(e)[:200]}'}), 400
+        return jsonify(
+            {"success": False, "error": f"Connection error: {str(e)[:200]}"}
+        ), 400
     except Exception as e:
-        return jsonify({'success': False, 'error': f'Error: {str(e)[:200]}'}), 500
+        return jsonify({"success": False, "error": f"Error: {str(e)[:200]}"}), 500
 
 
-@models_bp.route('/api/agents/<agent_id>/model', methods=['GET'])
+@models_bp.route("/api/agents/<agent_id>/model", methods=["GET"])
 def api_get_agent_model(agent_id):
     """Get agent's default model."""
     agent = db.get_agent(agent_id)
     if not agent:
-        return jsonify({'error': 'Agent not found'}), 404
+        return jsonify({"error": "Agent not found"}), 404
 
     model = db.get_agent_default_model(agent_id)
     if model:
         _sanitize_model(model)
-    return jsonify({
-        'agent_id': agent_id,
-        'default_model_id': agent.get('default_model_id'),
-        'model': model
-    })
+    return jsonify(
+        {
+            "agent_id": agent_id,
+            "default_model_id": agent.get("default_model_id"),
+            "model": model,
+        }
+    )
 
 
-@models_bp.route('/api/agents/<agent_id>/model', methods=['POST'])
+@models_bp.route("/api/agents/<agent_id>/model", methods=["POST"])
 def api_set_agent_model(agent_id):
     """Set agent's default model."""
     agent = db.get_agent(agent_id)
     if not agent:
-        return jsonify({'error': 'Agent not found'}), 404
+        return jsonify({"error": "Agent not found"}), 404
 
     data = request.get_json()
-    model_id = data.get('model_id') if data else None
+    model_id = data.get("model_id") if data else None
 
     success = db.set_agent_default_model(agent_id, model_id)
     if not success:
-        return jsonify({'success': False, 'error': 'Failed to set model'}), 400
+        return jsonify({"success": False, "error": "Failed to set model"}), 400
 
-    return jsonify({'success': True})
+    return jsonify({"success": True})
