@@ -150,7 +150,11 @@ def execute(agent, args: dict) -> dict:
         session_id = (agent or {}).get('session_id') or 'default'
         backend = registry.get_backend(session_id, agent)
 
-        target_path = file_path
+        # Resolve the file path relative to the agent's workspace before
+        # sending it to the execution backend.
+        target_path = resolve_workspace_path(agent, file_path, _WORKSPACE_ROOT)
+        # Convert host path to the backend's view (e.g. /workspace for Docker)
+        target_path = backend.resolve_path(target_path)
 
         if not backend.file_exists(target_path):
             return {'error': f"File not found: {display_path}"}

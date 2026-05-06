@@ -84,6 +84,20 @@ class ExecutionBackend(ABC):
     def make_dirs(self, path: str) -> dict:
         """Create directories recursively. Returns {'ok': True} or {'error': str}."""
 
+    # ------------------------------------------------------------------
+    # Path resolution — converts a host filesystem path into the
+    # path the backend's execution environment can access.
+    # Default: identity (the path is used as-is).
+    # ------------------------------------------------------------------
+
+    def resolve_path(self, path: str) -> str:
+        """Convert a host filesystem path to the backend's view of that path.
+
+        The default is identity.  DockerBackend overrides this to translate
+        host-mount paths to their /workspace container counterpart.
+        """
+        return path
+
 
 # ---------------------------------------------------------------------------
 # Backend registry

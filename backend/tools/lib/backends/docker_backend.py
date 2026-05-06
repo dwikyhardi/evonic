@@ -252,6 +252,23 @@ class DockerBackend(ExecutionBackend):
         self._session_id = session_id
         self._workspace = workspace
 
+    # ------------------------------------------------------------------
+    # Path resolution — translate host paths to /workspace mount point
+    # inside the container.
+    # ------------------------------------------------------------------
+
+    def resolve_path(self, path: str) -> str:
+        """Convert a host filesystem path to the container's /workspace view.
+
+        The host workspace is mounted at /workspace inside the container.
+        Paths that fall within the host workspace are translated to their
+        /workspace counterpart; all other paths pass through unchanged.
+        """
+        effective = os.path.abspath(self._workspace if self._workspace else SANDBOX_WORKSPACE)
+        if path.startswith(effective):
+            return '/workspace' + path[len(effective):]
+        return path
+
     def run_bash(self, script: str, timeout: int, env: dict) -> dict:
         container_id, err = _get_or_create_container(self._session_id, workspace=self._workspace)
         if err:
