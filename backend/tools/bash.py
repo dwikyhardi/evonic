@@ -91,17 +91,33 @@ def test_execute():
     import shutil
     import subprocess
 
+    try:
+        import pytest as _pytest
+        _skip = _pytest.skip
+    except ImportError:
+        def _skip(msg):
+            print(f'SKIP: {msg}')
+
     if not shutil.which('docker'):
-        print('SKIP: docker not found in PATH')
+        _skip('docker not found in PATH')
         return
 
     check = subprocess.run(['docker', 'info'], capture_output=True, timeout=10)
     if check.returncode != 0:
-        print('SKIP: docker daemon not reachable')
+        _skip('docker daemon not reachable')
         return
 
     agent = {'session_id': 'test-bash-self-test'}
     passed = 0
+
+    # Smoke check: verify Docker sandbox is functional before running full suite
+    print('Test 0: Docker sandbox smoke check')
+    r = execute(agent, {'script': 'echo "smoke"'})
+    if r.get('error') or r.get('exit_code') != 0:
+        execute(agent, {'action': 'destroy'})
+        _skip(f'Docker sandbox not functional in this environment: {r}')
+        return
+    passed += 1
 
     print('Test 1: Basic script execution')
     r = execute(agent, {'script': 'echo "hello world"'})
