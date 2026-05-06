@@ -15,6 +15,9 @@
                 {{ toggle_widget(id='plugin-enabled', onchange='toggleEnabled(this.checked)') }}
                 <span class="text-sm text-gray-600">Enabled</span>
             </label>
+            <span id="export-btn" class="hidden">
+                <button onclick="exportPlugin()" class="px-3 py-1.5 text-sm text-indigo-600 hover:bg-indigo-50 border border-indigo-200 rounded-md transition-colors">Export</button>
+            </span>
             <span id="uninstall-btn" class="hidden">
                 <button onclick="uninstallPlugin()" class="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors">Uninstall</button>
             </span>
@@ -164,6 +167,9 @@ async function loadPlugin() {
 
     renderSettings(pluginData.variables || [], pluginData.config || {});
     renderEvents(pluginData.events || []);
+
+    // Show export button for all plugins
+    document.getElementById('export-btn').classList.remove('hidden');
 
     // Show uninstall button only for non-system plugins
     if (!pluginData.is_system) {
@@ -416,6 +422,18 @@ function esc(s) {
     const d = document.createElement('div');
     d.textContent = s || '';
     return d.innerHTML;
+}
+
+async function exportPlugin() {
+    const confirmed = await showConfirm({
+        title: `Export "${pluginData.name || PLUGIN_ID}"?`,
+        message: 'This will download the entire plugin as a ZIP file, including all source code, templates, and assets. The exported file can be installed on other Evonic systems.',
+        confirmText: 'Export',
+        danger: false
+    });
+    if (!confirmed) return;
+
+    window.location.href = `/api/plugins/${PLUGIN_ID}/export`;
 }
 
 async function uninstallPlugin() {
