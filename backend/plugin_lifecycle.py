@@ -391,7 +391,7 @@ class PluginManager:
         return result
 
     def get_plugin(self, plugin_id: str) -> Optional[Dict[str, Any]]:
-        """Get a single plugin's metadata, events, variables, and config."""
+        """Get a single plugin's metadata, events, variables, config, and README."""
         manifest = self._read_manifest(plugin_id)
         if not manifest:
             return None
@@ -400,6 +400,18 @@ class PluginManager:
         manifest['event_count'] = len(manifest['events'])
         manifest['variables'] = manifest.get('variables', [])
         manifest['config'] = self.get_plugin_config(plugin_id)
+
+        # Read README.md if it exists
+        readme_path = os.path.join(PLUGINS_DIR, plugin_id, 'README.md')
+        if os.path.isfile(readme_path):
+            try:
+                with open(readme_path, encoding='utf-8') as f:
+                    manifest['readme'] = f.read()
+            except (IOError, UnicodeDecodeError):
+                manifest['readme'] = None
+        else:
+            manifest['readme'] = None
+
         return manifest
 
     def _read_manifest(self, plugin_id: str) -> Optional[Dict[str, Any]]:
