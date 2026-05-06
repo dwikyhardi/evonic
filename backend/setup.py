@@ -53,6 +53,26 @@ PROVIDER_DEFAULTS = {
         "description": "Cloud · API key required",
         "api_format": "ollama",
     },
+    "opencode_zen": {
+        "type": "remote",
+        "base_url": "https://opencode.ai/zen/v1",
+        "api_key_required": True,
+        "placeholder_model": "qwen3.6-plus",
+        "label": "OpenCode Zen",
+        "description": "Cloud · API key required",
+    },
+    "opencode_go": {
+        "type": "remote",
+        "base_url": "https://opencode.ai/zen/go/v1",
+        "api_key_required": True,
+        "placeholder_model": "kimi-k2.6",
+        "label": "OpenCode Go",
+        "description": "Cloud · API key required",
+        # Go's catalog is dominated by always-thinking models (Kimi K2, DeepSeek V4,
+        # MiniMax M2). The upstream rejects requests that omit reasoning_content on
+        # prior assistant messages, so default thinking on for this provider.
+        "default_thinking": True,
+    },
     "llama.cpp": {
         "type": "local",
         "base_url": "http://localhost:8080/v1",
@@ -386,6 +406,7 @@ def run_setup(
                 "is_default": 1,
                 "enabled": 1,
                 "api_format": model_api_format,
+                "thinking": 1 if provider_cfg.get("default_thinking") else 0,
             }
         )
 
@@ -534,8 +555,10 @@ def run_reconfigure(
         }
         existing_model = db.get_model_by_id(model_id)
         if existing_model:
+            # Update preserves the user's manual thinking toggle
             db.update_model(model_id, model_data)
         else:
+            model_data["thinking"] = 1 if provider_cfg.get("default_thinking") else 0
             db.create_model(model_data)
 
         # 2. Build new system prompt (tone + language)
