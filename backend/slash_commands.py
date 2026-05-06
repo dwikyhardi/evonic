@@ -350,7 +350,6 @@ def _register_builtins():
         def _do_restart():
             import time
             import resource
-            import subprocess
 
             time.sleep(1.5)  # Brief delay so response is sent first
 
@@ -393,15 +392,11 @@ def _register_builtins():
             _venv_python = os.path.join(_target, '.venv', 'bin', 'python')
             _python = _venv_python if os.path.exists(_venv_python) else sys.executable
 
-            # Spawn a new process to handle the restart.
-            # close_fds=True ensures no leftover FDs leak into the child.
-            # The parent can exit cleanly (watchdog won't kill us).
-            subprocess.Popen(
-                [_python, _app_py],
-                cwd=_target,
-                close_fds=True,
-            )
-            os._exit(0)  # Exit parent immediately so child runs independently
+            # Replace the current process in-place so we preserve the
+            # original execution mode (foreground stays foreground,
+            # daemon stays daemon).
+            os.chdir(_target)
+            os.execv(_python, [_python, _app_py])
 
         t = threading.Thread(target=_do_restart, daemon=True)
         t.start()
