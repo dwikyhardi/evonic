@@ -4,52 +4,52 @@
 <div class="p-4 md:p-6 max-w-4xl mx-auto">
     <!-- Header -->
     <div class="flex items-center gap-3 mb-6">
-        <a href="/skills" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <a href="/skills" class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         </a>
-        <h1 class="text-xl font-semibold text-gray-900">Edit Skillset</h1>
-        <span class="text-sm text-gray-400 font-mono" id="skill-id-display"></span>
+        <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Edit Skillset</h1>
+        <span class="text-sm text-gray-400 dark:text-gray-500 font-mono" id="skill-id-display"></span>
     </div>
 
     <!-- Form -->
     <form id="edit-form" class="space-y-5">
         <!-- Name -->
         <div>
-            <label class="block mb-1 text-sm font-medium text-gray-700">Name</label>
-            <input type="text" id="field-name" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" required>
+            <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+            <input type="text" id="field-name" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none" required>
         </div>
 
         <!-- Description -->
         <div>
-            <label class="block mb-1 text-sm font-medium text-gray-700">Description</label>
-            <textarea id="field-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-vertical"></textarea>
+            <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+            <textarea id="field-description" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-vertical"></textarea>
         </div>
 
         <!-- System Prompt -->
         <div>
-            <label class="block mb-1 text-sm font-medium text-gray-700">System Prompt</label>
-            <textarea id="field-system-prompt" rows="8" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-vertical"></textarea>
+            <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">System Prompt</label>
+            <textarea id="field-system-prompt" rows="8" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-md text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-vertical"></textarea>
         </div>
 
         <!-- Model -->
         <div>
-            <label class="block mb-1 text-sm font-medium text-gray-700">Model (optional)</label>
-            <input type="text" id="field-model" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
+            <label class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Model (optional)</label>
+            <input type="text" id="field-model" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none">
         </div>
 
         <!-- Tools -->
         <div>
             <div class="flex items-center justify-between mb-2">
-                <label class="text-sm font-medium text-gray-700">Tools <span id="tools-count" class="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-600 font-semibold hidden">0</span></label>
-                <button type="button" id="tools-clear" class="hidden text-xs text-gray-400 hover:text-red-500 transition-colors">Clear all</button>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Tools <span id="tools-count" class="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-semibold hidden">0</span></label>
+                <button type="button" id="tools-clear" class="hidden text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">Clear all</button>
             </div>
             <!-- Selected chips -->
             <div id="tools-tags" class="flex flex-wrap gap-1.5 mb-2 empty:hidden"></div>
             <!-- Search + dropdown -->
             <div id="tools-wrapper" class="relative">
-                <div class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-indigo-400 transition-all">
-                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
-                    <input type="text" id="tools-input" class="flex-1 text-sm border-0 outline-none bg-transparent placeholder-gray-400" placeholder="Search tools…" autocomplete="off">
+                <div class="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-indigo-400 transition-all">
+                    <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
+                    <input type="text" id="tools-input" class="flex-1 text-sm border-0 outline-none bg-transparent text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500" placeholder="Search tools…" autocomplete="off">
                 </div>
                 <div id="tools-dropdown" class="hidden absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-56 overflow-y-auto"></div>
             </div>
@@ -58,16 +58,16 @@
         <!-- Skills -->
         <div>
             <div class="flex items-center justify-between mb-2">
-                <label class="text-sm font-medium text-gray-700">Skills <span id="skills-count" class="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-600 font-semibold hidden">0</span></label>
-                <button type="button" id="skills-clear" class="hidden text-xs text-gray-400 hover:text-red-500 transition-colors">Clear all</button>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Skills <span id="skills-count" class="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-semibold hidden">0</span></label>
+                <button type="button" id="skills-clear" class="hidden text-xs text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors">Clear all</button>
             </div>
             <!-- Selected chips -->
             <div id="skills-tags" class="flex flex-wrap gap-1.5 mb-2 empty:hidden"></div>
             <!-- Search + dropdown -->
             <div id="skills-wrapper" class="relative">
-                <div class="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white focus-within:ring-2 focus-within:ring-emerald-400 focus-within:border-emerald-400 transition-all">
-                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
-                    <input type="text" id="skills-input" class="flex-1 text-sm border-0 outline-none bg-transparent placeholder-gray-400" placeholder="Search skills…" autocomplete="off">
+                <div class="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus-within:ring-2 focus-within:ring-emerald-400 focus-within:border-emerald-400 transition-all">
+                    <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/></svg>
+                    <input type="text" id="skills-input" class="flex-1 text-sm border-0 outline-none bg-transparent text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500" placeholder="Search skills…" autocomplete="off">
                 </div>
                 <div id="skills-dropdown" class="hidden absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-56 overflow-y-auto"></div>
             </div>
@@ -75,7 +75,7 @@
 
         <!-- Actions -->
         <div class="flex gap-3 pt-2">
-            <button type="button" onclick="window.location.href='/skills#skillsets'" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+            <button type="button" onclick="window.location.href='/skills#skillsets'" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Cancel</button>
             <button type="submit" id="save-btn" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md text-sm font-medium transition-colors">Save Changes</button>
         </div>
     </form>
@@ -163,9 +163,9 @@ function renderToolTags() {
     container.innerHTML = currentTools.map(fnName => {
         const t = availableTools.find(t => getToolFunctionName(t) === fnName);
         const display = t ? getToolDisplayName(t) : fnName;
-        return `<span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 group">
+        return `<span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 group">
             ${escHtml(display)}
-            <button type="button" onclick="removeTool('${escJs(fnName)}')" class="flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 hover:bg-indigo-200 hover:text-indigo-700 transition-colors ml-0.5" title="Remove">
+            <button type="button" onclick="removeTool('${escJs(fnName)}')" class="flex items-center justify-center w-4 h-4 rounded-full text-indigo-400 dark:text-indigo-500 hover:bg-indigo-200 dark:hover:bg-indigo-800 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors ml-0.5" title="Remove">
                 <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </span>`;
@@ -226,19 +226,19 @@ function showToolsDropdown(results) {
     toolsFocusIdx = -1;
 
     if (results.length === 0) {
-        dd.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 text-center">No tools found</div>';
+        dd.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 text-center">No tools found</div>';
     } else {
         dd.innerHTML = results.map((t, i) => {
             const fnName = getToolFunctionName(t);
             const displayName = getToolDisplayName(t);
             const desc = getToolDescription(t);
             const already = currentTools.includes(fnName);
-            return `<div class="dd-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${already ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-50'}"
+            return `<div class="dd-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${already ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20'}"
                 data-idx="${i}" data-fn="${escHtml(fnName)}" data-already="${already}"
                 ${already ? '' : `onclick="addTool('${escJs(fnName)}')"`}>
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-gray-800 truncate">${escHtml(displayName)}</div>
-                    ${desc ? `<div class="text-xs text-gray-400 truncate">${escHtml(desc)}</div>` : ''}
+                    <div class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">${escHtml(displayName)}</div>
+                    ${desc ? `<div class="text-xs text-gray-400 dark:text-gray-500 truncate">${escHtml(desc)}</div>` : ''}
                 </div>
                 ${already ? `<svg class="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>` : ''}
             </div>`;
@@ -266,9 +266,9 @@ function renderSkillTags() {
     const clearBtn = document.getElementById('skills-clear');
 
     container.innerHTML = currentSkills.map(name => {
-        return `<span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 group">
+        return `<span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 group">
             ${escHtml(name)}
-            <button type="button" onclick="removeSkill('${escJs(name)}')" class="flex items-center justify-center w-4 h-4 rounded-full text-emerald-400 hover:bg-emerald-200 hover:text-emerald-700 transition-colors ml-0.5" title="Remove">
+            <button type="button" onclick="removeSkill('${escJs(name)}')" class="flex items-center justify-center w-4 h-4 rounded-full text-emerald-400 dark:text-emerald-500 hover:bg-emerald-200 dark:hover:bg-emerald-800 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors ml-0.5" title="Remove">
                 <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </span>`;
@@ -329,19 +329,19 @@ function showSkillsDropdown(results) {
     skillsFocusIdx = -1;
 
     if (results.length === 0) {
-        dd.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 text-center">No skills found</div>';
+        dd.innerHTML = '<div class="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 text-center">No skills found</div>';
     } else {
         dd.innerHTML = results.map((s, i) => {
             const name = s.id || s;
             const displayName = s.name || name;
             const desc = s.description || '';
             const already = currentSkills.includes(name);
-            return `<div class="dd-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${already ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-50'}"
+            return `<div class="dd-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${already ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}"
                 data-idx="${i}" data-name="${escHtml(name)}" data-already="${already}"
                 ${already ? '' : `onclick="addSkill('${escJs(name)}')"`}>
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-gray-800 truncate">${escHtml(displayName)}</div>
-                    ${desc ? `<div class="text-xs text-gray-400 truncate">${escHtml(desc)}</div>` : ''}
+                    <div class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">${escHtml(displayName)}</div>
+                    ${desc ? `<div class="text-xs text-gray-400 dark:text-gray-500 truncate">${escHtml(desc)}</div>` : ''}
                 </div>
                 ${already ? `<svg class="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>` : ''}
             </div>`;
@@ -361,8 +361,14 @@ function navigateDropdown(ddId, delta, selectFn, dataAttr) {
     const newIdx = Math.max(0, Math.min(items.length - 1, currentFocusIdx + delta));
 
     items.forEach((el, i) => {
-        el.classList.toggle('bg-indigo-50', ddId === 'tools-dropdown' && i === newIdx);
-        el.classList.toggle('bg-emerald-50', ddId === 'skills-dropdown' && i === newIdx);
+        if (ddId === 'tools-dropdown') {
+            el.classList.toggle('bg-indigo-50', i === newIdx);
+            el.classList.toggle('dark:bg-indigo-900/20', i === newIdx);
+        }
+        if (ddId === 'skills-dropdown') {
+            el.classList.toggle('bg-emerald-50', i === newIdx);
+            el.classList.toggle('dark:bg-emerald-900/20', i === newIdx);
+        }
     });
     items[newIdx]?.scrollIntoView({ block: 'nearest' });
 
