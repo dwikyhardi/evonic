@@ -70,7 +70,7 @@
                 {% endif %}
  
                 {% if session.get('authenticated') %}
-                <a href="/settings" class="{{ 'nav-active' if request.path == '/settings' or request.path.startswith('/settings/') else '' }}">Settings</a>
+                <a href="/system" class="{{ 'nav-active' if request.path == '/system' or request.path.startswith('/system/') else '' }}">System</a>
                 <a href="/skills" class="{{ 'nav-active' if request.path.startswith('/skills') else '' }}">Skills</a>
                 <a href="/plugins" class="{{ 'nav-active' if request.path.startswith('/plugins') else '' }}">Plugins</a>
                 <a href="/scheduler" class="{{ 'nav-active' if request.path.startswith('/scheduler') else '' }}">Scheduler</a>
