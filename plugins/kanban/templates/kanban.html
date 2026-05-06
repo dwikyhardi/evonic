@@ -525,7 +525,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         }
     }
 
-    function loadTasks() {
+    function loadTasks(callback) {
         if (loadTasksInFlight) return;
         loadTasksInFlight = true;
         $.get(`${API}/tasks`, function(data) {
@@ -537,6 +537,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 previousTasksFingerprint = newFP;
                 renderBoard();
             }
+            if (typeof callback === 'function') callback();
         }).fail(function() {
             loadTasksInFlight = false;
             console.error('Failed to load tasks');
@@ -1251,10 +1252,11 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             data: JSON.stringify(payload),
             success: function() {
                 const taskIdNum = Number(taskId);
-                loadTasks();
                 $('#panel-edit').addClass('hidden');
                 $('#panel-details').removeClass('hidden');
-                openDetailModal(taskIdNum);
+                loadTasks(function() {
+                    openDetailModal(taskIdNum);
+                });
             },
             error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to update'); }
         });
