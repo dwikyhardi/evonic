@@ -1822,22 +1822,13 @@ def setup_wizard():
     print()
     print("  Setting up supervisor for self-update...", end=" ", flush=True)
 
-    # Resolve the server port from .env so the supervisor health check
-    # probes the correct port (not hardcoded 8080).
-    server_port = 8080
-    env_path = os.path.join(ROOT, '.env')
-    if os.path.isfile(env_path):
-        try:
-            with open(env_path) as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith('PORT=') or line.startswith('PORT '):
-                        val = line.split('=', 1)[-1].strip().strip('"').strip("'")
-                        if val:
-                            server_port = int(val)
-                        break
-        except (ValueError, IOError):
-            pass
+    # Resolve the server port from config (which loads .env) so the
+    # supervisor health check probes the correct port (not hardcoded 8080).
+    try:
+        import config
+        server_port = int(getattr(config, 'PORT', 8080))
+    except Exception:
+        server_port = 8080
 
     sup_cfg = {
         "app_root": ROOT,
