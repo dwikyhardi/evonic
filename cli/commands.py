@@ -1,12 +1,12 @@
 """Evonic CLI commands — start, stop, status, plugin, and skill management."""
 
 import os
-import sys
-import signal
-import time
-import subprocess
 import shutil
+import signal
+import subprocess
+import sys
 import tempfile
+import time
 from datetime import datetime
 
 # Ensure the project root is on sys.path so we can import backend modules
@@ -37,7 +37,9 @@ _DAY_COLORS = [
 ]
 _RESET = "\033[0m"
 
-EVONIC_BANNER = _DAY_COLORS[datetime.now().weekday()] + r"""
+EVONIC_BANNER = (
+    _DAY_COLORS[datetime.now().weekday()]
+    + r"""
 
          ░░░░░░░░░░░░░░░░░░░░░░░░
        ░░▒▒███████████████████▒▒░░
@@ -54,7 +56,9 @@ EVONIC_BANNER = _DAY_COLORS[datetime.now().weekday()] + r"""
             ░░    ▓▓▓▓    ▓▓
               ▒▒        ▒▒
 
-""" + _RESET
+"""
+    + _RESET
+)
 
 
 def _is_setup_done():
@@ -107,7 +111,7 @@ def _remove_pid():
 def start_server(port=None, host=None, debug=None, daemon=False):
     """Start the Flask server. Runs in foreground by default; use daemon=True to background."""
     # Check if setup is complete
-    #if not _is_setup_done():
+    # if not _is_setup_done():
     #    print("Evonic has not been set up yet.")
     #    print("Please run 'evonic setup' first to configure your platform.")
     #    sys.exit(1)
@@ -118,6 +122,7 @@ def start_server(port=None, host=None, debug=None, daemon=False):
         print(f"Server is already running (PID: {existing_pid})")
         try:
             import config
+
             print(f"Port: {port or config.PORT}")
         except Exception:
             pass
@@ -126,6 +131,7 @@ def start_server(port=None, host=None, debug=None, daemon=False):
     # Import config to get defaults
     try:
         import config
+
         if port is None:
             port = config.PORT
         if host is None:
@@ -152,7 +158,9 @@ def start_server(port=None, host=None, debug=None, daemon=False):
             time.sleep(2)
             if _is_running(proc.pid):
                 print(f"Supervisor started (PID: {proc.pid})")
-                print(f"Server akan berjalan dari current release dengan self-update otomatis")
+                print(
+                    f"Server akan berjalan dari current release dengan self-update otomatis"
+                )
             else:
                 print("Gagal start supervisor. Cek log untuk detail.")
                 sys.exit(1)
@@ -170,7 +178,9 @@ def start_server(port=None, host=None, debug=None, daemon=False):
         # Create run directory for PID file and logs
         os.makedirs(PID_DIR, exist_ok=True)
 
-        app_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app.py")
+        app_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "app.py"
+        )
         proc = subprocess.Popen(
             [sys.executable, app_path],
             env=env,
@@ -263,8 +273,8 @@ def stop_server():
     # use `taskkill /F` (the same approach as supervisor/supervisor.py).
     print("Server didn't stop gracefully. Force-killing...")
     try:
-        if sys.platform == 'win32':
-            subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
         else:
             os.kill(pid, signal.SIGKILL)
         time.sleep(1)
@@ -297,6 +307,7 @@ def status_server():
         # Try to get port from config
         try:
             import config
+
             print(f"Port: {config.PORT}")
             print(f"URL: http://localhost:{config.PORT}")
         except Exception:
@@ -322,9 +333,11 @@ def restart_server():
 
 # ─── Plugin Management ────────────────────────────────────────────────────────
 
+
 def _get_plugin_manager():
     """Lazily create a PluginManager instance."""
     from backend.plugin_manager import PluginManager
+
     return PluginManager()
 
 
@@ -339,8 +352,13 @@ def plugin_list():
 
     # Column widths
     id_width = max(len("ID"), max((len(p.get("id", "")) for p in plugins), default=2))
-    name_width = max(len("Name"), max((len(p.get("name", "")) for p in plugins), default=4))
-    ver_width = max(len("Version"), max((len(str(p.get("version", ""))) for p in plugins), default=7))
+    name_width = max(
+        len("Name"), max((len(p.get("name", "")) for p in plugins), default=4)
+    )
+    ver_width = max(
+        len("Version"),
+        max((len(str(p.get("version", ""))) for p in plugins), default=7),
+    )
     status_width = len("Status")
     events_width = len("Events")
 
@@ -420,6 +438,7 @@ def plugin_uninstall(name):
 
     print(f"Plugin uninstalled: {name}")
 
+
 def plugin_enable(plugin_id):
     """Enable a plugin by its ID."""
     if not plugin_id:
@@ -458,7 +477,9 @@ def plugin_new():
     """Interactive wizard to scaffold a new plugin project."""
     import re
 
-    PLUGINS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "plugins")
+    PLUGINS_DIR = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "plugins"
+    )
 
     print("")
     print("  \u26a1 Evonic Plugin Scaffolder")
@@ -476,7 +497,9 @@ def plugin_new():
     print(f"  Plugin ID:  {plugin_id}")
     print("")
 
-    description = input("  Description: ").strip() or f"A simple {name} plugin for Evonic"
+    description = (
+        input("  Description: ").strip() or f"A simple {name} plugin for Evonic"
+    )
     author = input("  Author / contact email: ").strip() or "you@example.com"
 
     dest = os.path.join(PLUGINS_DIR, plugin_id)
@@ -497,26 +520,27 @@ def plugin_new():
         "nav_items": [],
     }
     import json
+
     with open(os.path.join(dest, "plugin.json"), "w") as f:
         json.dump(manifest, f, indent=2)
         f.write("\n")
 
     handler_py = (
         '"""Handler for the ' + name + ' plugin."""\n\n\n'
-        'def on_load(sdk):\n'
+        "def on_load(sdk):\n"
         '    """Called when the plugin is loaded. Use sdk.log() for logging."""\n'
         '    sdk.log("' + name + ' plugin loaded (v1.0.0)")\n\n\n'
-        'def on_unload(sdk):\n'
+        "def on_unload(sdk):\n"
         '    """Called when the plugin is unloaded."""\n'
         '    sdk.log("' + name + ' plugin unloaded")\n\n\n'
-        'def on_tool_call(tool_name, args, sdk):\n'
+        "def on_tool_call(tool_name, args, sdk):\n"
         '    """Handle a tool call from an agent.\n\n'
-        '    Args:\n'
-        '        tool_name: Name of the tool being called.\n'
-        '        args: Dictionary of arguments passed to the tool.\n'
-        '        sdk: Plugin SDK instance for logging, config access, etc.\n\n'
-        '    Returns:\n'
-        '        A string response to send back to the agent.\n'
+        "    Args:\n"
+        "        tool_name: Name of the tool being called.\n"
+        "        args: Dictionary of arguments passed to the tool.\n"
+        "        sdk: Plugin SDK instance for logging, config access, etc.\n\n"
+        "    Returns:\n"
+        "        A string response to send back to the agent.\n"
         '    """\n'
         '    sdk.log(f"Tool called: {tool_name} with args={args}")\n'
         '    return f"Executed {tool_name} with {len(args)} argument(s)"\n'
@@ -526,8 +550,8 @@ def plugin_new():
 
     readme = f"""# {name}
 
-**Plugin ID:** `{plugin_id}`  
-**Version:** 1.0.0  
+**Plugin ID:** `{plugin_id}`
+**Version:** 1.0.0
 **Author:** {author}
 
 ## Description
@@ -576,17 +600,16 @@ the handler logic in `handler.py`.
     print("")
 
 
-
-
 # ─── Skill Management ──────────────────────────────────────────────────────────
 
 # Built-in/core skills that cannot be removed via CLI
-_SKILL_CORE_IDS = {'hello_world'}
+_SKILL_CORE_IDS = {"hello_world"}
 
 
 def _get_skills_manager():
     """Lazily create a SkillsManager instance."""
     from backend.skills_manager import SkillsManager
+
     return SkillsManager()
 
 
@@ -601,8 +624,12 @@ def skill_list():
 
     # Column widths
     id_width = max(len("ID"), max((len(s.get("id", "")) for s in skills), default=2))
-    name_width = max(len("Name"), max((len(s.get("name", "")) for s in skills), default=4))
-    ver_width = max(len("Version"), max((len(str(s.get("version", ""))) for s in skills), default=7))
+    name_width = max(
+        len("Name"), max((len(s.get("name", "")) for s in skills), default=4)
+    )
+    ver_width = max(
+        len("Version"), max((len(str(s.get("version", ""))) for s in skills), default=7)
+    )
     status_width = len("Status")
     tools_width = len("Tools")
 
@@ -639,24 +666,26 @@ def skill_add(source):
     temp_zip = None
     actual_source = source
 
-    if source.startswith(('https://github.com/', 'http://github.com/', 'git@github.com:')):
+    if source.startswith(
+        ("https://github.com/", "http://github.com/", "git@github.com:")
+    ):
         print(f"Cloning from GitHub: {source}")
         temp_dir = tempfile.mkdtemp()
 
         # Convert GitHub URL to git clone URL
-        if source.startswith('git@github.com:'):
-            git_url = source.replace('git@github.com:', 'git@github.com:')
-        elif source.startswith(('https://github.com/', 'http://github.com/')):
+        if source.startswith("git@github.com:"):
+            git_url = source.replace("git@github.com:", "git@github.com:")
+        elif source.startswith(("https://github.com/", "http://github.com/")):
             git_url = source
         else:
             git_url = source
 
         # Remove .git suffix if present
-        git_url = git_url.rstrip('.git')
+        git_url = git_url.rstrip(".git")
 
         try:
             result = subprocess.run(
-                ['git', 'clone', git_url, temp_dir],
+                ["git", "clone", git_url, temp_dir],
                 capture_output=True,
                 text=True,
                 timeout=120,
@@ -672,7 +701,7 @@ def skill_add(source):
             sys.exit(1)
 
         actual_source = temp_dir
-    elif source.endswith('.zip'):
+    elif source.endswith(".zip"):
         if not os.path.isfile(source):
             print(f"Error: File not found: {source}")
             sys.exit(1)
@@ -689,7 +718,7 @@ def skill_add(source):
 
     # Install the skill
     try:
-        if actual_source.endswith('.zip'):
+        if actual_source.endswith(".zip"):
             result = sm.install_skill(actual_source)
         else:
             result = sm.install_skill_from_dir(actual_source)
@@ -729,24 +758,24 @@ def skill_get(skill_id):
     print(f"Description: {skill.get('description', 'N/A')}")
 
     # Tools
-    tools = skill.get('tools', [])
+    tools = skill.get("tools", [])
     if tools:
         print(f"\nTools ({len(tools)}):")
         for t in tools:
-            tname = t.get('name', '')
-            tdesc = t.get('description', '')
+            tname = t.get("name", "")
+            tdesc = t.get("description", "")
             print(f"  - {tname}")
             if tdesc:
                 print(f"    {tdesc}")
 
     # Variables
-    variables = skill.get('variables', [])
+    variables = skill.get("variables", [])
     if variables:
         print(f"\nVariables ({len(variables)}):")
         for v in variables:
-            vname = v.get('name', v.get('key', ''))
-            vdesc = v.get('description', '')
-            vdefault = v.get('default', '')
+            vname = v.get("name", v.get("key", ""))
+            vdesc = v.get("description", "")
+            vdefault = v.get("default", "")
             print(f"  - {vname}")
             if vdesc:
                 print(f"    {vdesc}")
@@ -782,6 +811,7 @@ def skill_rm(skill_id):
 def _get_skillsets():
     """Lazily import skillsets module."""
     from backend import skillsets
+
     return skillsets
 
 
@@ -796,8 +826,13 @@ def skillset_list():
 
     # Column widths
     id_width = max(len("ID"), max((len(s.get("id", "")) for s in skillsets), default=2))
-    name_width = max(len("Name"), max((len(s.get("name", "")) for s in skillsets), default=4))
-    desc_width = max(len("Description"), max((len(s.get("description", "")) for s in skillsets), default=11))
+    name_width = max(
+        len("Name"), max((len(s.get("name", "")) for s in skillsets), default=4)
+    )
+    desc_width = max(
+        len("Description"),
+        max((len(s.get("description", "")) for s in skillsets), default=11),
+    )
     tools_width = len("Tools")
     skills_width = len("Skills")
 
@@ -843,7 +878,7 @@ def skillset_get(skillset_id):
     print(f"Model:       {skillset.get('model', '(default)')}")
 
     # System prompt (truncated)
-    sp = skillset.get('system_prompt', '')
+    sp = skillset.get("system_prompt", "")
     if sp:
         if len(sp) > 200:
             print(f"\nSystem Prompt: {sp[:200]}...")
@@ -851,21 +886,21 @@ def skillset_get(skillset_id):
             print(f"\nSystem Prompt: {sp}")
 
     # Tools
-    tools = skillset.get('tools', [])
+    tools = skillset.get("tools", [])
     if tools:
         print(f"\nTools ({len(tools)}):")
         for t in tools:
             print(f"  - {t}")
 
     # Skills
-    skills = skillset.get('skills', [])
+    skills = skillset.get("skills", [])
     if skills:
         print(f"\nSkills ({len(skills)}):")
         for sk in skills:
             print(f"  - {sk}")
 
     # KB files
-    kb_files = skillset.get('kb_files', {})
+    kb_files = skillset.get("kb_files", {})
     if kb_files:
         print(f"\nKB Files ({len(kb_files)}):")
         for k, v in kb_files.items():
@@ -893,23 +928,25 @@ def skillset_apply(skillset_id, agent_id, name=None, description=None, model=Non
 
     # Build agent data
     agent_data = {
-        'id': agent_id,
+        "id": agent_id,
     }
     if name:
-        agent_data['name'] = name
+        agent_data["name"] = name
     if description:
-        agent_data['description'] = description
+        agent_data["description"] = description
     if model:
-        agent_data['model'] = model
+        agent_data["model"] = model
 
     # Resolve the skillset to get actual tool IDs
     resolved = mod.resolve_skillset(skillset_id)
     if resolved:
-        agent_data['tools'] = resolved.get('resolved_tools', [])
+        agent_data["tools"] = resolved.get("resolved_tools", [])
 
-        unresolved = resolved.get('unresolved_tools', [])
+        unresolved = resolved.get("unresolved_tools", [])
         if unresolved:
-            print(f"Warning: {len(unresolved)} tool(s) not found and will be skipped: {', '.join(unresolved)}")
+            print(
+                f"Warning: {len(unresolved)} tool(s) not found and will be skipped: {', '.join(unresolved)}"
+            )
 
     # Apply skillset defaults
     merged = mod.apply_skillset(skillset_id, agent_data)
@@ -917,17 +954,19 @@ def skillset_apply(skillset_id, agent_id, name=None, description=None, model=Non
     # Create the agent via platform API
     try:
         import requests
+
         import config
+
         base_url = f"http://{getattr(config, 'HOST', 'localhost')}:{getattr(config, 'PORT', 8080)}"
 
         payload = {
-            'id': merged.get('id', ''),
-            'name': merged.get('name', ''),
-            'description': merged.get('description', ''),
-            'system_prompt': merged.get('system_prompt', ''),
+            "id": merged.get("id", ""),
+            "name": merged.get("name", ""),
+            "description": merged.get("description", ""),
+            "system_prompt": merged.get("system_prompt", ""),
         }
-        if merged.get('model'):
-            payload['model'] = merged['model']
+        if merged.get("model"):
+            payload["model"] = merged["model"]
 
         resp = requests.post(
             f"{base_url}/api/agent/create",
@@ -941,18 +980,18 @@ def skillset_apply(skillset_id, agent_id, name=None, description=None, model=Non
         resp.raise_for_status()
 
         # Assign tools
-        tools = merged.get('tools', [])
+        tools = merged.get("tools", [])
         if tools:
             resp2 = requests.post(
                 f"{base_url}/api/agent/{agent_id}/tools",
-                json={'tool_ids': tools},
+                json={"tool_ids": tools},
                 timeout=15,
             )
             if resp2.status_code != 200:
                 print(f"Warning: Failed to assign tools: {resp2.text}")
 
         # Enable skills
-        skills = merged.get('skills', [])
+        skills = merged.get("skills", [])
         for skill_id in skills:
             resp3 = requests.post(
                 f"{base_url}/api/agent/{agent_id}/skill/{skill_id}/enable",
@@ -961,7 +1000,7 @@ def skillset_apply(skillset_id, agent_id, name=None, description=None, model=Non
             if resp3.status_code != 200:
                 print(f"Warning: Failed to enable skill '{skill_id}': {resp3.text}")
 
-        agent_name = merged.get('name', agent_id)
+        agent_name = merged.get("name", agent_id)
         print(f"Agent created: {agent_name} ({agent_id}) from skillset '{skillset_id}'")
 
     except requests.exceptions.ConnectionError:
@@ -978,6 +1017,7 @@ def skillset_apply(skillset_id, agent_id, name=None, description=None, model=Non
 def _get_db():
     """Lazily create a Database instance."""
     from models.db import db
+
     return db
 
 
@@ -992,7 +1032,9 @@ def agent_list():
 
     # Column widths
     id_width = max(len("ID"), max((len(a.get("id", "")) for a in agents), default=2))
-    name_width = max(len("Name"), max((len(a.get("name", "")) for a in agents), default=4))
+    name_width = max(
+        len("Name"), max((len(a.get("name", "")) for a in agents), default=4)
+    )
     status_width = len("Status")
     tools_width = len("Tools")
     channels_width = len("Channels")
@@ -1039,11 +1081,11 @@ def agent_get(agent_id):
     print(f"Description: {agent.get('description', 'N/A')}")
     print(f"Status:      {'enabled' if agent.get('enabled', True) else 'disabled'}")
     print(f"Super:       {'yes' if agent.get('is_super', False) else 'no'}")
-    model = agent.get('model') or '(default)'
+    model = agent.get("model") or "(default)"
     print(f"Model:       {model}")
 
     # System prompt (truncated)
-    sp = agent.get('system_prompt', '')
+    sp = agent.get("system_prompt", "")
     if sp:
         if len(sp) > 200:
             print(f"\nSystem Prompt: {sp[:200]}...")
@@ -1062,7 +1104,7 @@ def agent_get(agent_id):
     if channels:
         print(f"\nChannels ({len(channels)}):")
         for c in channels:
-            cname = c.get('name', c.get('type', ''))
+            cname = c.get("name", c.get("type", ""))
             print(f"  - {cname}")
 
 
@@ -1070,7 +1112,9 @@ def agent_add(agent_id, name, description=None, model=None, skillset=None):
     """Create a new agent, optionally from a skillset template."""
     if not agent_id:
         print("Error: agent_id is required.")
-        print("Usage: evonic agent add <id> --name <name> [--description] [--model] [--skillset]")
+        print(
+            "Usage: evonic agent add <id> --name <name> [--description] [--model] [--skillset]"
+        )
         sys.exit(1)
 
     if not name:
@@ -1079,9 +1123,12 @@ def agent_add(agent_id, name, description=None, model=None, skillset=None):
         sys.exit(1)
 
     import re
+
     agent_id = agent_id.strip().lower()
-    if not re.match(r'^[a-z0-9_]+$', agent_id):
-        print("Error: Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case).")
+    if not re.match(r"^[a-z0-9_]+$", agent_id):
+        print(
+            "Error: Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case)."
+        )
         sys.exit(1)
 
     db = _get_db()
@@ -1091,51 +1138,63 @@ def agent_add(agent_id, name, description=None, model=None, skillset=None):
 
     # Resolve skillset if provided
     resolved_tools = []
-    system_prompt = ''
+    system_prompt = ""
     skills = []
 
     if skillset:
         from backend import skillsets as ss_mod
+
         skillset_data = ss_mod.get_skillset(skillset)
         if skillset_data is None:
             print(f"Error: Skillset not found: {skillset}")
             sys.exit(1)
 
-        system_prompt = skillset_data.get('system_prompt', '')
-        skills = skillset_data.get('skills', [])
+        system_prompt = skillset_data.get("system_prompt", "")
+        skills = skillset_data.get("skills", [])
 
         resolved = ss_mod.resolve_skillset(skillset)
         if resolved:
-            resolved_tools = resolved.get('resolved_tools', [])
-            unresolved = resolved.get('unresolved_tools', [])
+            resolved_tools = resolved.get("resolved_tools", [])
+            unresolved = resolved.get("unresolved_tools", [])
             if unresolved:
-                print(f"Warning: {len(unresolved)} tool(s) not found and will be skipped: {', '.join(unresolved)}")
+                print(
+                    f"Warning: {len(unresolved)} tool(s) not found and will be skipped: {', '.join(unresolved)}"
+                )
 
     # Create agent directory and KB
-    AGENTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agents')
+    AGENTS_DIR = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents"
+    )
     agent_dir = os.path.join(AGENTS_DIR, agent_id)
-    kb_dir = os.path.join(agent_dir, 'kb')
+    kb_dir = os.path.join(agent_dir, "kb")
     os.makedirs(kb_dir, exist_ok=True)
 
     # Create workspace directory at shared/agents/[agent-id]
-    workspace_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'shared', 'agents', agent_id)
+    workspace_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "shared",
+        "agents",
+        agent_id,
+    )
     os.makedirs(workspace_dir, exist_ok=True)
 
     # Write system prompt file
-    sp_path = os.path.join(agent_dir, 'SYSTEM.md')
-    with open(sp_path, 'w', encoding='utf-8') as f:
+    sp_path = os.path.join(agent_dir, "SYSTEM.md")
+    with open(sp_path, "w", encoding="utf-8") as f:
         f.write(system_prompt)
 
     # Create in DB
     try:
-        db.create_agent({
-            'id': agent_id,
-            'name': name,
-            'description': description or '',
-            'system_prompt': system_prompt,
-            'model': model or None,
-            'workspace': workspace_dir,
-        })
+        db.create_agent(
+            {
+                "id": agent_id,
+                "name": name,
+                "description": description or "",
+                "system_prompt": system_prompt,
+                "model": model or None,
+                "workspace": workspace_dir,
+            }
+        )
 
         # Assign tools from skillset
         if resolved_tools:
@@ -1162,7 +1221,7 @@ def agent_enable(agent_id):
         print(f"Error: Agent not found: {agent_id}")
         sys.exit(1)
 
-    db.update_agent(agent_id, {'enabled': True})
+    db.update_agent(agent_id, {"enabled": True})
     print(f"Agent enabled: {agent_id}")
 
 
@@ -1180,11 +1239,11 @@ def agent_disable(agent_id):
         print(f"Error: Agent not found: {agent_id}")
         sys.exit(1)
 
-    if agent.get('is_super'):
+    if agent.get("is_super"):
         print("Error: Super agent cannot be disabled.")
         sys.exit(1)
 
-    db.update_agent(agent_id, {'enabled': False})
+    db.update_agent(agent_id, {"enabled": False})
     print(f"Agent disabled: {agent_id}")
 
 
@@ -1202,13 +1261,13 @@ def agent_remove(agent_id):
         print(f"Error: Agent not found: {agent_id}")
         sys.exit(1)
 
-    if agent.get('is_super'):
+    if agent.get("is_super"):
         print("Error: Super agent cannot be deleted.")
         sys.exit(1)
 
     # Show agent details and ask for confirmation
-    aname = agent.get('name', agent_id)
-    status = 'enabled' if agent.get('enabled', True) else 'disabled'
+    aname = agent.get("name", agent_id)
+    status = "enabled" if agent.get("enabled", True) else "disabled"
     print(f"Agent to remove:")
     print(f"  ID:        {agent_id}")
     print(f"  Name:      {aname}")
@@ -1221,13 +1280,17 @@ def agent_remove(agent_id):
         print("Aborted.")
         sys.exit(1)
 
-    if response not in ('y', 'yes'):
+    if response not in ("y", "yes"):
         print("Aborted.")
         sys.exit(0)
 
     try:
         db.delete_agent(agent_id)
-        agent_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agents', agent_id)
+        agent_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "agents",
+            agent_id,
+        )
         if os.path.isdir(agent_dir):
             shutil.rmtree(agent_dir)
         print(f"Agent removed: {agent_id}")
@@ -1250,8 +1313,13 @@ def model_list():
 
     # Column widths
     id_width = max(len("ID"), max((len(m.get("id", "")) for m in models), default=2))
-    name_width = max(len("Name"), max((len(m.get("name", "")) for m in models), default=4))
-    provider_width = max(len("Provider"), max((len(str(m.get("provider", ""))) for m in models), default=8))
+    name_width = max(
+        len("Name"), max((len(m.get("name", "")) for m in models), default=4)
+    )
+    provider_width = max(
+        len("Provider"),
+        max((len(str(m.get("provider", ""))) for m in models), default=8),
+    )
 
     header = (
         f"{'ID':<{id_width}}  {'Name':<{name_width}}  {'Provider':<{provider_width}}"
@@ -1289,7 +1357,9 @@ def model_get(model_id):
     print(f"Provider:    {model.get('provider', '')}")
     print(f"Model Name:  {model.get('model_name', '')}")
     print(f"Base URL:    {model.get('base_url', '') or '(default)'}")
-    print(f"API Key:     {'***' + (model.get('api_key', '') or '')[-6:] if model.get('api_key') else '(none)'}")
+    print(
+        f"API Key:     {'***' + (model.get('api_key', '') or '')[-6:] if model.get('api_key') else '(none)'}"
+    )
     print(f"Max Tokens:  {model.get('max_tokens', 32768)}")
     print(f"Timeout:     {model.get('timeout', 60)}")
     print(f"Temperature: {model.get('temperature', 'N/A')}")
@@ -1301,7 +1371,9 @@ def model_add(model_id, name, provider, api_key=None, base_url=None):
     """Add a new LLM model."""
     if not model_id:
         print("Error: model_id is required.")
-        print("Usage: evonic model add <id> --name <name> --provider <provider> [--api-key] [--base-url]")
+        print(
+            "Usage: evonic model add <id> --name <name> --provider <provider> [--api-key] [--base-url]"
+        )
         sys.exit(1)
 
     if not name:
@@ -1320,14 +1392,14 @@ def model_add(model_id, name, provider, api_key=None, base_url=None):
         sys.exit(1)
 
     model_data = {
-        'id': model_id,
-        'name': name,
-        'type': 'chat',
-        'provider': provider,
-        'model_name': model_id,
-        'api_key': api_key or '',
-        'base_url': base_url or '',
-        'is_default': 0,
+        "id": model_id,
+        "name": name,
+        "type": "chat",
+        "provider": provider,
+        "model_name": model_id,
+        "api_key": api_key or "",
+        "base_url": base_url or "",
+        "is_default": 0,
     }
 
     try:
@@ -1353,8 +1425,8 @@ def model_rm(model_id):
         sys.exit(1)
 
     # Show model details and ask for confirmation
-    mname = model.get('name', model_id)
-    provider = model.get('provider', '')
+    mname = model.get("name", model_id)
+    provider = model.get("provider", "")
     print(f"Model to remove:")
     print(f"  ID:        {model_id}")
     print(f"  Name:      {mname}")
@@ -1367,7 +1439,7 @@ def model_rm(model_id):
         print("Aborted.")
         sys.exit(1)
 
-    if response not in ('y', 'yes'):
+    if response not in ("y", "yes"):
         print("Aborted.")
         sys.exit(0)
 
@@ -1391,7 +1463,8 @@ def _install_dependencies():
     print("  Installing dependencies...")
     result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "-r", req_file],
-        capture_output=True, text=True
+        capture_output=True,
+        text=True,
     )
     if result.returncode != 0:
         print("  Error installing dependencies:")
@@ -1411,7 +1484,7 @@ def setup_wizard():
     #    read directly from the terminal instead of hitting EOF. ──
     if not sys.stdin.isatty():
         try:
-            sys.stdin = open('/dev/tty', 'r')
+            sys.stdin = open("/dev/tty", "r")
         except OSError:
             pass  # No /dev/tty available; existing EOFError handlers will abort gracefully
 
@@ -1431,8 +1504,14 @@ def setup_wizard():
         sys.exit(1)
     print()
 
-    from backend.setup import (PROVIDER_DEFAULTS, TONE_PRESETS, test_connection,
-                                run_setup, check_docker_available, build_sandbox_image)
+    from backend.setup import (
+        PROVIDER_DEFAULTS,
+        TONE_PRESETS,
+        build_sandbox_image,
+        check_docker_available,
+        run_setup,
+        test_connection,
+    )
 
     # ── Step 1: Provider ──
     providers = list(PROVIDER_DEFAULTS.items())
@@ -1456,11 +1535,10 @@ def setup_wizard():
 
     provider_id, provider_cfg = providers[idx]
     print(f"\n  Selected: {provider_cfg['label']}")
-
     # ── Step 2: Base URL ──
-    default_url = provider_cfg['base_url']
+    default_url = provider_cfg["base_url"]
     print()
-    if provider_id == 'custom':
+    if provider_id == "custom":
         try:
             print("  eg: http://192.168.1.7:8080/v1")
             base_url = input("  Base URL: ").strip()
@@ -1479,8 +1557,8 @@ def setup_wizard():
         base_url = entered or default_url
 
     # ── Step 3: API Key ──
-    api_key = ''
-    if provider_cfg['api_key_required']:
+    api_key = ""
+    if provider_cfg["api_key_required"]:
         try:
             api_key = getpass.getpass("  API Key: ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -1491,13 +1569,15 @@ def setup_wizard():
             sys.exit(1)
     else:
         try:
-            api_key = getpass.getpass("  API Key (optional, press Enter to skip): ").strip()
+            api_key = getpass.getpass(
+                "  API Key (optional, press Enter to skip): "
+            ).strip()
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
             sys.exit(1)
 
     # ── Step 4: Model name ──
-    placeholder = provider_cfg['placeholder_model']
+    placeholder = provider_cfg["placeholder_model"]
     try:
         model_name = input(f"  Model name [{placeholder}]: ").strip() or placeholder
     except (EOFError, KeyboardInterrupt):
@@ -1511,7 +1591,7 @@ def setup_wizard():
     print()
     print("  Testing connection...", end=" ", flush=True)
     result = test_connection(base_url, api_key or None)
-    if result['success']:
+    if result["success"]:
         print(f"OK — {result['message']}")
     else:
         print(f"FAILED — {result['message']}")
@@ -1520,7 +1600,7 @@ def setup_wizard():
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
             sys.exit(1)
-        if cont not in ('y', 'yes'):
+        if cont not in ("y", "yes"):
             print("  Aborted.")
             sys.exit(1)
 
@@ -1533,15 +1613,18 @@ def setup_wizard():
         sys.exit(1)
 
     import re
-    default_id = re.sub(r'[^a-z0-9_]', '_', agent_name.lower())
-    default_id = re.sub(r'_+', '_', default_id).strip('_') or 'admin'
+
+    default_id = re.sub(r"[^a-z0-9_]", "_", agent_name.lower())
+    default_id = re.sub(r"_+", "_", default_id).strip("_") or "admin"
     try:
         agent_id = input(f"  Agent ID [{default_id}]: ").strip().lower() or default_id
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
-    if not re.match(r'^[a-z0-9_]+$', agent_id):
-        print("  Agent ID must be lowercase alphanumeric and underscores only (snake_case).")
+    if not re.match(r"^[a-z0-9_]+$", agent_id):
+        print(
+            "  Agent ID must be lowercase alphanumeric and underscores only (snake_case)."
+        )
         sys.exit(1)
 
     # ── Step 7: Communication style ──
@@ -1566,39 +1649,45 @@ def setup_wizard():
         sys.exit(1)
 
     tone_id, tone_cfg = tones[tidx]
-    custom_tone_text = ''
-    if tone_id == 'custom':
+    custom_tone_text = ""
+    if tone_id == "custom":
         print()
         print("  Enter your custom style instructions (press Enter twice to finish):")
         lines = []
         try:
             while True:
                 line = input("  > ")
-                if line == '' and lines and lines[-1] == '':
+                if line == "" and lines and lines[-1] == "":
                     break
                 lines.append(line)
         except (EOFError, KeyboardInterrupt):
             pass
-        custom_tone_text = '\n'.join(lines).strip()
+        custom_tone_text = "\n".join(lines).strip()
 
     # ── Step 8: Docker Sandbox Detection ──
     sandbox_enabled = False
     print()
     docker_status = check_docker_available()
-    if docker_status['available']:
+    if docker_status["available"]:
         print(f"  Docker detected — {docker_status['message']}")
         print()
         print("  Fitur sandbox execution memerlukan Docker.")
         try:
-            build_choice = input("  Apakah Anda ingin menyiapkan Docker image terlebih dahulu? [Y/n]: ").strip().lower()
+            build_choice = (
+                input(
+                    "  Apakah Anda ingin menyiapkan Docker image terlebih dahulu? [Y/n]: "
+                )
+                .strip()
+                .lower()
+            )
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
             sys.exit(1)
-        if build_choice in ('', 'y', 'yes'):
+        if build_choice in ("", "y", "yes"):
             print()
             print("  Building Docker sandbox image...", end=" ", flush=True)
             build_result = build_sandbox_image()
-            if build_result['success']:
+            if build_result["success"]:
                 print("Done!")
                 print(f"  {build_result['message']}")
                 sandbox_enabled = True
@@ -1628,7 +1717,7 @@ def setup_wizard():
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
-    if confirm in ('n', 'no'):
+    if confirm in ("n", "no"):
         print("  Aborted.")
         sys.exit(0)
 
@@ -1646,7 +1735,7 @@ def setup_wizard():
         custom_tone_text=custom_tone_text,
         sandbox_enabled=sandbox_enabled,
     )
-    if outcome.get('error'):
+    if outcome.get("error"):
         print(f"FAILED\n  Error: {outcome['error']}")
         sys.exit(1)
 
@@ -1675,13 +1764,15 @@ def setup_wizard():
             sys.exit(1)
         if bot_token:
             try:
-                db.create_channel({
-                    "agent_id": agent_id,
-                    "type": "telegram",
-                    "name": "Telegram Bot",
-                    "config": {"bot_token": bot_token, "mode": "restricted"},
-                    "enabled": True,
-                })
+                db.create_channel(
+                    {
+                        "agent_id": agent_id,
+                        "type": "telegram",
+                        "name": "Telegram Bot",
+                        "config": {"bot_token": bot_token, "mode": "restricted"},
+                        "enabled": True,
+                    }
+                )
                 print("  Telegram bot connected successfully.")
                 print(f"  You can now chat with '{agent_name}' via Telegram.")
             except Exception as e:
@@ -1693,12 +1784,13 @@ def setup_wizard():
 
     # ── Step 11: Password Setup ──
     from werkzeug.security import generate_password_hash
+
     print()
     print("  Set Web Dashboard Password")
     print("  " + "─" * 30)
     print("  This password is used to log in to the web dashboard.")
     print()
-    env_path = os.path.join(ROOT, '.env')
+    env_path = os.path.join(ROOT, ".env")
     while True:
         try:
             pw1 = getpass.getpass("  Password: ")
@@ -1706,7 +1798,9 @@ def setup_wizard():
             print("\n  Aborted.")
             sys.exit(1)
         if not pw1:
-            print("  Warning: No password set. Web dashboard will be accessible without login.")
+            print(
+                "  Warning: No password set. Web dashboard will be accessible without login."
+            )
             break
         if len(pw1) < 6:
             print("  Error: Password must be at least 6 characters. Try again.")
@@ -1720,17 +1814,35 @@ def setup_wizard():
             print("  Error: Passwords do not match. Try again.")
             continue
         new_hash = generate_password_hash(pw1)
-        _update_env_var(env_path, 'ADMIN_PASSWORD_HASH', new_hash)
+        _update_env_var(env_path, "ADMIN_PASSWORD_HASH", new_hash)
         print("  Password set successfully.")
         break
 
     # -- Generate supervisor/config.json for self-update support --
     print()
     print("  Setting up supervisor for self-update...", end=" ", flush=True)
+
+    # Resolve the server port from .env so the supervisor health check
+    # probes the correct port (not hardcoded 8080).
+    server_port = 8080
+    env_path = os.path.join(ROOT, '.env')
+    if os.path.isfile(env_path):
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('PORT=') or line.startswith('PORT '):
+                        val = line.split('=', 1)[-1].strip().strip('"').strip("'")
+                        if val:
+                            server_port = int(val)
+                        break
+        except (ValueError, IOError):
+            pass
+
     sup_cfg = {
         "app_root": ROOT,
         "poll_interval": 300,
-        "health_port": 8080,
+        "health_port": server_port,
         "health_temp_port": 18080,
         "health_timeout": 10,
         "monitor_duration": 60,
@@ -1744,6 +1856,7 @@ def setup_wizard():
     os.makedirs(sup_cfg_dir, exist_ok=True)
     sup_cfg_path = os.path.join(sup_cfg_dir, "config.json")
     import json
+
     with open(sup_cfg_path, "w") as f:
         json.dump(sup_cfg, f, indent=4)
     print("Done!")
@@ -1759,63 +1872,65 @@ def setup_wizard():
 def pass_setup():
     """Set or change the admin password used for web dashboard authentication."""
     import getpass
-    from werkzeug.security import generate_password_hash, check_password_hash
 
-    env_path = os.path.join(ROOT, '.env')
+    from werkzeug.security import check_password_hash, generate_password_hash
+
+    env_path = os.path.join(ROOT, ".env")
 
     try:
         import config
+
         current_hash = config.ADMIN_PASSWORD_HASH
     except Exception:
-        current_hash = os.getenv('ADMIN_PASSWORD_HASH', '')
+        current_hash = os.getenv("ADMIN_PASSWORD_HASH", "")
 
     if not current_hash:
-        print('No admin password is set. Create a new password.')
-        pw1 = getpass.getpass('New password: ')
+        print("No admin password is set. Create a new password.")
+        pw1 = getpass.getpass("New password: ")
         if not pw1:
-            print('Error: Password cannot be empty.')
+            print("Error: Password cannot be empty.")
             sys.exit(1)
         if len(pw1) < 6:
-            print('Error: Password must be at least 6 characters.')
+            print("Error: Password must be at least 6 characters.")
             sys.exit(1)
-        pw2 = getpass.getpass('Confirm password: ')
+        pw2 = getpass.getpass("Confirm password: ")
         if pw1 != pw2:
-            print('Error: Passwords do not match.')
+            print("Error: Passwords do not match.")
             sys.exit(1)
         new_hash = generate_password_hash(pw1)
-        _update_env_var(env_path, 'ADMIN_PASSWORD_HASH', new_hash)
-        print('Password set successfully.')
+        _update_env_var(env_path, "ADMIN_PASSWORD_HASH", new_hash)
+        print("Password set successfully.")
     else:
-        print('Admin password is already configured.')
+        print("Admin password is already configured.")
         try:
-            choice = input('Change password? [y/N]: ').strip().lower()
+            choice = input("Change password? [y/N]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
-            print('\nAborted.')
+            print("\nAborted.")
             sys.exit(1)
-        if choice not in ('y', 'yes'):
-            print('No changes made.')
+        if choice not in ("y", "yes"):
+            print("No changes made.")
             return
 
-        old_pw = getpass.getpass('Current password: ')
+        old_pw = getpass.getpass("Current password: ")
         if not check_password_hash(current_hash, old_pw):
-            print('Error: Incorrect password.')
+            print("Error: Incorrect password.")
             sys.exit(1)
 
-        pw1 = getpass.getpass('New password: ')
+        pw1 = getpass.getpass("New password: ")
         if not pw1:
-            print('Error: Password cannot be empty.')
+            print("Error: Password cannot be empty.")
             sys.exit(1)
         if len(pw1) < 6:
-            print('Error: Password must be at least 6 characters.')
+            print("Error: Password must be at least 6 characters.")
             sys.exit(1)
-        pw2 = getpass.getpass('Confirm password: ')
+        pw2 = getpass.getpass("Confirm password: ")
         if pw1 != pw2:
-            print('Error: Passwords do not match.')
+            print("Error: Passwords do not match.")
             sys.exit(1)
 
         new_hash = generate_password_hash(pw1)
-        _update_env_var(env_path, 'ADMIN_PASSWORD_HASH', new_hash)
-        print('Password changed successfully.')
+        _update_env_var(env_path, "ADMIN_PASSWORD_HASH", new_hash)
+        print("Password changed successfully.")
 
 
 def _reconfigure_supervisor_wizard():
@@ -1828,7 +1943,7 @@ def _reconfigure_supervisor_wizard():
     import json
 
     sup = _load_supervisor_module()
-    cfg_path = os.path.join(ROOT, 'supervisor', 'config.json')
+    cfg_path = os.path.join(ROOT, "supervisor", "config.json")
 
     # Load existing config if available, otherwise start from defaults
     cfg = sup.load_config(cfg_path)
@@ -1846,7 +1961,7 @@ def _reconfigure_supervisor_wizard():
     print("  Poll interval \u2014 how often (in seconds) the supervisor checks")
     print("  for new releases on GitHub.")
     print()
-    current_poll = cfg.get('poll_interval', 300)
+    current_poll = cfg.get("poll_interval", 300)
     try:
         poll_input = input(f"  Poll interval [{current_poll}]: ").strip()
     except (EOFError, KeyboardInterrupt):
@@ -1869,7 +1984,13 @@ def _reconfigure_supervisor_wizard():
     print("  Health check port \u2014 the supervisor probes this port to")
     print("  determine whether the server is responsive after a swap.")
     print()
-    current_health = cfg.get('health_port', 8080)
+    # Resolve default from config.PORT if available, otherwise 8080
+    try:
+        import config
+        _default_health_port = int(getattr(config, 'PORT', 8080))
+    except Exception:
+        _default_health_port = 8080
+    current_health = cfg.get('health_port', _default_health_port)
     try:
         health_input = input(f"  Health check port [{current_health}]: ").strip()
     except (EOFError, KeyboardInterrupt):
@@ -1892,7 +2013,7 @@ def _reconfigure_supervisor_wizard():
     print("  Release retention \u2014 how many past releases to keep")
     print("  (older ones are pruned after a successful update).")
     print()
-    current_keep = cfg.get('keep_releases', 3)
+    current_keep = cfg.get("keep_releases", 3)
     try:
         keep_input = input(f"  Keep releases [{current_keep}]: ").strip()
     except (EOFError, KeyboardInterrupt):
@@ -1915,14 +2036,20 @@ def _reconfigure_supervisor_wizard():
     print("  Telegram notifications \u2014 optionally notify a chat when")
     print("  the supervisor performs an update or encounters an error.")
     print()
-    current_token = cfg.get('telegram_bot_token', '')
-    current_chat = cfg.get('telegram_chat_id', '')
-    masked_token = ('***' + current_token[-4:]) if len(current_token) > 4 else (current_token or '(not set)')
+    current_token = cfg.get("telegram_bot_token", "")
+    current_chat = cfg.get("telegram_chat_id", "")
+    masked_token = (
+        ("***" + current_token[-4:])
+        if len(current_token) > 4
+        else (current_token or "(not set)")
+    )
     print(f"  Current bot token : {masked_token}")
     print(f"  Current chat ID   : {current_chat or '(not set)'}")
     print()
     try:
-        use_telegram = input("  Configure Telegram notifications? [y/N]: ").strip().lower()
+        use_telegram = (
+            input("  Configure Telegram notifications? [y/N]: ").strip().lower()
+        )
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
@@ -1930,7 +2057,7 @@ def _reconfigure_supervisor_wizard():
     telegram_bot_token = current_token
     telegram_chat_id = current_chat
 
-    if use_telegram in ('y', 'yes'):
+    if use_telegram in ("y", "yes"):
         try:
             token_input = input(f"  Bot token [{masked_token}]: ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -1953,7 +2080,11 @@ def _reconfigure_supervisor_wizard():
     print(f"  Poll interval    : {poll_interval} seconds")
     print(f"  Health check port: {health_port}")
     print(f"  Keep releases    : {keep_releases}")
-    masked_final = ('***' + telegram_bot_token[-4:]) if len(telegram_bot_token) > 4 else telegram_bot_token
+    masked_final = (
+        ("***" + telegram_bot_token[-4:])
+        if len(telegram_bot_token) > 4
+        else telegram_bot_token
+    )
     print(f"  Telegram token   : {masked_final or '(not set)'}")
     print(f"  Telegram chat ID : {telegram_chat_id or '(not set)'}")
     print()
@@ -1962,19 +2093,19 @@ def _reconfigure_supervisor_wizard():
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
-    if confirm in ('n', 'no'):
+    if confirm in ("n", "no"):
         print("  Aborted.")
         sys.exit(0)
 
     # --- Save ---
-    cfg['poll_interval'] = poll_interval
-    cfg['health_port'] = health_port
-    cfg['keep_releases'] = keep_releases
-    cfg['telegram_bot_token'] = telegram_bot_token
-    cfg['telegram_chat_id'] = telegram_chat_id
+    cfg["poll_interval"] = poll_interval
+    cfg["health_port"] = health_port
+    cfg["keep_releases"] = keep_releases
+    cfg["telegram_bot_token"] = telegram_bot_token
+    cfg["telegram_chat_id"] = telegram_chat_id
 
     os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
-    with open(cfg_path, 'w') as f:
+    with open(cfg_path, "w") as f:
         json.dump(cfg, f, indent=2)
 
     print()
@@ -2000,28 +2131,34 @@ def reconfigure_wizard(supervisor=False):
         print("Please run 'evonic setup' first to configure your platform.")
         sys.exit(1)
 
-    from backend.setup import (PROVIDER_DEFAULTS, TONE_PRESETS, LANGUAGE_PRESETS,
-                                test_connection, run_reconfigure,
-                                check_docker_available, build_sandbox_image)
+    from backend.setup import (
+        LANGUAGE_PRESETS,
+        PROVIDER_DEFAULTS,
+        TONE_PRESETS,
+        build_sandbox_image,
+        check_docker_available,
+        run_reconfigure,
+        test_connection,
+    )
 
     # ── Load current configuration from DB ──
     super_agent = db.get_super_agent()
-    agent_id = super_agent['id']
+    agent_id = super_agent["id"]
 
-    current_tone = db.get_setting('super_agent_tone', 'professional')
-    current_language = db.get_setting('agent_language', 'english')
-    current_sandbox = db.get_setting('sandbox_default_enabled', '0') == '1'
+    current_tone = db.get_setting("super_agent_tone", "professional")
+    current_language = db.get_setting("agent_language", "english")
+    current_sandbox = db.get_setting("sandbox_default_enabled", "0") == "1"
 
     # Determine current provider/model by checking which setup_* model exists
-    current_provider = 'ollama'
-    current_model_name = ''
-    current_base_url = ''
+    current_provider = "ollama"
+    current_model_name = ""
+    current_base_url = ""
     for pid in PROVIDER_DEFAULTS:
-        model = db.get_model_by_id(f'setup_{pid}')
+        model = db.get_model_by_id(f"setup_{pid}")
         if model:
             current_provider = pid
-            current_model_name = model.get('model_name', '')
-            current_base_url = model.get('base_url', '')
+            current_model_name = model.get("model_name", "")
+            current_base_url = model.get("base_url", "")
             break
 
     # ── Banner ──
@@ -2058,15 +2195,14 @@ def reconfigure_wizard(supervisor=False):
 
     provider_id, provider_cfg = providers[idx]
     print(f"\n  Selected: {provider_cfg['label']}")
-
     # ── Step 2: Base URL ──
     # If provider changed, use the new provider's default; otherwise use current
     if provider_id == current_provider and current_base_url:
         default_url = current_base_url
     else:
-        default_url = provider_cfg['base_url']
+        default_url = provider_cfg["base_url"]
     print()
-    if provider_id == 'custom':
+    if provider_id == "custom":
         try:
             print("  eg: http://192.168.1.7:8080/v1")
             prompt = f"  Base URL [{default_url}]: " if default_url else "  Base URL: "
@@ -2086,8 +2222,8 @@ def reconfigure_wizard(supervisor=False):
         base_url = entered or default_url
 
     # ── Step 3: API Key ──
-    api_key = ''
-    if provider_cfg['api_key_required']:
+    api_key = ""
+    if provider_cfg["api_key_required"]:
         try:
             api_key = getpass.getpass("  API Key: ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -2098,7 +2234,9 @@ def reconfigure_wizard(supervisor=False):
             sys.exit(1)
     else:
         try:
-            api_key = getpass.getpass("  API Key (optional, press Enter to skip): ").strip()
+            api_key = getpass.getpass(
+                "  API Key (optional, press Enter to skip): "
+            ).strip()
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
             sys.exit(1)
@@ -2107,7 +2245,7 @@ def reconfigure_wizard(supervisor=False):
     if provider_id == current_provider and current_model_name:
         placeholder = current_model_name
     else:
-        placeholder = provider_cfg['placeholder_model']
+        placeholder = provider_cfg["placeholder_model"]
     try:
         model_name = input(f"  Model name [{placeholder}]: ").strip() or placeholder
     except (EOFError, KeyboardInterrupt):
@@ -2121,7 +2259,7 @@ def reconfigure_wizard(supervisor=False):
     print()
     print("  Testing connection...", end=" ", flush=True)
     result = test_connection(base_url, api_key or None)
-    if result['success']:
+    if result["success"]:
         print(f"OK — {result['message']}")
     else:
         print(f"FAILED — {result['message']}")
@@ -2130,7 +2268,7 @@ def reconfigure_wizard(supervisor=False):
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
             sys.exit(1)
-        if cont not in ('y', 'yes'):
+        if cont not in ("y", "yes"):
             print("  Aborted.")
             sys.exit(1)
 
@@ -2147,7 +2285,9 @@ def reconfigure_wizard(supervisor=False):
             current_tone_idx = i
     print()
     try:
-        tone_choice = input(f"  Choice [{current_tone_idx}]: ").strip() or str(current_tone_idx)
+        tone_choice = input(f"  Choice [{current_tone_idx}]: ").strip() or str(
+            current_tone_idx
+        )
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
@@ -2160,20 +2300,20 @@ def reconfigure_wizard(supervisor=False):
         sys.exit(1)
 
     tone_id, tone_cfg = tones[tidx]
-    custom_tone_text = ''
-    if tone_id == 'custom':
+    custom_tone_text = ""
+    if tone_id == "custom":
         print()
         print("  Enter your custom style instructions (press Enter twice to finish):")
         lines = []
         try:
             while True:
                 line = input("  > ")
-                if line == '' and lines and lines[-1] == '':
+                if line == "" and lines and lines[-1] == "":
                     break
                 lines.append(line)
         except (EOFError, KeyboardInterrupt):
             pass
-        custom_tone_text = '\n'.join(lines).strip()
+        custom_tone_text = "\n".join(lines).strip()
 
     # ── Step 7: Language ──
     languages = list(LANGUAGE_PRESETS.items())
@@ -2188,7 +2328,9 @@ def reconfigure_wizard(supervisor=False):
             current_lang_idx = i
     print()
     try:
-        lang_choice = input(f"  Choice [{current_lang_idx}]: ").strip() or str(current_lang_idx)
+        lang_choice = input(f"  Choice [{current_lang_idx}]: ").strip() or str(
+            current_lang_idx
+        )
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
@@ -2206,7 +2348,7 @@ def reconfigure_wizard(supervisor=False):
     sandbox_enabled = current_sandbox
     print()
     docker_status = check_docker_available()
-    if docker_status['available']:
+    if docker_status["available"]:
         print(f"  Docker detected — {docker_status['message']}")
         print()
         sandbox_label = "enabled" if current_sandbox else "disabled"
@@ -2216,13 +2358,13 @@ def reconfigure_wizard(supervisor=False):
         except (EOFError, KeyboardInterrupt):
             print("\n  Aborted.")
             sys.exit(1)
-        if build_choice in ('y', 'yes'):
+        if build_choice in ("y", "yes"):
             sandbox_enabled = not current_sandbox
             if sandbox_enabled:
                 print()
                 print("  Building Docker sandbox image...", end=" ", flush=True)
                 build_result = build_sandbox_image()
-                if build_result['success']:
+                if build_result["success"]:
                     print("Done!")
                     print(f"  {build_result['message']}")
                 else:
@@ -2253,7 +2395,7 @@ def reconfigure_wizard(supervisor=False):
     except (EOFError, KeyboardInterrupt):
         print("\n  Aborted.")
         sys.exit(1)
-    if confirm in ('n', 'no'):
+    if confirm in ("n", "no"):
         print("  Aborted.")
         sys.exit(0)
 
@@ -2270,7 +2412,7 @@ def reconfigure_wizard(supervisor=False):
         language=language_id,
         sandbox_enabled=sandbox_enabled,
     )
-    if outcome.get('error'):
+    if outcome.get("error"):
         print(f"FAILED\n  Error: {outcome['error']}")
         sys.exit(1)
 
@@ -2282,16 +2424,17 @@ def reconfigure_wizard(supervisor=False):
     # ── Step 10: Optional password change ──
     try:
         import config
+
         current_hash = config.ADMIN_PASSWORD_HASH
     except Exception:
-        current_hash = ''
+        current_hash = ""
     if current_hash:
         try:
             pw_choice = input("  Change admin password? [y/N]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print("\n  Done.")
             return
-        if pw_choice not in ('y', 'yes'):
+        if pw_choice not in ("y", "yes"):
             print("  Password unchanged.")
             print()
             return
@@ -2302,14 +2445,16 @@ def reconfigure_wizard(supervisor=False):
         except (EOFError, KeyboardInterrupt):
             print("\n  Done.")
             return
-        if pw_choice in ('n', 'no'):
+        if pw_choice in ("n", "no"):
             print("  Password skipped.")
             print()
             return
 
-    from werkzeug.security import generate_password_hash
     import getpass as gp
-    env_path = os.path.join(ROOT, '.env')
+
+    from werkzeug.security import generate_password_hash
+
+    env_path = os.path.join(ROOT, ".env")
     while True:
         try:
             pw1 = gp.getpass("  Password: ")
@@ -2317,7 +2462,9 @@ def reconfigure_wizard(supervisor=False):
             print("\n  Aborted.")
             return
         if not pw1:
-            print("  Warning: Password not set. Web dashboard can be accessed without login.")
+            print(
+                "  Warning: Password not set. Web dashboard can be accessed without login."
+            )
             break
         if len(pw1) < 6:
             print("  Error: Password must be at least 6 characters. Try again.")
@@ -2332,7 +2479,8 @@ def reconfigure_wizard(supervisor=False):
             continue
         new_hash = generate_password_hash(pw1)
         from backend.setup import _update_env_var
-        _update_env_var(env_path, 'ADMIN_PASSWORD_HASH', new_hash)
+
+        _update_env_var(env_path, "ADMIN_PASSWORD_HASH", new_hash)
         print("  Password set successfully.")
         break
     print()
@@ -2341,26 +2489,26 @@ def reconfigure_wizard(supervisor=False):
 def _update_env_var(env_path, key, value):
     """Update or add an environment variable in a .env file."""
     if not os.path.exists(env_path):
-        with open(env_path, 'w') as f:
-            f.write(f'{key}={value}\n')
+        with open(env_path, "w") as f:
+            f.write(f"{key}={value}\n")
         return
 
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         lines = f.readlines()
 
     found = False
     for i, line in enumerate(lines):
-        if line.startswith(f'{key}=') or line.startswith(f'{key} '):
-            lines[i] = f'{key}={value}\n'
+        if line.startswith(f"{key}=") or line.startswith(f"{key} "):
+            lines[i] = f"{key}={value}\n"
             found = True
             break
 
     if not found:
-        if lines and not lines[-1].endswith('\n'):
-            lines.append('\n')
-        lines.append(f'{key}={value}\n')
+        if lines and not lines[-1].endswith("\n"):
+            lines.append("\n")
+        lines.append(f"{key}={value}\n")
 
-    with open(env_path, 'w') as f:
+    with open(env_path, "w") as f:
         f.writelines(lines)
 
 
@@ -2369,16 +2517,17 @@ def _update_env_var(env_path, key, value):
 
 def _load_supervisor_module():
     """Import supervisor.py from the supervisor/ directory."""
-    sup_path = os.path.join(ROOT, 'supervisor')
+    sup_path = os.path.join(ROOT, "supervisor")
     if sup_path not in sys.path:
         sys.path.insert(0, sup_path)
     import importlib
-    return importlib.import_module('supervisor')
+
+    return importlib.import_module("supervisor")
 
 
 def _get_supervisor_pid():
     """Read the running supervisor's PID, or None."""
-    sup_pid_file = os.path.join(ROOT, 'supervisor', 'run', 'supervisor.pid')
+    sup_pid_file = os.path.join(ROOT, "supervisor", "run", "supervisor.pid")
     if not os.path.exists(sup_pid_file):
         return None
     try:
@@ -2388,7 +2537,9 @@ def _get_supervisor_pid():
         return None
 
 
-def update_server(check_only=False, force=False, tag=None, rollback_flag=False, nightly=False):
+def update_server(
+    check_only=False, force=False, tag=None, rollback_flag=False, nightly=False
+):
     """
     Trigger or run a self-update.
 
@@ -2400,49 +2551,49 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False, 
     - nightly: fetch origin/main and run full update lifecycle (no tags)
     """
     sup = _load_supervisor_module()
-    cfg_path = os.path.join(ROOT, 'supervisor', 'config.json')
+    cfg_path = os.path.join(ROOT, "supervisor", "config.json")
     cfg = sup.load_config(cfg_path)
-    app_root = cfg['app_root']
+    app_root = cfg["app_root"]
 
     if rollback_flag:
-        print('Rolling back to previous release...')
+        print("Rolling back to previous release...")
         ok = sup.rollback(app_root, cfg, None)
         sys.exit(0 if ok else 1)
 
     if check_only:
         if nightly:
-            print('Fetching origin/main...')
-            ok, err = sup.git_fetch_branch(app_root, 'main')
+            print("Fetching origin/main...")
+            ok, err = sup.git_fetch_branch(app_root, "main")
             if not ok:
-                print(f'Fetch failed: {err}')
+                print(f"Fetch failed: {err}")
                 sys.exit(1)
-            rc, sha, _ = sup._git(app_root, ['rev-parse', '--short', 'origin/main'])
+            rc, sha, _ = sup._git(app_root, ["rev-parse", "--short", "origin/main"])
             current = sup.get_current_release(app_root)
-            print(f'Current      : {current or "(none — flat repo mode)"}')
-            print(f'origin/main  : {sha if rc == 0 else "unknown"}')
+            print(f"Current      : {current or '(none — flat repo mode)'}")
+            print(f"origin/main  : {sha if rc == 0 else 'unknown'}")
             return
-        print('Fetching tags...')
+        print("Fetching tags...")
         sup.git_fetch_tags(app_root)
         current = sup.get_current_release(app_root)
         latest = sup.get_latest_tag(app_root)
-        print(f'Current : {current or "(none — flat repo mode)"}')
-        print(f'Latest  : {latest or "(no tags found)"}')
+        print(f"Current : {current or '(none — flat repo mode)'}")
+        print(f"Latest  : {latest or '(no tags found)'}")
         if latest and latest != current:
-            print(f'Update available: {current} -> {latest}')
+            print(f"Update available: {current} -> {latest}")
         elif latest:
-            print('Already up to date.')
+            print("Already up to date.")
         return
 
     if nightly:
         # Nightly: always run inline (no supervisor signal)
-        print('Fetching origin/main (nightly)...')
-        ok, err = sup.git_fetch_branch(app_root, 'main')
+        print("Fetching origin/main (nightly)...")
+        ok, err = sup.git_fetch_branch(app_root, "main")
         if not ok:
-            print(f'Fetch failed: {err}')
+            print(f"Fetch failed: {err}")
             sys.exit(1)
-        rc, sha, _ = sup._git(app_root, ['rev-parse', '--short', 'origin/main'])
-        print(f'Updating to nightly (origin/main @ {sha if rc == 0 else "unknown"})...')
-        ok = sup.run_update('main', cfg, None, skip_verify=True, nightly=True)
+        rc, sha, _ = sup._git(app_root, ["rev-parse", "--short", "origin/main"])
+        print(f"Updating to nightly (origin/main @ {sha if rc == 0 else 'unknown'})...")
+        ok = sup.run_update("main", cfg, None, skip_verify=True, nightly=True)
         sys.exit(0 if ok else 1)
 
     # Signal running supervisor for immediate check
@@ -2451,25 +2602,25 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False, 
         if spid and _is_running(spid):
             try:
                 os.kill(spid, signal.SIGUSR1)
-                print(f'Sent update trigger to supervisor (PID {spid})')
+                print(f"Sent update trigger to supervisor (PID {spid})")
                 return
             except OSError:
                 pass
 
     # Supervisor not running — run update inline
-    print('Supervisor not running. Running update inline...')
+    print("Supervisor not running. Running update inline...")
     sup.git_fetch_tags(app_root)
     target = tag or sup.get_latest_tag(app_root)
     if not target:
-        print('No tags found — nothing to update.')
+        print("No tags found — nothing to update.")
         sys.exit(1)
 
     current = sup.get_current_release(app_root)
     if target == current and not force:
-        print(f'Already at {target}.')
+        print(f"Already at {target}.")
         return
 
-    print(f'Updating to {target}...')
+    print(f"Updating to {target}...")
     ok = sup.run_update(target, cfg, None, skip_verify=force)
     sys.exit(0 if ok else 1)
 
@@ -2479,12 +2630,12 @@ def update_server(check_only=False, force=False, tag=None, rollback_flag=False, 
 # ═══════════════════════════════════════════════════════════════════
 
 # ANSI helpers
-_G = "\033[32m"   # green
-_R = "\033[31m"   # red
-_Y = "\033[33m"   # yellow
-_B = "\033[34m"   # blue
-_C = "\033[36m"   # cyan
-_W = "\033[37m"   # white (bright)
+_G = "\033[32m"  # green
+_R = "\033[31m"  # red
+_Y = "\033[33m"  # yellow
+_B = "\033[34m"  # blue
+_C = "\033[36m"  # cyan
+_W = "\033[37m"  # white (bright)
 _BOLD = "\033[1m"
 _DIM = "\033[2m"
 _RESET = "\033[0m"
@@ -2523,9 +2674,9 @@ def _info(msg):
 
 def doctor_command(quick=False):
     """Run comprehensive system health diagnostics."""
-    import platform
     import importlib
     import json
+    import platform
 
     print(f"\n{_BOLD}{_C}🩺  Evonic Doctor{_RESET}")
     print(f"{_DIM}System diagnostics & health check{_RESET}")
@@ -2549,21 +2700,31 @@ def doctor_command(quick=False):
 
     # Key environment variables
     important_vars = [
-        "PORT", "HOST", "SECRET_KEY", "DEBUG",
-        "ADMIN_PASSWORD_HASH", "SANDBOX_NETWORK",
-        "LOG_FULL_THINKING", "LOG_FULL_RESPONSE",
+        "PORT",
+        "HOST",
+        "SECRET_KEY",
+        "DEBUG",
+        "ADMIN_PASSWORD_HASH",
+        "SANDBOX_NETWORK",
+        "LOG_FULL_THINKING",
+        "LOG_FULL_RESPONSE",
     ]
     for var in important_vars:
         val = os.getenv(var)
         if val is None:
             results.append(_warn(f"Env {var} not set"))
         else:
-            masked = "***" if var in ("SECRET_KEY", "ADMIN_PASSWORD_HASH") and len(val) > 4 else val
+            masked = (
+                "***"
+                if var in ("SECRET_KEY", "ADMIN_PASSWORD_HASH") and len(val) > 4
+                else val
+            )
             _info(f"  {var}={masked}")
 
     # Dependencies check
     try:
         import flask
+
         flask_ver = getattr(flask, "__version__", "?")
         _info(f"  flask=={flask_ver}")
     except ImportError:
@@ -2571,6 +2732,7 @@ def doctor_command(quick=False):
 
     try:
         import requests
+
         requests_ver = getattr(requests, "__version__", "?")
         _info(f"  requests=={requests_ver}")
     except ImportError:
@@ -2578,6 +2740,7 @@ def doctor_command(quick=False):
 
     try:
         import anthropic
+
         anthro_ver = getattr(anthropic, "__version__", "?")
         _info(f"  anthropic=={anthro_ver}")
     except ImportError:
@@ -2586,6 +2749,7 @@ def doctor_command(quick=False):
     # DB driver check
     try:
         import sqlite3
+
         results.append(_ok("sqlite3 available"))
     except ImportError:
         results.append(_fail("sqlite3 not available"))
@@ -2605,7 +2769,9 @@ def doctor_command(quick=False):
             if fname == ".env":
                 try:
                     with open(fpath) as f:
-                        lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+                        lines = [
+                            l.strip() for l in f if l.strip() and not l.startswith("#")
+                        ]
                     if lines:
                         results.append(_ok(f"{fname} ({len(lines)} vars)"))
                     else:
@@ -2618,6 +2784,7 @@ def doctor_command(quick=False):
     # Config.py integrity check
     try:
         import config
+
         required_attrs = ["BASE_DIR", "DB_PATH", "PORT", "HOST", "SECRET_KEY"]
         missing = [a for a in required_attrs if not hasattr(config, a)]
         if missing:
@@ -2645,6 +2812,7 @@ def doctor_command(quick=False):
     # Database
     try:
         from models.db import db
+
         db_path = getattr(db, "db_path", config.DB_PATH)
         if os.path.isfile(db_path):
             try:
@@ -2665,6 +2833,7 @@ def doctor_command(quick=False):
     if redis_url:
         try:
             import redis
+
             r = redis.from_url(redis_url)
             r.ping()
             results.append(_ok(f"Redis ({redis_url})"))
@@ -2695,6 +2864,7 @@ def doctor_command(quick=False):
         results.append(_ok(f"Server running (PID {pid})"))
 
         import config
+
         port = getattr(config, "PORT", 8080)
         _info(f"  Port: {port}")
 
@@ -2714,10 +2884,13 @@ def doctor_command(quick=False):
                 else:
                     results.append(_warn(f"Health endpoint HTTP {hr.status_code}"))
             except Exception:
-                results.append(_warn("Health endpoint unreachable (server may be starting)"))
+                results.append(
+                    _warn("Health endpoint unreachable (server may be starting)")
+                )
 
         # Port binding check
         import socket
+
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(2)
         try:
@@ -2740,7 +2913,7 @@ def doctor_command(quick=False):
         "skills": "Skills directory",
         "agents": "Agent data",
         "skillsets": "Skillset templates",
-        "templates": "Web templates"
+        "templates": "Web templates",
     }
 
     for dname, desc in important_dirs.items():
@@ -2769,6 +2942,7 @@ def doctor_command(quick=False):
 
     try:
         from models.db import db
+
         agents = db.get_agents()
         if not agents:
             results.append(_warn("No agents configured"))
@@ -2777,7 +2951,11 @@ def doctor_command(quick=False):
             disabled = [a for a in agents if not a.get("enabled")]
             super_agents = [a for a in agents if a.get("is_super")]
 
-            results.append(_ok(f"{len(agents)} agent(s) — {len(enabled)} enabled, {len(disabled)} disabled"))
+            results.append(
+                _ok(
+                    f"{len(agents)} agent(s) — {len(enabled)} enabled, {len(disabled)} disabled"
+                )
+            )
 
             for a in agents:
                 aid = a.get("id", "?")
@@ -2785,10 +2963,14 @@ def doctor_command(quick=False):
                 status = "enabled" if a.get("enabled") else "disabled"
                 sicon = _PASS if a.get("enabled") else _WARN
                 tools = db.get_agent_tools(aid)
-                skills = db.get_agent_skills(aid) if hasattr(db, "get_agent_skills") else []
+                skills = (
+                    db.get_agent_skills(aid) if hasattr(db, "get_agent_skills") else []
+                )
                 model_id = a.get("default_model_id") or a.get("model") or "none"
                 has_model = "✓" if model_id and model_id != "none" else "✗"
-                _info(f"    {sicon} {aname} ({aid}) — model:{has_model} tools:{len(tools)} skills:{len(skills)}")
+                _info(
+                    f"    {sicon} {aname} ({aid}) — model:{has_model} tools:{len(tools)} skills:{len(skills)}"
+                )
 
                 if not a.get("enabled"):
                     results.append("skip")
@@ -2800,6 +2982,7 @@ def doctor_command(quick=False):
     # Skills check
     try:
         from backend.skills_manager import SkillsManager
+
         sm = SkillsManager()
         skills = sm.list_skills()
         if not skills:
@@ -2807,7 +2990,11 @@ def doctor_command(quick=False):
         else:
             enabled_skills = [s for s in skills if s.get("enabled")]
             disabled_skills = [s for s in skills if not s.get("enabled")]
-            results.append(_ok(f"{len(skills)} skill(s) — {len(enabled_skills)} enabled, {len(disabled_skills)} disabled"))
+            results.append(
+                _ok(
+                    f"{len(skills)} skill(s) — {len(enabled_skills)} enabled, {len(disabled_skills)} disabled"
+                )
+            )
 
             for s in skills:
                 sid = s.get("id", "?")
@@ -2828,7 +3015,9 @@ def doctor_command(quick=False):
                             with open(manifest) as f:
                                 json.load(f)
                         except json.JSONDecodeError:
-                            results.append(_fail(f"Corrupted skill manifest: {entry}/skill.json"))
+                            results.append(
+                                _fail(f"Corrupted skill manifest: {entry}/skill.json")
+                            )
     except Exception as e:
         results.append(_fail(f"Skill check failed: {e}"))
 
@@ -2841,6 +3030,7 @@ def doctor_command(quick=False):
     else:
         try:
             from models.db import db
+
             models = db.get_llm_models()
             if not models:
                 results.append(_warn("No LLM models configured"))
@@ -2869,14 +3059,24 @@ def doctor_command(quick=False):
                             available = data.get("data") or data.get("models") or []
                             results.append(_ok(f"  {mname} — {len(available)} models"))
                         elif resp.status_code in (401, 403):
-                            results.append(_warn(f"  {mname} — auth error (HTTP {resp.status_code})"))
+                            results.append(
+                                _warn(
+                                    f"  {mname} — auth error (HTTP {resp.status_code})"
+                                )
+                            )
                         else:
-                            results.append(_warn(f"  {mname} — HTTP {resp.status_code}: {resp.text[:100]}"))
+                            results.append(
+                                _warn(
+                                    f"  {mname} — HTTP {resp.status_code}: {resp.text[:100]}"
+                                )
+                            )
                         tested += 1
                     except requests.exceptions.Timeout:
                         results.append(_fail(f"  {mname} — timed out"))
                     except requests.exceptions.ConnectionError as e:
-                        results.append(_fail(f"  {mname} — connection error: {str(e)[:80]}"))
+                        results.append(
+                            _fail(f"  {mname} — connection error: {str(e)[:80]}")
+                        )
                     except Exception as e:
                         results.append(_fail(f"  {mname} — {str(e)[:80]}"))
 
@@ -2900,7 +3100,11 @@ def doctor_command(quick=False):
             if app_root and os.path.isdir(app_root):
                 results.append(_ok(f"  app_root: {app_root}"))
             elif app_root:
-                results.append(_fail(f"  app_root '{app_root}' does not exist or is not a directory"))
+                results.append(
+                    _fail(
+                        f"  app_root '{app_root}' does not exist or is not a directory"
+                    )
+                )
             else:
                 results.append(_fail("  app_root is not set in supervisor/config.json"))
 
@@ -2917,34 +3121,44 @@ def doctor_command(quick=False):
                 if isinstance(val, int) and val >= min_val:
                     _info(f"  {label}: {val}")
                 else:
-                    results.append(_warn(f"  {label} is invalid or missing (got {val!r})"))
+                    results.append(
+                        _warn(f"  {label} is invalid or missing (got {val!r})")
+                    )
 
             # Validate telegram_bot_token
             token = sup_cfg.get("telegram_bot_token", "")
             if token:
                 results.append(_ok("  telegram_bot_token is configured"))
             else:
-                results.append(_warn(
-                    "  telegram_bot_token is empty — configure it for supervisor notifications. "
-                    "Set via super agent channel or edit supervisor/config.json manually."
-                ))
+                results.append(
+                    _warn(
+                        "  telegram_bot_token is empty — configure it for supervisor notifications. "
+                        "Set via super agent channel or edit supervisor/config.json manually."
+                    )
+                )
 
             # Validate telegram_chat_id
             chat_id = sup_cfg.get("telegram_chat_id", "")
             if chat_id:
                 results.append(_ok("  telegram_chat_id is configured"))
             else:
-                results.append(_warn(
-                    "  telegram_chat_id is empty — configure it for supervisor notifications. "
-                    "Set via super agent channel or edit supervisor/config.json manually."
-                ))
+                results.append(
+                    _warn(
+                        "  telegram_chat_id is empty — configure it for supervisor notifications. "
+                        "Set via super agent channel or edit supervisor/config.json manually."
+                    )
+                )
 
         except json.JSONDecodeError as e:
             results.append(_fail(f"  supervisor/config.json parse error: {e}"))
         except Exception as e:
             results.append(_fail(f"  supervisor/config.json validation error: {e}"))
     else:
-        results.append(_warn("  supervisor/config.json not found — self-update supervisor is not configured"))
+        results.append(
+            _warn(
+                "  supervisor/config.json not found — self-update supervisor is not configured"
+            )
+        )
 
     # ── Summary ───────────────────────────────────────────────
     _section("Summary")
@@ -2996,7 +3210,9 @@ def channel_approve(pair_code):
 
     success = db.approve_pending(pending["id"])
     if success:
-        print(f"✅ User {pending['external_user_id']} berhasil ditambahkan ke allowlist")
+        print(
+            f"✅ User {pending['external_user_id']} berhasil ditambahkan ke allowlist"
+        )
     else:
         print("❌ Failed to approve pairing request.")
         sys.exit(1)

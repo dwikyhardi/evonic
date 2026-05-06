@@ -2,25 +2,11 @@
 Authentication Blueprint — admin login with Cloudflare Turnstile captcha.
 """
 
-import functools
 import requests
 from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 import config
 
 auth_bp = Blueprint('auth', __name__)
-
-
-def login_required(f):
-    """Decorator that enforces authentication."""
-    @functools.wraps(f)
-    def decorated(*args, **kwargs):
-        if session.get('authenticated'):
-            return f(*args, **kwargs)
-        # API requests get 401, page requests get redirected
-        if request.path.startswith('/api/'):
-            return jsonify({'error': 'Authentication required'}), 401
-        return redirect(url_for('auth.login_page', next=request.path))
-    return decorated
 
 
 @auth_bp.route('/login', methods=['GET'])

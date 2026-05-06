@@ -23,8 +23,8 @@ class ModelsMixin:
                 cursor.execute("""
                     INSERT INTO llm_models (id, name, type, provider, base_url, api_key,
                         model_name, max_tokens, timeout, thinking, thinking_budget,
-                        temperature, enabled, is_default, model_max_concurrent)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        temperature, enabled, is_default, model_max_concurrent, api_format)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     m.get('id'),
                     m.get('name'),
@@ -41,6 +41,7 @@ class ModelsMixin:
                     m.get('enabled', 1),
                     m.get('is_default', 0),
                     m.get('model_max_concurrent', 1),
+                    m.get('api_format', 'openai'),
                 ))
             conn.commit()
 
@@ -114,8 +115,8 @@ class ModelsMixin:
             cursor.execute("""
                 INSERT INTO llm_models (id, name, type, provider, base_url, api_key,
                     model_name, max_tokens, timeout, thinking, thinking_budget,
-                    temperature, enabled, is_default, model_max_concurrent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    temperature, enabled, is_default, model_max_concurrent, api_format)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 model_id,
                 model_data.get('name'),
@@ -132,6 +133,7 @@ class ModelsMixin:
                 model_data.get('enabled', 1),
                 model_data.get('is_default', 0),
                 model_data.get('model_max_concurrent', 1),
+                model_data.get('api_format', 'openai'),
             ))
             conn.commit()
         return model_id
@@ -140,7 +142,7 @@ class ModelsMixin:
         """Update an existing model."""
         allowed = {'name', 'type', 'provider', 'base_url', 'api_key', 'model_name',
                    'max_tokens', 'timeout', 'thinking', 'thinking_budget', 'temperature', 'enabled', 'is_default',
-                   'model_max_concurrent'}
+                   'model_max_concurrent', 'api_format'}
         updates = {k: v for k, v in model_data.items() if k in allowed}
         if not updates:
             return False
