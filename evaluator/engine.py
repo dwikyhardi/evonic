@@ -66,11 +66,20 @@ class EvaluationEngine:
         with self.lock:
             if self.is_running:
                 raise Exception("Evaluation already running")
-            
-            # Always force-refresh model name from server at eval start
-            from evaluator.llm_client import llm_client
-            model_name = llm_client.get_actual_model_name(force_refresh=True)
-            
+
+            # Resolve model: use selected model or fall back to global default
+            if model_name and model_name != 'default':
+                model_record = db.get_model_by_model_name(model_name)
+                if model_record:
+                    self.model_config = model_record
+                else:
+                    self.model_config = None
+            else:
+                # No specific model selected — use global default
+                from evaluator.llm_client import llm_client
+                model_name = llm_client.get_actual_model_name(force_refresh=True)
+                self.model_config = None
+
             self.model_name = model_name
             self.selected_domains = domains  # Store selected domains
             self.current_run_id = db.create_evaluation_run(model_name)
@@ -241,7 +250,7 @@ class EvaluationEngine:
                 self._log(f'[TEST] Menjalankan tes: {domain} Level {level}')
                 
                 # Run the test
-                test_result = self._run_single_legacy_test(domain, level)
+                test_result = self._run_single_legacy_test(domain, level, run_llm_client=run_llm_client)
                 
                 # Store result
                 db.update_test_result(
@@ -322,7 +331,7 @@ class EvaluationEngine:
                         continue
                     
                     result = self._run_single_configurable_test(
-                        test, domain_id, level, model_name, run_id
+                        test, domain_id, level, model_name, run_id, run_llm_client=run_llm_client
                     )
                     test_results.append(result)
                     
@@ -370,8 +379,9 @@ class EvaluationEngine:
                 
                 time.sleep(0.5)
     
-    def _run_single_legacy_test(self, domain: str, level: int) -> Dict[str, Any]:
+    def _run_single_legacy_test(self, domain: str, level: int, run_llm_client=None) -> Dict[str, Any]:
         """Run a single legacy test using domain-specific evaluator"""
+        _client = run_llm_client or llm_client
         try:
             test_class = get_test_class(domain)
             if not test_class:
@@ -412,8 +422,8 @@ class EvaluationEngine:
                 self._log(f'[TOOLS] Available: {[t["function"]["name"] for t in tools]}')
                 
                 # Run tool calling loop
-                loop_result = self._run_tool_calling_loop(prompt, tools, system_prompt=system_prompt)
-                
+                loop_result = self._run_tool_calling_loop(prompt, tools, system_prompt=system_prompt, run_llm_client=_client)
+
                 duration_ms = loop_result["total_duration_ms"]
                 total_tokens = loop_result["total_tokens"]
                 thinking_content = loop_result["thinking"]
@@ -446,27 +456,27 @@ class EvaluationEngine:
                 tools = None
 
                 self._log(f'[LLM] Sending request to model...')
-                llm_response = llm_client.chat_completion(messages, tools)
-                
+                llm_response = _client.chat_completion(messages, tools)
+
                 # Safely extract duration and tokens
                 duration_ms = llm_response.get("duration_ms", 0) if isinstance(llm_response, dict) else 0
                 total_tokens = llm_response.get("total_tokens", 0) if isinstance(llm_response, dict) else 0
-                
+
                 # Check for LLM errors
-                error_info = llm_client.get_error_info(llm_response)
+                error_info = _client.get_error_info(llm_response)
                 if error_info:
                     self._log(f'[ERROR] LLM {error_info["type"]}: {error_info["message"]}')
                     if error_info["detail"]:
                         self._log(f'[ERROR] Detail: {error_info["detail"][:100]}')
                 else:
                     self._log(f'[LLM] Response received in {duration_ms}ms, {total_tokens} tokens')
-                
+
                 # Accumulate tokens and duration for tok/s calculation
                 self.total_tokens += total_tokens
                 self.total_duration_ms += duration_ms
-                
+
                 # Extract content with thinking separation
-                content_info = llm_client.extract_content_with_thinking(llm_response)
+                content_info = _client.extract_content_with_thinking(llm_response)
                 response_content = content_info["content"]  # Final content (without thinking)
                 thinking_content = content_info["thinking"]  # Thinking content (if present)
 
@@ -742,8 +752,9 @@ class EvaluationEngine:
             return {"error": f"Python mock failed: {str(e)}"}
 
     def _run_single_configurable_test(self, test: Dict[str, Any], domain: str,
-                                       level: int, model_name: str, run_id: int) -> TestResult:
+                                       level: int, model_name: str, run_id: int, run_llm_client=None) -> TestResult:
         """Run a single configurable test"""
+        _client = run_llm_client or llm_client
         test_id = test['id']
         prompt = test['prompt']
         expected = test.get('expected', {})
@@ -826,8 +837,8 @@ class EvaluationEngine:
                 self._log(f'[TOOLS] No-mock (real backend): {sorted(no_mock_tools)}')
 
             # Run tool calling loop
-            loop_result = self._run_tool_calling_loop(prompt, tools, mock_responses, system_prompt=system_prompt, mock_response_types=mock_response_types, no_mock_tools=no_mock_tools)
-            
+            loop_result = self._run_tool_calling_loop(prompt, tools, mock_responses, system_prompt=system_prompt, mock_response_types=mock_response_types, no_mock_tools=no_mock_tools, run_llm_client=_client)
+
             duration_ms = loop_result["total_duration_ms"]
             total_tokens = loop_result["total_tokens"]
             thinking_content = loop_result["thinking"]
@@ -868,18 +879,18 @@ class EvaluationEngine:
             tools = None
             
             self._log(f'[LLM] Sending request to model...')
-            llm_response = llm_client.chat_completion(messages, tools)
-            
+            llm_response = _client.chat_completion(messages, tools)
+
             duration_ms = llm_response.get("duration_ms", 0) if isinstance(llm_response, dict) else 0
             total_tokens = llm_response.get("total_tokens", 0) if isinstance(llm_response, dict) else 0
             self._log(f'[LLM] Response received in {duration_ms}ms, {total_tokens} tokens')
-            
+
             # Accumulate tokens
             self.total_tokens += total_tokens
             self.total_duration_ms += duration_ms
-            
+
             # Extract content with thinking separation
-            content_info = llm_client.extract_content_with_thinking(llm_response)
+            content_info = _client.extract_content_with_thinking(llm_response)
             response_content = content_info["content"]
             thinking_content = content_info["thinking"]
 
@@ -1064,7 +1075,7 @@ class EvaluationEngine:
             self._log(f'[JS-MOCK] Exception: {str(e)}')
             return {"error": f"JS mock failed: {str(e)}"}
 
-    def _run_tool_calling_loop(self, prompt: str, tools: list, mock_responses: Dict[str, Any] = None, system_prompt: str = None, mock_response_types: Dict[str, str] = None, no_mock_tools: set = None, enable_planning: bool = True) -> Dict[str, Any]:
+    def _run_tool_calling_loop(self, prompt: str, tools: list, mock_responses: Dict[str, Any] = None, system_prompt: str = None, mock_response_types: Dict[str, str] = None, no_mock_tools: set = None, enable_planning: bool = True, run_llm_client=None) -> Dict[str, Any]:
         """
         Run multi-turn tool calling loop with mock execution.
         
@@ -1090,7 +1101,8 @@ class EvaluationEngine:
             - messages: Full conversation history
         """
         from evaluator.tools import tool_framework
-        
+        _client = run_llm_client or llm_client
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -1119,12 +1131,12 @@ class EvaluationEngine:
                 {"role": "user", "content": prompt}
             ]
             try:
-                plan_response = llm_client.chat_completion(
+                plan_response = _client.chat_completion(
                     plan_messages, tools=None, temperature=0.0,
                     enable_thinking=False, max_tokens=2048
                 )
                 if plan_response.get("success", False):
-                    plan_info = llm_client.extract_content_with_thinking(plan_response)
+                    plan_info = _client.extract_content_with_thinking(plan_response)
                     plan_text = plan_info.get("content", "")
                     # Parse "- [ ] ..." lines
                     import re
@@ -1171,7 +1183,7 @@ class EvaluationEngine:
             }
             
             # Send to LLM
-            llm_response = llm_client.chat_completion(messages, tools)
+            llm_response = _client.chat_completion(messages, tools)
 
             # Accumulate stats
             duration_ms = llm_response.get("duration_ms", 0) if isinstance(llm_response, dict) else 0
@@ -1196,7 +1208,7 @@ class EvaluationEngine:
                 break
 
             # Extract content and thinking
-            content_info = llm_client.extract_content_with_thinking(llm_response)
+            content_info = _client.extract_content_with_thinking(llm_response)
             response_content = content_info["content"]
             
             # Capture thinking for this turn
@@ -1526,8 +1538,8 @@ class EvaluationEngine:
             )})
 
             try:
-                force_response = llm_client.chat_completion(force_messages, tools=None, temperature=0.0)
-                force_info = llm_client.extract_content_with_thinking(force_response)
+                force_response = _client.chat_completion(force_messages, tools=None, temperature=0.0)
+                force_info = _client.extract_content_with_thinking(force_response)
                 final_response = force_info.get("content", "").strip()
                 force_duration = force_response.get("duration_ms", 0)
                 force_tokens = force_response.get("total_tokens", 0)
