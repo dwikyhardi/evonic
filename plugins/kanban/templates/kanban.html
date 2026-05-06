@@ -397,6 +397,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     const SUPER_AGENT_ID = '{{ super_agent_id }}';
     let tasks = [];
     let currentDetailId = null;
+    let _isEditing = false;  // true when editing existing task — prevents backdrop-click-close
 
     const PRIORITY_BADGE = {
         high: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400',
@@ -889,6 +890,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     }
 
     function openCreateModal() {
+        _isEditing = false;
         $('#task-id').val('');
         $('#task-form')[0].reset();
         $('#task-assignee').val('');
@@ -902,6 +904,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     function editTask(taskId) {
         const task = tasks.find(t => t.id === taskId);
         if (!task) return;
+        _isEditing = true;  // prevent backdrop-click-close during editing
         $('#task-id').val(task.id);
         $('#task-title').val(task.title);
         $('#task-desc').val(task.description || '');
@@ -915,6 +918,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     }
 
     function closeModal() {
+        _isEditing = false;
         $('#kb-modal').removeClass('flex').addClass('hidden');
     }
 
@@ -1669,11 +1673,23 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
         // ── Close on backdrop click ───────────────────────────────────────────────
 
-    $('#kb-modal').on('click', function(e) { if (e.target === this) closeModal(); });
+    // Prevent backdrop-click-close when editing an existing task (accidental outside clicks)
+    $('#kb-modal').on('click', function(e) { if (e.target === this && !_isEditing) closeModal(); });
     $('#kb-detail-modal').on('click', function(e) { if (e.target === this) closeDetailModal(); });
     $('#kb-assign-modal').on('click', function(e) { if (e.target === this) closeAssignModal(); });
     $('#kb-trigger-modal').on('click', function(e) { if (e.target === this) closeTriggerModal(); });
     $('#kb-trigger-results-modal').on('click', function(e) { if (e.target === this) closeTriggerResultsModal(); });
+
+    // ── Close on Escape key ──────────────────────────────────────────
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape') {
+            if (!$('#kb-modal').hasClass('hidden')) closeModal();
+            else if (!$('#kb-detail-modal').hasClass('hidden')) closeDetailModal();
+            else if (!$('#kb-assign-modal').hasClass('hidden')) closeAssignModal();
+            else if (!$('#kb-trigger-modal').hasClass('hidden')) closeTriggerModal();
+            else if (!$('#kb-trigger-results-modal').hasClass('hidden')) closeTriggerResultsModal();
+        }
+    });
 
     let autoRefreshInterval = null;
     let isAutoRefreshing = false;
