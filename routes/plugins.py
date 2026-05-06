@@ -1,9 +1,13 @@
 """Plugin management routes — list, upload, toggle, configure, delete plugins."""
 
+import io
 import os
+import re
 import tempfile
-from flask import Blueprint, render_template, jsonify, request, redirect
+import zipfile
+from flask import Blueprint, render_template, jsonify, request, redirect, send_file
 from backend.plugin_manager import plugin_manager
+from backend.plugin_lifecycle import PLUGINS_DIR
 from backend.zip_validator import validate_upload_zip, MAX_UPLOAD_BYTES
 
 plugins_bp = Blueprint('plugins', __name__)
@@ -127,6 +131,51 @@ def api_clear_plugin_logs(plugin_id):
     """Clear all log entries for a plugin."""
     plugin_manager.clear_logs(plugin_id)
     return jsonify({'success': True})
+
+
+@plugins_bp.route('/api/plugins/<plugin_id>/export')
+def api_export_plugin(plugin_id):
+    """Export a plugin as a downloadable ZIP file."""
+    # Validate plugin_id
+    if not re.match(r'^[a-zA-Z0-9_-]+$', plugin_id):
+        return jsonify({'error': 'Invalid plugin id'}), 400
+
+    plugin_dir = os.path.join(PLUGINS_DIR, plugin_id)
+    if not os.path.isdir(plugin_dir):
+        return jsonify({'error': f'Plugin not found: {plugin_id}'}), 404
+
+    manifest_path = os.path.join(plugin_dir, 'plugin.json')
+    if not os.path.isfile(manifest_path):
+        return jsonify({'error': f'No plugin.json found for: {plugin_id}'}), 400
+
+    # Build in-memory ZIP
+    try:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for root, dirs, files in os.walk(plugin_dir):
+                # Skip __pycache__ directories
+                dirs[:] = [d for d in dirs if d != '__pycache__']
+
+                for filename in files:
+                    # Skip .pyc files (compiled bytecode) and dot-files (VCS/editor artifacts)
+                    if filename.endswith('.pyc') or filename.startswith('.'):
+                        continue
+                    file_path = os.path.join(root, filename)
+                    arcname = os.path.relpath(file_path, plugin_dir)
+                    zf.write(file_path, arcname)
+
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f'{plugin_id}.zip',
+        )
+
+    except PermissionError:
+        return jsonify({'error': f'Permission denied reading plugin files for: {plugin_id}'}), 500
+    except OSError as exc:
+        return jsonify({'error': f'Failed to export plugin: {exc}'}), 500
 
 
 @plugins_bp.route('/api/plugins/<plugin_id>', methods=['DELETE'])
