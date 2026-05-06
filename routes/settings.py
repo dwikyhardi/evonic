@@ -19,15 +19,15 @@ def _sanitize_model(model: Dict[str, Any]) -> Dict[str, Any]:
     return model
 
 
-@settings_bp.route('/settings')
+@settings_bp.route('/system')
 def settings():
-    """Settings page - manage tests"""
+    """System page - manage tests"""
     return render_template('settings.html')
 
 
-@settings_bp.route('/settings/models')
+@settings_bp.route('/system/models')
 def settings_models():
-    """Models settings page"""
+    """Models system page"""
     return render_template('settings_models.html')
 
 

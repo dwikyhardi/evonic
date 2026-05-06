@@ -142,7 +142,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
     <!-- Tabs -->
     <div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto flex-shrink-0" style="-webkit-overflow-scrolling: touch;">
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600" onclick="showTab('chat')" data-tab="chat">Chat</button>
-        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('general')" data-tab="general">Settings</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('general')" data-tab="general">System</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('knowledge')" data-tab="knowledge">Knowledge</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('tools')" data-tab="tools">Tools</button>
         {% if not agent.is_super %}
@@ -1688,7 +1688,7 @@ async function showToolDetail(toolId) {
         document.getElementById('tool-test-status-real').classList.add('hidden');
         document.getElementById('tool-test-status-mock').classList.add('hidden');
 
-        document.getElementById('tool-detail-edit-link').href = `/settings#tools-${toolId}`;
+        document.getElementById('tool-detail-edit-link').href = `/system#tools-${toolId}`;
         document.getElementById('tool-backend-save-status').classList.add('hidden');
         switchToolTab('prod');
         document.getElementById('tool-detail-modal').classList.remove('hidden');

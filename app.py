@@ -65,6 +65,15 @@ app.register_blueprint(models_bp)
 app.register_blueprint(health_bp)
 app.register_blueprint(workplaces_bp)
 
+
+# ---- Backward-compatible redirect: /settings/* → /system/* ----
+@app.route('/settings')
+@app.route('/settings/<path:subpath>')
+def redirect_settings_to_system(subpath=None):
+    target = '/system' + ('/' + subpath if subpath else '')
+    return redirect(target, code=301)
+
+
 # Register plugin blueprints (routes from plugins)
 from backend.plugin_manager import plugin_manager
 for plugin_id, bp in plugin_manager.get_blueprints().items():
