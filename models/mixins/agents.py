@@ -80,6 +80,54 @@ class AgentMixin:
             conn.commit()
             return cursor.rowcount > 0
 
+    def clone_agent(self, source_id: str, new_id: str, new_name: str,
+                    new_description: str = '') -> Optional[str]:
+        """Clone an agent: copy all settings, tools, skills, and variables.
+
+        Returns the new agent ID on success, or None if source not found.
+        """
+        source = self.get_agent(source_id)
+        if not source:
+            return None
+        if self.get_agent(new_id):
+            raise ValueError(f"Agent ID '{new_id}' already exists")
+
+        # Build new agent dict: copy all fields, override id/name/desc, skip auto fields
+        auto_fields = {'id', 'created_at', 'updated_at', 'last_active_at',
+                       'session_count', 'primary_channel_id', 'avatar_path'}
+        clone = {}
+        for k, v in source.items():
+            if k in auto_fields:
+                continue
+            clone[k] = v
+        clone['id'] = new_id
+        clone['name'] = new_name
+        clone['description'] = new_description
+        clone['is_super'] = False
+        clone['enabled'] = False  # cloned agent starts disabled
+
+        self.create_agent(clone)
+
+        # Copy tools, skills, and variables
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            for tid in self.get_agent_tools(source_id):
+                cursor.execute(
+                    "INSERT INTO agent_tools (agent_id, tool_id) VALUES (?, ?)",
+                    (new_id, tid))
+            for sid in self.get_agent_skills(source_id):
+                cursor.execute(
+                    "INSERT INTO agent_skills (agent_id, skill_id) VALUES (?, ?)",
+                    (new_id, sid))
+            for var in self.get_agent_variables(source_id):
+                cursor.execute(
+                    "INSERT INTO agent_variables (agent_id, key, value, is_secret) VALUES (?, ?, ?, ?)",
+                    (new_id, var['key'], var['value'],
+                     1 if var.get('is_secret') else 0))
+            conn.commit()
+
+        return new_id
+
     def get_super_agent(self) -> Optional[Dict[str, Any]]:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
