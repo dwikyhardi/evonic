@@ -29,27 +29,9 @@
 
     <!-- Tabs -->
     <div class="border-b border-gray-200 mb-6 flex gap-0 overflow-x-auto">
-        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600" onclick="showTab('about')" data-tab="about">About</button>
-        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('settings')" data-tab="settings">Settings</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600" onclick="showTab('settings')" data-tab="settings">Settings</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('about')" data-tab="about">About</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('logs')" data-tab="logs">Logs</button>
-    </div>
-
-    <!-- Tab: About -->
-    <div id="tab-about" class="tab-content">
-        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
-            <div id="about-content">
-                <p class="text-sm text-gray-400">Loading...</p>
-            </div>
-            <div id="about-empty" class="hidden">
-                <div class="text-center py-16 text-gray-400">
-                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 3.75a6 6 0 00-6 6v.375m12-6.375v.375m0 0a6 6 0 016 6v4.5m-12 0a6 6 0 016-6m-6 6v3.75a2.25 2.25 0 002.25 2.25h1.5m-3.75 0a2.25 2.25 0 01-2.25-2.25v-1.5m12 0v1.5a2.25 2.25 0 01-2.25 2.25h-1.5"/>
-                    </svg>
-                    <p class="text-lg font-medium">No README.md</p>
-                    <p class="text-sm mt-1">This plugin does not include a README.md file with documentation.</p>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Tab: Settings -->
@@ -87,6 +69,24 @@
                     <div id="events-list" class="space-y-2">
                         <p class="text-sm text-gray-400">Loading...</p>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: About -->
+    <div id="tab-about" class="tab-content hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6">
+            <div id="about-content">
+                <p class="text-sm text-gray-400">Loading...</p>
+            </div>
+            <div id="about-empty" class="hidden">
+                <div class="text-center py-16 text-gray-400">
+                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 3.75a6 6 0 00-6 6v.375m12-6.375v.375m0 0a6 6 0 016 6v4.5m-12 0a6 6 0 016-6m-6 6v3.75a2.25 2.25 0 002.25 2.25h1.5m-3.75 0a2.25 2.25 0 01-2.25-2.25v-1.5m12 0v1.5a2.25 2.25 0 01-2.25 2.25h-1.5"/>
+                    </svg>
+                    <p class="text-lg font-medium">No README.md</p>
+                    <p class="text-sm mt-1">This plugin does not include a README.md file with documentation.</p>
                 </div>
             </div>
         </div>
@@ -491,6 +491,6 @@ async function uninstallPlugin() {
     window.location.href = '/plugins';
 }
 
-loadPlugin().then(() => showTab('about'));
+loadPlugin().then(() => showTab('settings'));
 </script>
 {% endblock %}
