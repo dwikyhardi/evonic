@@ -27,6 +27,9 @@ class TestOpenRedirectPrevention(unittest.TestCase):
         # (Other test classes may have imported config with stale values.)
         import config
         importlib.reload(config)
+        # load_dotenv() during reload may overwrite our env var with .env values,
+        # so force the config attribute to the test hash directly.
+        config.ADMIN_PASSWORD_HASH = TEST_PASSWORD_HASH
 
         from routes.auth import auth_bp
         from flask import Flask
