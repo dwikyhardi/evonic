@@ -235,6 +235,12 @@ if not _reloader_active or _is_reloader_child:
                 if _last.get('type') != 'user':
                     continue  # last message is agent/system — already replied
 
+                # Slash commands (e.g. /autopilot on, /clear) are system/control
+                # instructions that don't require an agent reply — skip them.
+                _content = (_last.get('content') or '').strip()
+                if _content.startswith('/'):
+                    continue
+
                 _unreplied_count += 1
                 _ts = _last.get('ts', 0)
                 _ts_str = _time.strftime(
