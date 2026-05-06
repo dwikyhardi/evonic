@@ -88,10 +88,10 @@
     },
     {
       "name": "ELIGIBLE_AGENTS",
-      "label": "Eligible Agent IDs",
+      "label": "Eligible Agent IDs (deprecated)",
       "type": "string",
       "default": "",
-      "description": "Comma-separated list of agent IDs that can be notified about tasks (e.g. 'example_agent,siwa'). Leave empty to notify no agents."
+      "description": "DEPRECATED. Agent eligibility is now determined by the kanban skill — only agents with the kanban skill assigned (or the super agent) receive notifications. This field is ignored and kept only for backward compatibility."
     },
     {
       "name": "SCAN_INTERVAL_SECONDS",
