@@ -1821,10 +1821,28 @@ def setup_wizard():
     # -- Generate supervisor/config.json for self-update support --
     print()
     print("  Setting up supervisor for self-update...", end=" ", flush=True)
+
+    # Resolve the server port from .env so the supervisor health check
+    # probes the correct port (not hardcoded 8080).
+    server_port = 8080
+    env_path = os.path.join(ROOT, '.env')
+    if os.path.isfile(env_path):
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('PORT=') or line.startswith('PORT '):
+                        val = line.split('=', 1)[-1].strip().strip('"').strip("'")
+                        if val:
+                            server_port = int(val)
+                        break
+        except (ValueError, IOError):
+            pass
+
     sup_cfg = {
         "app_root": ROOT,
         "poll_interval": 300,
-        "health_port": 8080,
+        "health_port": server_port,
         "health_temp_port": 18080,
         "health_timeout": 10,
         "monitor_duration": 60,
@@ -1966,7 +1984,13 @@ def _reconfigure_supervisor_wizard():
     print("  Health check port \u2014 the supervisor probes this port to")
     print("  determine whether the server is responsive after a swap.")
     print()
-    current_health = cfg.get("health_port", 8080)
+    # Resolve default from config.PORT if available, otherwise 8080
+    try:
+        import config
+        _default_health_port = int(getattr(config, 'PORT', 8080))
+    except Exception:
+        _default_health_port = 8080
+    current_health = cfg.get('health_port', _default_health_port)
     try:
         health_input = input(f"  Health check port [{current_health}]: ").strip()
     except (EOFError, KeyboardInterrupt):

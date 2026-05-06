@@ -792,6 +792,23 @@ def _notify(notifier: Optional[TelegramNotifier], step: int, description: str) -
         notifier.send_progress(step, TOTAL_STEPS, description)
 
 
+def _resolve_port_from_env(release_path: str, fallback: int = 8080) -> int:
+    """Read PORT from the release's .env file. Falls back to the given value."""
+    env_path = os.path.join(release_path, '.env')
+    if os.path.isfile(env_path):
+        try:
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('PORT=') or line.startswith('PORT '):
+                        val = line.split('=', 1)[-1].strip().strip('"').strip("'")
+                        if val:
+                            return int(val)
+        except (ValueError, IOError):
+            pass
+    return fallback
+
+
 def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
                skip_verify: bool = False, nightly: bool = False) -> bool:
     """
@@ -895,6 +912,11 @@ def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
         if not ok:
             raise UpdateError('Failed to start daemon from new release')
 
+        # Resolve the actual port from the release's .env so health checks
+        # work on non-default ports (e.g. when PORT != 8080).
+        health_port = _resolve_port_from_env(release_path, fallback=cfg['health_port'])
+        log.info(f'Health check will probe port {health_port}')
+
         # Monitor for monitor_duration seconds
         end_time = time.time() + cfg['monitor_duration']
         check_interval = 5
@@ -902,7 +924,7 @@ def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
             time.sleep(check_interval)
             if not _is_process_alive(pid):
                 raise UpdateError('Daemon process died during monitoring period')
-            if not health_check(cfg['health_port'], timeout=cfg['health_timeout']):
+            if not health_check(health_port, timeout=cfg['health_timeout']):
                 raise UpdateError('Health check failed during monitoring period')
 
         if notifier:
