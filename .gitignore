@@ -296,3 +296,14 @@ keys/
 data/
 plan/
 run/
+
+# Ignore Other Agents settings and Editor configs
+.codex/
+.opencode/
+.claude/
+.windsurf/
+.windsurfrules
+.codeium/
+.codeiumignore
+AGENTS.md
+CLAUDE.md
