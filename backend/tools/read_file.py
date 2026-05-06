@@ -134,6 +134,21 @@ def execute(agent, args: dict) -> dict:
                 },
             }
 
+    # Heuristic safety check: require approval for sensitive system paths
+    if not (agent or {}).get('is_super') and (agent is None or agent.get("safety_checker_enabled", 1)):
+        from backend.tools.safety_checker import check_sensitive_path
+        path_check = check_sensitive_path(file_path, agent)
+        if path_check["blocked"]:
+            return {
+                "error": path_check["error"],
+                "level": "requires_approval",
+                "reasons": [path_check["reason"]],
+                "approval_info": {
+                    "risk_level": "medium",
+                    "description": "Accessing sensitive system paths may expose critical system data.",
+                },
+            }
+
     # /_self/ path: always route to the agent's local directory on the evonic server.
     from backend.tools._workspace import is_self_path, resolve_self_path
     agent_id = (agent or {}).get('id')
