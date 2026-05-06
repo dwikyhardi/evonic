@@ -3271,9 +3271,9 @@ async function toggleEnabled() {
     const btn = document.getElementById('toggle-enabled-btn');
     if (btn) {
         const label = newEnabled ? 'Disable' : 'Enable';
-        btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg><span>${label}</span>`;
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"/></svg><span>${label}</span>`;
         btn.title = `${label} Agent`;
-        btn.className = `flex items-center gap-1.5 text-sm ${newEnabled ? 'text-gray-500 hover:text-gray-700' : 'text-green-600 hover:text-green-800'} transition-colors`;
+        btn.className = `w-full text-left flex items-center gap-2 px-4 py-2 text-sm transition-colors ${newEnabled ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600' : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'}`;
     }
 }
 </script>
