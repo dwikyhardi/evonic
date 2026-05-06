@@ -224,6 +224,59 @@ def api_delete_agent(agent_id):
     return jsonify({'success': True})
 
 
+@agents_bp.route('/api/agents/<agent_id>/clone', methods=['POST'])
+def api_clone_agent(agent_id):
+    """Clone an existing agent: copy all settings, tools, skills, variables, and KB files."""
+    source = db.get_agent(agent_id)
+    if not source:
+        return jsonify({'error': 'Agent not found'}), 404
+    if source.get('is_super'):
+        return jsonify({'error': 'Super agent cannot be cloned.'}), 403
+
+    data = request.get_json() or {}
+    new_id = data.get('id', '').strip().lower()
+    new_name = data.get('name', '').strip()
+    new_desc = data.get('description', '').strip()
+
+    if not new_id or not SLUG_RE.match(new_id):
+        return jsonify({
+            'error': 'Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case).'
+        }), 400
+    if not new_name:
+        new_name = f"{source.get('name', agent_id)} (Clone)"
+
+    try:
+        cloned_id = db.clone_agent(agent_id, new_id, new_name, new_desc)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    # Copy SYSTEM.md
+    src_sp = _system_prompt_path(agent_id)
+    if os.path.isfile(src_sp):
+        _write_system_prompt(cloned_id, _read_system_prompt(agent_id))
+
+    # Copy KB files
+    src_kb = _kb_dir(agent_id)
+    dst_kb = _ensure_kb_dir(cloned_id)
+    if os.path.isdir(src_kb):
+        for fname in os.listdir(src_kb):
+            src_path = os.path.join(src_kb, fname)
+            dst_path = os.path.join(dst_kb, fname)
+            if os.path.isfile(src_path):
+                import shutil
+                shutil.copy2(src_path, dst_path)
+
+    # Create workspace directory for the clone
+    clone_ws = os.path.join(WORKSPACE_DIR, cloned_id)
+    os.makedirs(clone_ws, exist_ok=True)
+
+    agent = db.get_agent(cloned_id)
+    agent['system_prompt'] = _read_system_prompt(cloned_id, fallback=agent.get('system_prompt', ''))
+    return jsonify({'success': True, 'agent': _sanitize_agent(agent)})
+
+
 # ==================== Agent Tools API ====================
 
 @agents_bp.route('/api/agents/<agent_id>/tools', methods=['GET'])
