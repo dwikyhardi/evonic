@@ -19,8 +19,14 @@ Environment variables:
     EVONIC_LOG_MAX_BYTES — max log file size before rotation (default: 5 MB)
     EVONIC_LOG_BACKUPS   — number of rotated backup files to keep (default: 3)
     EVONIC_LOG_QUIET     — comma-separated list of module names to silence (default: WARNING level)
+    EVONIC_LOG_ROUTES    — semicolon-separated route entries; each entry is file_path:pattern1,pattern2
+                           where patterns are fnmatch globs matched against logger names.
+                           Default: logs/agent.log:backend.agent_runtime.*,backend.agent_state;
+                                    logs/channels.log:backend.channels.*;
+                                    logs/evaluator.log:evaluator.*
 """
 
+import fnmatch
 import logging
 import os
 import sys
@@ -36,8 +42,28 @@ _DEFAULT_LOG_FILE = os.path.join(
 )
 _DEFAULT_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 _DEFAULT_BACKUPS = 3
+_DEFAULT_LOG_ROUTES = (
+    "logs/agent.log:backend.agent_runtime.*,backend.agent_state;"
+    "logs/channels.log:backend.channels.*;"
+    "logs/evaluator.log:evaluator.*"
+)
 
 _configured = False
+
+
+class RouteFilter(logging.Filter):
+    """Filter that accepts log records whose logger name matches any of the
+    given fnmatch patterns (e.g. 'backend.agent_runtime.*', 'evaluator.*').
+    """
+
+    def __init__(self, patterns: list[str], name: str = ""):
+        super().__init__(name)
+        self.patterns = patterns
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return any(
+            fnmatch.fnmatch(record.name, p) for p in self.patterns
+        )
 
 
 def _build_formatter() -> logging.Formatter:
@@ -106,6 +132,32 @@ def configure(
         )
         fh.setFormatter(formatter)
         root.addHandler(fh)
+
+    # --- Per-module log routing (EVONIC_LOG_ROUTES) ---
+    # Format: file_path:pattern1,pattern2;file_path:pattern3,...
+    # Routes matching module logs to dedicated files via filtered handlers.
+    routes_raw = os.environ.get("EVONIC_LOG_ROUTES", _DEFAULT_LOG_ROUTES)
+    if routes_raw:
+        for entry in routes_raw.split(";"):
+            entry = entry.strip()
+            if not entry or ":" not in entry:
+                continue
+            # Split on first colon only — file path may be absolute (e.g. /var/log/...)
+            file_path, patterns_str = entry.split(":", 1)
+            file_path = file_path.strip()
+            patterns = [p.strip() for p in patterns_str.split(",") if p.strip()]
+            if not file_path or not patterns:
+                continue
+            # Create a dedicated rotating handler with a filter
+            route_dir = os.path.dirname(file_path)
+            if route_dir:
+                os.makedirs(route_dir, exist_ok=True)
+            rh = RotatingFileHandler(
+                file_path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
+            )
+            rh.setFormatter(formatter)
+            rh.addFilter(RouteFilter(patterns))
+            root.addHandler(rh)
 
     _configured = True
 
