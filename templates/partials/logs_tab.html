@@ -157,6 +157,8 @@
                 }
             } catch (e) {
                 console.error('Failed to load log files:', e);
+                const statusEl = document.getElementById('log-status-info');
+                if (statusEl) statusEl.textContent = '⚠ Error: ' + e.message;
             }
         },
 
