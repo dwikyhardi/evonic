@@ -1,0 +1,338 @@
+<div class="space-y-4">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h3 class="font-medium text-gray-800 dark:text-gray-100">HMADS Safety Rules</h3>
+            <p class="text-sm text-gray-500 mt-0.5">Custom regex-based rules for the Heuristic Mal-Activity Detection System. Rules are evaluated alongside built-in system rules.</p>
+        </div>
+        <button onclick="hmads.openModal()"
+                class="bg-emerald-500 hover:bg-emerald-600 text-white border-none px-4 py-2 rounded-md cursor-pointer text-sm flex items-center gap-1.5">
+            + Add Rule
+        </button>
+    </div>
+
+    <!-- Scope Filter -->
+    <div class="flex items-center gap-2">
+        <label class="text-sm text-gray-500">Filter:</label>
+        <select id="hmads-scope-filter" onchange="hmads.load()"
+                class="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="">All Rules</option>
+            <option value="global">Global Only</option>
+            <option value="specific">Specific Only</option>
+        </select>
+        <span id="hmads-count" class="text-xs text-gray-400 ml-2"></span>
+    </div>
+
+    <!-- Rules Table -->
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+            <thead class="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-300">
+                <tr>
+                    <th class="px-4 py-2">Name</th>
+                    <th class="px-4 py-2">Pattern</th>
+                    <th class="px-4 py-2 text-center">Weight</th>
+                    <th class="px-4 py-2">Category</th>
+                    <th class="px-4 py-2">Scope</th>
+                    <th class="px-4 py-2 text-center">Enabled</th>
+                    <th class="px-4 py-2 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="hmads-rules-body">
+                <tr><td colspan="7" class="text-center py-8 text-gray-400">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add/Edit Rule Modal -->
+<div id="hmads-modal" class="modal">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]">
+        <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+            <h3 id="hmads-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100">Add Safety Rule</h3>
+            <button onclick="hmads.closeModal()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+        </div>
+        <div class="px-6 py-4 overflow-y-auto space-y-4">
+            <input type="hidden" id="hmads-edit-id" value="">
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name *</label>
+                <input id="hmads-name" type="text" placeholder="e.g. Block DROP TABLE operations"
+                       class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Regex Pattern *</label>
+                <input id="hmads-pattern" type="text" placeholder="e.g. \bDROP\s+TABLE\b"
+                       class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <p class="text-xs text-gray-400 mt-1">Case-insensitive regex. Matched against the full code/script.</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <input id="hmads-description" type="text" placeholder="What this rule detects"
+                       class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weight (1-20) *</label>
+                    <input id="hmads-weight" type="number" min="1" max="20" value="5"
+                           class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <p class="text-xs text-gray-400 mt-1">0-3 safe, 4-7 warn, 8-14 approval, 15+ block</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category *</label>
+                    <input id="hmads-category" type="text" placeholder="e.g. sql_destructive"
+                           class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tool Scope</label>
+                    <select id="hmads-tool-scope"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                        <option value="all">All (bash + python)</option>
+                        <option value="bash">Bash only</option>
+                        <option value="python">Python only</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Scope</label>
+                    <select id="hmads-scope"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                        <option value="global">Global (all agents)</option>
+                        <option value="specific">Specific (assign per agent)</option>
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">Specific rules are assigned to agents in each agent's settings.</p>
+                </div>
+            </div>
+
+            <!-- Test Pattern Section -->
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Test Pattern</label>
+                <textarea id="hmads-test-code" rows="3" placeholder="Paste sample code to test the regex..."
+                          class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
+                <div class="flex items-center gap-2 mt-2">
+                    <button onclick="hmads.testPattern()"
+                            class="px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                        Test
+                    </button>
+                    <span id="hmads-test-result" class="text-sm"></span>
+                </div>
+            </div>
+
+            <div id="hmads-modal-error" class="text-sm text-red-600 hidden"></div>
+        </div>
+        <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 flex-shrink-0">
+            <button onclick="hmads.closeModal()"
+                    class="px-4 py-2 rounded-md text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                Cancel
+            </button>
+            <button onclick="hmads.save()"
+                    class="px-4 py-2 rounded-md text-sm bg-indigo-500 hover:bg-indigo-600 text-white border-none">
+                Save Rule
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+window.hmads = {
+    _initialized: false,
+
+    async init() {
+        if (this._initialized) { this.load(); return; }
+        this._initialized = true;
+        this.load();
+    },
+
+    async load() {
+        try {
+            const res = await fetch('/api/safety-rules');
+            const data = await res.json();
+            let rules = data.rules || [];
+            const filter = document.getElementById('hmads-scope-filter').value;
+            if (filter) rules = rules.filter(r => r.scope === filter);
+            this.render(rules);
+            document.getElementById('hmads-count').textContent = `${rules.length} rule${rules.length !== 1 ? 's' : ''}`;
+        } catch(e) {
+            console.error('Failed to load rules:', e);
+            document.getElementById('hmads-rules-body').innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-500">Failed to load rules.</td></tr>';
+        }
+    },
+
+    render(rules) {
+        const tbody = document.getElementById('hmads-rules-body');
+        if (!rules.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">No custom rules yet. Click "Add Rule" to create one.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rules.map(r => {
+            const isSystem = r.is_system;
+            const enabledBg = r.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
+            const weightColor = r.weight >= 15 ? 'text-red-600 dark:text-red-400 font-bold' :
+                                r.weight >= 8 ? 'text-orange-600 dark:text-orange-400 font-semibold' :
+                                r.weight >= 4 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-600 dark:text-gray-400';
+            const scopeBg = r.scope === 'global' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300' : 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300';
+            return `<tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750">
+                <td class="px-4 py-2.5">
+                    <div class="font-medium text-gray-800 dark:text-gray-100">${esc(r.name)}</div>
+                    ${r.description ? `<div class="text-xs text-gray-400 mt-0.5">${esc(r.description)}</div>` : ''}
+                    ${isSystem ? '<span class="inline-block mt-0.5 text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded px-1.5 py-0.5">SYSTEM</span>' : ''}
+                </td>
+                <td class="px-4 py-2.5 font-mono text-xs text-gray-600 dark:text-gray-400 max-w-[200px] truncate" title="${esc(r.pattern)}">${esc(r.pattern)}</td>
+                <td class="px-4 py-2.5 text-center ${weightColor}">${r.weight}</td>
+                <td class="px-4 py-2.5"><span class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded px-2 py-0.5">${esc(r.category)}</span></td>
+                <td class="px-4 py-2.5">
+                    <span class="text-xs rounded px-2 py-0.5 ${scopeBg}">${r.scope || 'global'}</span>
+                    <div class="text-[10px] text-gray-400 mt-0.5">${r.tool_scope === 'all' ? 'all tools' : r.tool_scope}</div>
+                </td>
+                <td class="px-4 py-2.5 text-center">
+                    <span class="inline-block text-xs rounded px-2 py-0.5 ${enabledBg}">${r.enabled ? 'ON' : 'OFF'}</span>
+                </td>
+                <td class="px-4 py-2.5 text-right">
+                    ${isSystem ? '<span class="text-xs text-gray-400">read-only</span>' : `
+                        <button onclick="hmads.edit('${r.id}')" class="btn-icon" title="Edit">&#9998;</button>
+                        <button onclick="hmads.toggleEnabled('${r.id}', ${r.enabled ? 0 : 1})" class="btn-icon" title="${r.enabled ? 'Disable' : 'Enable'}">${r.enabled ? '&#9724;' : '&#9654;'}</button>
+                        <button onclick="hmads.remove('${r.id}', '${esc(r.name)}')" class="btn-icon delete" title="Delete">&#128465;</button>
+                    `}
+                </td>
+            </tr>`;
+        }).join('');
+    },
+
+    openModal(ruleId) {
+        document.getElementById('hmads-edit-id').value = ruleId || '';
+        document.getElementById('hmads-modal-title').textContent = ruleId ? 'Edit Safety Rule' : 'Add Safety Rule';
+        document.getElementById('hmads-modal-error').classList.add('hidden');
+        document.getElementById('hmads-test-result').textContent = '';
+        if (!ruleId) {
+            document.getElementById('hmads-name').value = '';
+            document.getElementById('hmads-pattern').value = '';
+            document.getElementById('hmads-description').value = '';
+            document.getElementById('hmads-weight').value = 5;
+            document.getElementById('hmads-category').value = '';
+            document.getElementById('hmads-tool-scope').value = 'all';
+            document.getElementById('hmads-scope').value = 'global';
+            document.getElementById('hmads-test-code').value = '';
+        }
+        document.getElementById('hmads-modal').classList.add('active');
+    },
+
+    closeModal() {
+        document.getElementById('hmads-modal').classList.remove('active');
+    },
+
+    async edit(ruleId) {
+        try {
+            const res = await fetch(`/api/safety-rules/${ruleId}`);
+            const r = await res.json();
+            this.openModal(ruleId);
+            document.getElementById('hmads-name').value = r.name || '';
+            document.getElementById('hmads-pattern').value = r.pattern || '';
+            document.getElementById('hmads-description').value = r.description || '';
+            document.getElementById('hmads-weight').value = r.weight || 5;
+            document.getElementById('hmads-category').value = r.category || '';
+            document.getElementById('hmads-tool-scope').value = r.tool_scope || 'all';
+            document.getElementById('hmads-scope').value = r.scope || 'global';
+        } catch(e) {
+            console.error('Failed to load rule:', e);
+        }
+    },
+
+    async save() {
+        const errEl = document.getElementById('hmads-modal-error');
+        errEl.classList.add('hidden');
+
+        const editId = document.getElementById('hmads-edit-id').value;
+        const data = {
+            name: document.getElementById('hmads-name').value.trim(),
+            pattern: document.getElementById('hmads-pattern').value.trim(),
+            description: document.getElementById('hmads-description').value.trim(),
+            weight: parseInt(document.getElementById('hmads-weight').value, 10),
+            category: document.getElementById('hmads-category').value.trim(),
+            tool_scope: document.getElementById('hmads-tool-scope').value,
+            scope: document.getElementById('hmads-scope').value,
+        };
+
+        if (!data.name || !data.pattern || !data.category) {
+            errEl.textContent = 'Name, pattern, and category are required.';
+            errEl.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const url = editId ? `/api/safety-rules/${editId}` : '/api/safety-rules';
+            const method = editId ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                errEl.textContent = result.error || 'Failed to save rule';
+                errEl.classList.remove('hidden');
+                return;
+            }
+            this.closeModal();
+            this.load();
+        } catch(e) {
+            errEl.textContent = 'Network error: ' + e.message;
+            errEl.classList.remove('hidden');
+        }
+    },
+
+    async toggleEnabled(ruleId, enabled) {
+        try {
+            await fetch(`/api/safety-rules/${ruleId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled }),
+            });
+            this.load();
+        } catch(e) { console.error('Toggle failed:', e); }
+    },
+
+    async remove(ruleId, name) {
+        if (!confirm(`Delete rule "${name}"?`)) return;
+        try {
+            await fetch(`/api/safety-rules/${ruleId}`, { method: 'DELETE' });
+            this.load();
+        } catch(e) { console.error('Delete failed:', e); }
+    },
+
+    async testPattern() {
+        const pattern = document.getElementById('hmads-pattern').value.trim();
+        const code = document.getElementById('hmads-test-code').value;
+        const resultEl = document.getElementById('hmads-test-result');
+
+        if (!pattern) { resultEl.textContent = 'Enter a pattern first'; return; }
+
+        try {
+            const res = await fetch('/api/safety-rules/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pattern, code }),
+            });
+            const data = await res.json();
+            if (data.error) {
+                resultEl.className = 'text-sm text-red-600';
+                resultEl.textContent = data.error;
+            } else if (data.matches) {
+                resultEl.className = 'text-sm text-emerald-600';
+                resultEl.textContent = `Match: "${data.match_text}" (pos ${data.match_start}-${data.match_end})`;
+            } else {
+                resultEl.className = 'text-sm text-gray-500';
+                resultEl.textContent = 'No match';
+            }
+        } catch(e) {
+            resultEl.className = 'text-sm text-red-600';
+            resultEl.textContent = 'Test failed: ' + e.message;
+        }
+    },
+};
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+</script>

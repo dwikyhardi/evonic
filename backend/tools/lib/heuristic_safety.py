@@ -25,6 +25,8 @@ import logging
 import re
 from typing import Any
 
+from backend.tools.lib.safety_base import SafetyCheckerBase, CheckResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -609,17 +611,66 @@ def _generate_approval_info(
 
 
 # ============================================================================
-# Main Entry Point
+# HeuristicSafetyChecker — class wrapper implementing SafetyCheckerBase
+# ============================================================================
+
+class HeuristicSafetyChecker(SafetyCheckerBase):
+    """Built-in (system) safety checker using hardcoded heuristic patterns.
+
+    This wraps the existing 3-layer logic (pattern matching, AST analysis,
+    semantic scoring) behind the :class:`SafetyCheckerBase` interface so it
+    can participate in the :class:`SafetyPipeline`.
+
+    The ``check()`` method returns a :class:`CheckResult` (partial score +
+    reasons).  Final level/threshold logic is handled by the pipeline.
+    """
+
+    def check(self, code: str, tool_type: str = 'python', agent_context: dict[str, Any] | None = None) -> CheckResult:
+        # Layer 1: Pattern matching
+        pattern_results = _layer1_pattern_matching(code, tool_type)
+
+        # Layer 2: AST analysis (Python only)
+        ast_results = _layer2_ast_analysis(code) if tool_type == 'python' else {}
+
+        # Aggregate score
+        score = pattern_results["total_score"] + ast_results.get("total_score", 0)
+        score = _apply_modifiers(score, pattern_results, ast_results, tool_type)
+
+        reasons: list[str] = []
+        blocked_patterns: list[str] = []
+
+        for p in pattern_results["matched_patterns"]:
+            reasons.append(p["description"])
+            blocked_patterns.append(p["category"])
+
+        for call in ast_results.get("function_calls", []):
+            reasons.append(call["description"])
+            blocked_patterns.append(call.get("category", "code_execution"))
+
+        return CheckResult(
+            score=score,
+            reasons=reasons,
+            matched_patterns=pattern_results["matched_patterns"],
+            blocked_patterns=list(set(blocked_patterns)),
+        )
+
+
+# Singleton for use by the pipeline
+heuristic_checker = HeuristicSafetyChecker()
+
+
+# ============================================================================
+# Main Entry Point (backward-compatible module-level function)
 # ============================================================================
 
 def check_safety(code: str, tool_type: str = 'python') -> dict:
     """
     Check code safety across 3 layers.
-    
+
     Args:
         code: Python code or Bash script to check
         tool_type: 'python' or 'bash'
-    
+
     Returns:
         {
             "level": "safe" | "warning" | "requires_approval" | "dangerous",
@@ -629,14 +680,14 @@ def check_safety(code: str, tool_type: str = 'python') -> dict:
             "requires_approval": bool,
             "approval_info": dict | None
         }
-    
+
     Examples:
         >>> check_safety("print(2 + 2)")
         {'level': 'safe', 'score': 0, 'reasons': [], ...}
-        
+
         >>> check_safety("import ctypes")
         {'level': 'dangerous', 'score': 12, 'reasons': [...], ...}
-        
+
         >>> check_safety("rm -rf /tmp")
         {'level': 'requires_approval', 'score': 10, 'reasons': [...], ...}
     """

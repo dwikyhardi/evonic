@@ -691,16 +691,32 @@ class SchemaMixin:
                     weight INTEGER NOT NULL DEFAULT 5,
                     category TEXT NOT NULL,
                     tool_scope TEXT DEFAULT 'all',
-                    agent_id TEXT,
+                    scope TEXT DEFAULT 'global',
                     enabled BOOLEAN DEFAULT 1,
                     is_system BOOLEAN DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_safety_rules_agent ON safety_rules(agent_id)")
+            # Migration: add scope column for existing safety_rules tables (replaces agent_id)
+            try:
+                cursor.execute("ALTER TABLE safety_rules ADD COLUMN scope TEXT DEFAULT 'global'")
+            except sqlite3.OperationalError:
+                pass
+
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_safety_rules_enabled ON safety_rules(enabled)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_safety_rules_scope ON safety_rules(scope)")
+
+            # Agent ↔ Safety Rule assignment (many-to-many, for scope='specific' rules)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS agent_safety_rules (
+                    agent_id TEXT NOT NULL,
+                    rule_id TEXT NOT NULL,
+                    PRIMARY KEY (agent_id, rule_id),
+                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+                    FOREIGN KEY (rule_id) REFERENCES safety_rules(id) ON DELETE CASCADE
+                )
+            """)
 
             conn.commit()
 

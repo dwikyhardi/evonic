@@ -53,12 +53,12 @@ def execute(agent_context: dict, args: dict) -> dict:
         return {'error': "Missing required argument: 'code'"}
 
     # ------------------------------------------------------------------
-    # Heuristic safety check
+    # HMADS safety check (pipeline: system rules + custom user rules)
     # ------------------------------------------------------------------
-    from backend.tools.lib.heuristic_safety import check_safety
+    from backend.tools.lib.safety_pipeline import get_safety_pipeline
 
     if not agent_context.get('_skip_safety') and agent_context.get('safety_checker_enabled', 1) and not agent_context.get('is_super'):
-        safety = check_safety(code, tool_type='python')
+        safety = get_safety_pipeline().check(code, tool_type='python', agent_context=agent_context)
     else:
         safety = {'level': 'safe', 'score': 0, 'reasons': [], 'blocked_patterns': [], 'approval_info': {}}
 

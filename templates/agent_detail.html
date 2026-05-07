@@ -235,6 +235,14 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                     </div>
                 </label>
             </div>
+            <!-- HMADS: Agent-specific safety rules -->
+            <div class="mb-4" id="agent-safety-rules-section">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Safety Rules (Specific)</label>
+                <p class="text-xs text-gray-400 mb-2">Assign specific-scope HMADS rules to this agent. Global rules always apply. <a href="/system#hmads" class="text-indigo-500 hover:underline">Manage rules</a></p>
+                <div id="agent-safety-rules-list" class="space-y-1 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md p-2 bg-gray-50 dark:bg-gray-700/50">
+                    <div class="text-xs text-gray-400">Loading...</div>
+                </div>
+            </div>
             <div class="mb-4">
                 <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">System Prompt</label>
                 <textarea id="agent-system-prompt" rows="10" placeholder="Define the agent's persona and behavior..." class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">{{ agent.system_prompt or '' }}</textarea>
@@ -1117,6 +1125,53 @@ async function saveVariables(silent = false) {
         body: JSON.stringify({ variables: vars })
     });
     if (!silent) showToast("Variables saved successfully!", "success");
+}
+
+// ==================== Agent Safety Rules (HMADS) ====================
+let _specificRules = [];
+let _assignedRuleIds = new Set();
+
+async function loadAgentSafetyRules() {
+    const listEl = document.getElementById('agent-safety-rules-list');
+    try {
+        const [rulesRes, assignedRes] = await Promise.all([
+            fetch('/api/safety-rules'),
+            fetch(`/api/agents/${AGENT_ID}/safety-rules`),
+        ]);
+        const rulesData = await rulesRes.json();
+        const assignedData = await assignedRes.json();
+        _specificRules = (rulesData.rules || []).filter(r => r.scope === 'specific' && !r.is_system);
+        _assignedRuleIds = new Set(assignedData.rule_ids || []);
+
+        if (!_specificRules.length) {
+            listEl.innerHTML = '<div class="text-xs text-gray-400">No specific-scope rules available. <a href="/system#hmads" class="text-indigo-500 hover:underline">Create one</a></div>';
+            return;
+        }
+        listEl.innerHTML = _specificRules.map(r => {
+            const checked = _assignedRuleIds.has(r.id) ? 'checked' : '';
+            const weightColor = r.weight >= 15 ? 'text-red-600' : r.weight >= 8 ? 'text-orange-600' : r.weight >= 4 ? 'text-yellow-600' : 'text-gray-500';
+            return `<label class="flex items-center gap-2 py-1 px-1 rounded hover:bg-gray-100 dark:hover:bg-gray-600/50 cursor-pointer select-none">
+                <input type="checkbox" value="${r.id}" ${checked} onchange="saveAgentSafetyRules()" class="agent-safety-rule-cb rounded border-gray-300 text-indigo-500 focus:ring-indigo-400">
+                <span class="text-sm text-gray-700 dark:text-gray-200">${r.name}</span>
+                <span class="text-[10px] ${weightColor} ml-auto">${r.weight}</span>
+            </label>`;
+        }).join('');
+    } catch(e) {
+        listEl.innerHTML = '<div class="text-xs text-red-500">Failed to load rules</div>';
+        console.error('Failed to load agent safety rules:', e);
+    }
+}
+
+async function saveAgentSafetyRules() {
+    const checkboxes = document.querySelectorAll('.agent-safety-rule-cb');
+    const ruleIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+    try {
+        await fetch(`/api/agents/${AGENT_ID}/safety-rules`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ rule_ids: ruleIds }),
+        });
+    } catch(e) { console.error('Failed to save agent safety rules:', e); }
 }
 
 const SPINNER_SVG = '<svg class="animate-spin h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
@@ -2981,6 +3036,7 @@ async function loadAgentModelSelector() {
 }
 loadAgentModelSelector();
 loadVariables();
+loadAgentSafetyRules();
 
 // ==================== Workplace Selector ====================
 const CURRENT_HOME_ID = '{{ agent.workplace_id or "" }}';

@@ -32,12 +32,12 @@ def execute(agent: dict, args: dict) -> dict:
         return {'error': "Missing required argument: 'script'"}
 
     # ------------------------------------------------------------------
-    # Heuristic safety check
+    # HMADS safety check (pipeline: system rules + custom user rules)
     # ------------------------------------------------------------------
-    from backend.tools.lib.heuristic_safety import check_safety
+    from backend.tools.lib.safety_pipeline import get_safety_pipeline
 
     if not agent.get('_skip_safety') and agent.get('safety_checker_enabled', 1) and not agent.get('is_super'):
-        safety = check_safety(script, tool_type='bash')
+        safety = get_safety_pipeline().check(script, tool_type='bash', agent_context=agent)
     else:
         safety = {'level': 'safe', 'score': 0, 'reasons': [], 'blocked_patterns': [], 'approval_info': {}}
 
