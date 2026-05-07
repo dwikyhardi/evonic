@@ -272,7 +272,7 @@ function renderPluginCards(pluginCards) {
         var card = pluginCards[i];
         var items = card.items || [];
 
-        var cardHtml = '<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">';
+        var cardHtml = '<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">';
         cardHtml += '  <div class="p-5 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">';
         cardHtml += '    <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100 m-0">' + (card.title || 'Plugin Card') + '</h3>';
         if (card.link) {
