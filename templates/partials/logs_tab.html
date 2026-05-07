@@ -157,6 +157,15 @@
                 }
             } catch (e) {
                 console.error('Failed to load log files:', e);
+                // Show error in select dropdown
+                const select = document.getElementById('log-file-select');
+                select.innerHTML = '<option value="">⚠ Failed to load log files</option>';
+
+                // Show error in viewer area
+                const viewer = document.getElementById('log-viewer');
+                viewer.innerHTML = `<div class="text-red-400 text-center py-8">Failed to load log files<br><span class="text-red-300 text-xs">${this._esc(e.message)}</span></div>`;
+
+                // Show error in status bar
                 const statusEl = document.getElementById('log-status-info');
                 if (statusEl) statusEl.textContent = '⚠ Error: ' + e.message;
             }
