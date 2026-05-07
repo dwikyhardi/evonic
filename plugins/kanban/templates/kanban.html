@@ -61,6 +61,14 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 /* Scrollable tabs — hide scrollbar */
 #detailTabs::-webkit-scrollbar { display: none; }
 #detailTabs { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Auto-grow textarea — smooth height transition */
+#task-desc, #detail-task-desc {
+    transition: height 0.15s ease-out;
+    overflow-y: hidden;
+    min-height: 4.5rem;
+    resize: none;
+}
 </style>
 
 <!-- Board header -->
@@ -389,6 +397,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     const SUPER_AGENT_ID = '{{ super_agent_id }}';
     let tasks = [];
     let currentDetailId = null;
+    let _isEditing = false;  // true when editing existing task — prevents backdrop-click-close
 
     const PRIORITY_BADGE = {
         high: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400',
@@ -525,7 +534,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         }
     }
 
-    function loadTasks() {
+    function loadTasks(callback) {
         if (loadTasksInFlight) return;
         loadTasksInFlight = true;
         $.get(`${API}/tasks`, function(data) {
@@ -537,6 +546,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 previousTasksFingerprint = newFP;
                 renderBoard();
             }
+            if (typeof callback === 'function') callback();
         }).fail(function() {
             loadTasksInFlight = false;
             console.error('Failed to load tasks');
@@ -880,6 +890,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     }
 
     function openCreateModal() {
+        _isEditing = false;
         $('#task-id').val('');
         $('#task-form')[0].reset();
         $('#task-assignee').val('');
@@ -893,9 +904,11 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     function editTask(taskId) {
         const task = tasks.find(t => t.id === taskId);
         if (!task) return;
+        _isEditing = true;  // prevent backdrop-click-close during editing
         $('#task-id').val(task.id);
         $('#task-title').val(task.title);
         $('#task-desc').val(task.description || '');
+        setTimeout(function() { autoGrowTextarea(document.getElementById('task-desc')); }, 0);
         $('#task-priority').val(task.priority || 'low');
         populateAgentSelect('#task-assignee', task.assignee || '');
         initDepsWidget(task.id, task.deps || []);
@@ -905,6 +918,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     }
 
     function closeModal() {
+        _isEditing = false;
         $('#kb-modal').removeClass('flex').addClass('hidden');
     }
 
@@ -969,7 +983,10 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             }),
             success: function(data) {
                 if (data.title) $('#task-title').val(data.title);
-                if (data.description) $('#task-desc').val(data.description);
+                if (data.description) {
+                    $('#task-desc').val(data.description);
+                    autoGrowTextarea(document.getElementById('task-desc'));
+                }
             },
             error: function(xhr) {
                 alert(xhr.responseJSON?.error || 'Enhance failed');
@@ -1218,6 +1235,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $('#detail-task-id').val(task.id);
         $('#detail-task-title').val(decodeHtmlEntities(task.title));
         $('#detail-task-desc').val(task.description || '');
+        setTimeout(function() { autoGrowTextarea(document.getElementById('detail-task-desc')); }, 0);
         $('#detail-task-priority').val(task.priority || 'low');
         populateAgentSelect('#detail-task-assignee', task.assignee || '');
         initDepsWidget(task.id, task.deps || [], {
@@ -1251,10 +1269,11 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             data: JSON.stringify(payload),
             success: function() {
                 const taskIdNum = Number(taskId);
-                loadTasks();
                 $('#panel-edit').addClass('hidden');
                 $('#panel-details').removeClass('hidden');
-                openDetailModal(taskIdNum);
+                loadTasks(function() {
+                    openDetailModal(taskIdNum);
+                });
             },
             error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to update'); }
         });
@@ -1654,11 +1673,23 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
         // ── Close on backdrop click ───────────────────────────────────────────────
 
-    $('#kb-modal').on('click', function(e) { if (e.target === this) closeModal(); });
+    // Prevent backdrop-click-close when editing an existing task (accidental outside clicks)
+    $('#kb-modal').on('click', function(e) { if (e.target === this && !_isEditing) closeModal(); });
     $('#kb-detail-modal').on('click', function(e) { if (e.target === this) closeDetailModal(); });
     $('#kb-assign-modal').on('click', function(e) { if (e.target === this) closeAssignModal(); });
     $('#kb-trigger-modal').on('click', function(e) { if (e.target === this) closeTriggerModal(); });
     $('#kb-trigger-results-modal').on('click', function(e) { if (e.target === this) closeTriggerResultsModal(); });
+
+    // ── Close on Escape key ──────────────────────────────────────────
+    $(document).on('keydown', function(e) {
+        if (e.key === 'Escape') {
+            if (!$('#kb-modal').hasClass('hidden')) closeModal();
+            else if (!$('#kb-detail-modal').hasClass('hidden')) closeDetailModal();
+            else if (!$('#kb-assign-modal').hasClass('hidden')) closeAssignModal();
+            else if (!$('#kb-trigger-modal').hasClass('hidden')) closeTriggerModal();
+            else if (!$('#kb-trigger-results-modal').hasClass('hidden')) closeTriggerResultsModal();
+        }
+    });
 
     let autoRefreshInterval = null;
     let isAutoRefreshing = false;
@@ -1723,6 +1754,28 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         $icon.removeClass("animate-spin");
       }
     }
+
+    // ── Auto-grow Textarea ──────────────────────────────────────────────
+
+    const TEXTAREA_MAX_HEIGHT = 300;
+
+    function autoGrowTextarea(el) {
+        el.style.height = 'auto';
+        const scrollH = el.scrollHeight;
+        el.style.height = Math.min(scrollH, TEXTAREA_MAX_HEIGHT) + 'px';
+        // Enable vertical scrollbar only when max height is reached
+        el.style.overflowY = scrollH > TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+    }
+
+    // Bind to Create/Edit Modal textarea
+    $('#task-desc').on('input', function() {
+        autoGrowTextarea(this);
+    });
+
+    // Bind to Detail Modal edit textarea
+    $('#detail-task-desc').on('input', function() {
+        autoGrowTextarea(this);
+    });
 
     fetchNotifierStatus();
     loadTasks();

@@ -28,6 +28,23 @@ def _is_safe_redirect_url(target):
     return target.startswith('/')
 
 
+def _is_safe_redirect_url(target):
+    """Validate that a redirect target is a safe relative URL.
+
+    Rejects absolute URLs (http://..., https://..., etc.), protocol-relative
+    URLs (//evil.com), and anything else that doesn't start with a single /.
+    This prevents open redirect attacks.
+    """
+    # Reject anything containing :// (catches http://, https://, ftp://, etc.)
+    if '://' in target:
+        return False
+    # Reject protocol-relative URLs (//evil.com)
+    if target.startswith('//'):
+        return False
+    # Must be a relative path starting with /
+    return target.startswith('/')
+
+
 @auth_bp.route('/login', methods=['GET'])
 def login_page():
     if session.get('authenticated'):
