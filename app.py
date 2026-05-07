@@ -32,6 +32,7 @@ from routes.scheduler import scheduler_bp
 from routes.models import models_bp
 from routes.health import health_bp
 from routes.workplaces import workplaces_bp
+from routes.logs import logs_bp
 import config
 from backend.version import get_version
 
@@ -64,6 +65,7 @@ app.register_blueprint(dashboard_bp)
 app.register_blueprint(models_bp)
 app.register_blueprint(health_bp)
 app.register_blueprint(workplaces_bp)
+app.register_blueprint(logs_bp)
 
 
 # ---- Backward-compatible redirect: /settings/* → /system/* ----

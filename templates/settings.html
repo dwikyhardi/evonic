@@ -11,6 +11,7 @@ block content %}
         </button>
         <button class="tab-btn" onclick="showTab('tools')">Tools</button>
         <button class="tab-btn" onclick="showTab('models')">Models</button>
+        <button class="tab-btn" onclick="showTab('logs')">Logs</button>
     </div>
 
     <!-- General Tab -->
@@ -577,6 +578,11 @@ block content %}
                 Save Model
             </button>
         </div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div id="logs-tab" class="tab-content">
+        {% include 'partials/logs_tab.html' %}
     </div>
 </div>
 
@@ -1362,12 +1368,14 @@ block content %}
 
     // Restore tab from URL hash on page load
     (function () {
-        const valid = ["general", "tools", "models"];
+        const valid = ["general", "tools", "models", "logs"];
         const hash = location.hash.replace("#", "");
         if (valid.includes(hash)) {
             showTab(hash);
             if (hash === "models")
                 document.addEventListener("DOMContentLoaded", loadModels);
+            if (hash === "logs" && window.logViewer)
+                document.addEventListener("DOMContentLoaded", () => logViewer.init());
         }
     })();
 
@@ -2212,12 +2220,14 @@ block content %}
         closeModal("connection-test-modal");
     }
 
-    // Load models when models tab is shown
+    // Load models/logs when their tabs are shown
     const origShowTab = showTab;
     showTab = function (tabName) {
         origShowTab(tabName);
         if (tabName === "models") {
             loadModels();
+        } else if (tabName === "logs" && window.logViewer) {
+            logViewer.init();
         }
     };
 

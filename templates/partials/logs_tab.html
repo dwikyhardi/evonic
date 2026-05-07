@@ -1,0 +1,342 @@
+<div class="space-y-4">
+    <!-- Controls Bar -->
+    <div class="flex flex-wrap items-center gap-3">
+        <!-- File Selector -->
+        <div class="flex items-center gap-2">
+            <i data-lucide="file-text" class="w-4 h-4 text-gray-500"></i>
+            <select id="log-file-select"
+                    onchange="logViewer.loadContent()"
+                    class="border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                <option value="">Loading...</option>
+            </select>
+            <span id="log-file-size" class="text-xs text-gray-400"></span>
+        </div>
+
+        <!-- Level Filter Pills -->
+        <div class="flex items-center gap-1" id="log-level-filters">
+            <button onclick="logViewer.filterLevel('ALL')"
+                    class="log-level-pill active px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200"
+                    data-level="ALL">ALL</button>
+            <button onclick="logViewer.filterLevel('INFO')"
+                    class="log-level-pill px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+                    data-level="INFO">INFO</button>
+            <button onclick="logViewer.filterLevel('WARNING')"
+                    class="log-level-pill px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300"
+                    data-level="WARNING">WARN</button>
+            <button onclick="logViewer.filterLevel('ERROR')"
+                    class="log-level-pill px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
+                    data-level="ERROR">ERROR</button>
+            <button onclick="logViewer.filterLevel('CRITICAL')"
+                    class="log-level-pill px-2 py-0.5 rounded text-xs font-medium bg-red-200 dark:bg-red-900/60 text-red-800 dark:text-red-200"
+                    data-level="CRITICAL">CRIT</button>
+        </div>
+
+        <!-- Search -->
+        <div class="flex items-center gap-1 flex-1 min-w-[180px] max-w-xs">
+            <div class="relative w-full">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="log-search-input"
+                       placeholder="Search logs..."
+                       oninput="logViewer.filterSearch(this.value)"
+                       class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-2 ml-auto">
+            <!-- Auto-refresh toggle -->
+            <button id="log-auto-refresh-btn" onclick="logViewer.toggleAutoRefresh()"
+                    class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                <span id="log-auto-refresh-dot" class="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-500"></span>
+                Live
+            </button>
+            <!-- Clear -->
+            <button onclick="logViewer.clearFile()"
+                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                Clear
+            </button>
+        </div>
+    </div>
+
+    <!-- Log Viewer -->
+    <div id="log-viewer-container"
+         class="relative rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+        <!-- Loading overlay -->
+        <div id="log-loading" class="hidden absolute inset-0 bg-gray-900/50 flex items-center justify-center z-10">
+            <div class="text-gray-300 text-sm">Loading...</div>
+        </div>
+        <!-- Content -->
+        <div id="log-viewer"
+             class="bg-gray-900 text-gray-100 font-mono text-xs leading-5 p-4 overflow-auto"
+             style="max-height: 65vh; min-height: 300px;">
+            <div class="text-gray-500 text-center py-8">Select a log file to view</div>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="log-status-bar" class="flex items-center justify-between text-xs text-gray-400 px-1">
+        <span id="log-status-info"></span>
+        <span id="log-status-lines"></span>
+    </div>
+</div>
+
+<script>
+(function() {
+    const logViewer = {
+        files: [],
+        currentFile: null,
+        currentLines: [],
+        autoRefreshInterval: null,
+        activeLevel: 'ALL',
+        searchQuery: '',
+        initialized: false,
+
+        async init() {
+            if (this.initialized) return;
+            this.initialized = true;
+            await this.loadFiles();
+        },
+
+        async loadFiles() {
+            try {
+                const resp = await fetch('/api/logs/files');
+                this.files = await resp.json();
+                const select = document.getElementById('log-file-select');
+                select.innerHTML = '';
+
+                // Group by category
+                const groups = {};
+                this.files.forEach(f => {
+                    const cat = f.category;
+                    if (!groups[cat]) groups[cat] = [];
+                    groups[cat].push(f);
+                });
+
+                const labels = {
+                    system: 'System Logs',
+                    sessrecap: 'Agent Session Recaps',
+                    other: 'Other'
+                };
+
+                for (const [cat, files] of Object.entries(groups)) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = labels[cat] || cat;
+                    files.forEach(f => {
+                        const opt = document.createElement('option');
+                        opt.value = f.path;
+                        opt.textContent = `${f.path} (${f.size_human})`;
+                        optgroup.appendChild(opt);
+                    });
+                    select.appendChild(optgroup);
+                }
+
+                // Auto-select first non-empty system log
+                const first = this.files.find(f => f.category === 'system' && f.size > 0)
+                             || this.files[0];
+                if (first) {
+                    select.value = first.path;
+                    this.loadContent();
+                }
+            } catch (e) {
+                console.error('Failed to load log files:', e);
+            }
+        },
+
+        async loadContent() {
+            const select = document.getElementById('log-file-select');
+            const filePath = select.value;
+            if (!filePath) return;
+
+            this.currentFile = filePath;
+            const viewer = document.getElementById('log-viewer');
+            const loading = document.getElementById('log-loading');
+            loading.classList.remove('hidden');
+
+            try {
+                const resp = await fetch(`/api/logs/read?file=${encodeURIComponent(filePath)}&lines=500`);
+                const data = await resp.json();
+                if (data.error) {
+                    viewer.innerHTML = `<div class="text-red-400 py-4">${this._esc(data.error)}</div>`;
+                    return;
+                }
+
+                this.currentLines = data.content;
+                this._render();
+
+                // Update status
+                document.getElementById('log-file-size').textContent = data.file_size_human;
+                document.getElementById('log-status-info').textContent = `${filePath} \u2022 ${data.file_size_human}`;
+                document.getElementById('log-status-lines').textContent = `${data.total_lines} lines shown`;
+            } catch (e) {
+                viewer.innerHTML = `<div class="text-red-400 py-4">Error: ${this._esc(e.message)}</div>`;
+            } finally {
+                loading.classList.add('hidden');
+            }
+        },
+
+        _render() {
+            const viewer = document.getElementById('log-viewer');
+            const isSessionRecap = this.currentFile && this.currentFile.includes('sessrecap');
+
+            if (isSessionRecap && typeof marked !== 'undefined') {
+                // Render sessrecap as markdown
+                const content = this.currentLines.join('\n');
+                viewer.innerHTML = `<div class="prose prose-invert prose-sm max-w-none">${marked.parse(content)}</div>`;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            this.currentLines.forEach((line, i) => {
+                const row = document.createElement('div');
+                row.className = 'log-line flex hover:bg-gray-800/50';
+                row.dataset.lineNum = i + 1;
+
+                // Parse level
+                const levelMatch = line.match(/^\[(\w+)\]/);
+                const level = levelMatch ? levelMatch[1] : '';
+                row.dataset.level = level;
+
+                // Apply level filter
+                if (this.activeLevel !== 'ALL' && level && level !== this.activeLevel) {
+                    row.style.display = 'none';
+                }
+
+                // Apply search filter
+                if (this.searchQuery && !line.toLowerCase().includes(this.searchQuery)) {
+                    row.style.display = 'none';
+                }
+
+                // Line number
+                const numSpan = document.createElement('span');
+                numSpan.className = 'text-gray-600 select-none w-10 shrink-0 text-right pr-3';
+                numSpan.textContent = i + 1;
+                row.appendChild(numSpan);
+
+                // Content
+                const contentSpan = document.createElement('span');
+                contentSpan.className = 'flex-1 whitespace-pre-wrap break-all ' + this._levelClass(level);
+                contentSpan.textContent = line;
+
+                // Highlight search matches
+                if (this.searchQuery && line.toLowerCase().includes(this.searchQuery)) {
+                    const escaped = this._escRegex(this.searchQuery);
+                    const re = new RegExp(`(${escaped})`, 'gi');
+                    contentSpan.innerHTML = this._esc(line).replace(re, '<mark class="bg-yellow-500/40 text-yellow-200 rounded px-0.5">$1</mark>');
+                }
+
+                row.appendChild(contentSpan);
+                fragment.appendChild(row);
+            });
+
+            viewer.innerHTML = '';
+            viewer.appendChild(fragment);
+
+            // Auto-scroll to bottom
+            viewer.scrollTop = viewer.scrollHeight;
+        },
+
+        _levelClass(level) {
+            switch(level) {
+                case 'DEBUG':    return 'text-gray-400';
+                case 'INFO':     return 'text-blue-400';
+                case 'WARNING':  return 'text-yellow-400';
+                case 'ERROR':    return 'text-red-400';
+                case 'CRITICAL': return 'text-red-500 font-bold';
+                default:         return 'text-gray-300';
+            }
+        },
+
+        filterLevel(level) {
+            this.activeLevel = level;
+
+            // Update pill styles
+            document.querySelectorAll('.log-level-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.level === level);
+                btn.classList.toggle('ring-2', btn.dataset.level === level);
+                btn.classList.toggle('ring-indigo-400', btn.dataset.level === level);
+            });
+
+            this._applyFilters();
+        },
+
+        filterSearch(query) {
+            this.searchQuery = query.toLowerCase();
+            this._render();
+        },
+
+        _applyFilters() {
+            document.querySelectorAll('#log-viewer .log-line').forEach(row => {
+                const level = row.dataset.level;
+                const text = row.textContent.toLowerCase();
+                let show = true;
+
+                if (this.activeLevel !== 'ALL' && level && level !== this.activeLevel) {
+                    show = false;
+                }
+                if (this.searchQuery && !text.includes(this.searchQuery)) {
+                    show = false;
+                }
+
+                row.style.display = show ? '' : 'none';
+            });
+        },
+
+        toggleAutoRefresh() {
+            const btn = document.getElementById('log-auto-refresh-btn');
+            const dot = document.getElementById('log-auto-refresh-dot');
+
+            if (this.autoRefreshInterval) {
+                clearInterval(this.autoRefreshInterval);
+                this.autoRefreshInterval = null;
+                dot.className = 'w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-500';
+                btn.classList.remove('border-green-400', 'dark:border-green-600');
+            } else {
+                this.autoRefreshInterval = setInterval(() => this.loadContent(), 3000);
+                dot.className = 'w-2 h-2 rounded-full bg-green-400 animate-pulse';
+                btn.classList.add('border-green-400', 'dark:border-green-600');
+            }
+        },
+
+        async clearFile() {
+            if (!this.currentFile) return;
+            if (!confirm(`Clear ${this.currentFile}? This cannot be undone.`)) return;
+
+            try {
+                const resp = await fetch('/api/logs/clear', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({file: this.currentFile})
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    if (typeof showToast === 'function') showToast('Log file cleared', 'success');
+                    this.loadContent();
+                } else {
+                    if (typeof showToast === 'function') showToast(data.error || 'Failed to clear', 'error');
+                }
+            } catch (e) {
+                if (typeof showToast === 'function') showToast(e.message, 'error');
+            }
+        },
+
+        _esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        },
+
+        _escRegex(s) {
+            return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+    };
+
+    // Expose globally for tab integration
+    window.logViewer = logViewer;
+
+    // Re-init lucide icons for this partial
+    if (typeof lucide !== 'undefined') {
+        requestAnimationFrame(() => lucide.createIcons());
+    }
+})();
+</script>
