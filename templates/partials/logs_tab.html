@@ -94,16 +94,17 @@
 
         async init() {
             if (this.initialized) return;
-            this.initialized = true;
             await this.loadFiles();
+            this.initialized = true;
         },
 
         async loadFiles() {
             try {
                 const resp = await fetch('/api/logs/files');
                 this.files = await resp.json();
-                const select = document.getElementById('log-file-select');
-                select.innerHTML = '';
+
+                // Build all options in a fragment first — only touch DOM on success
+                const fragment = document.createDocumentFragment();
 
                 // Group by category
                 const groups = {};
@@ -128,8 +129,13 @@
                         opt.textContent = `${f.path} (${f.size_human})`;
                         optgroup.appendChild(opt);
                     });
-                    select.appendChild(optgroup);
+                    fragment.appendChild(optgroup);
                 }
+
+                // Atomically replace select content
+                const select = document.getElementById('log-file-select');
+                select.innerHTML = '';
+                select.appendChild(fragment);
 
                 // Auto-select first non-empty system log
                 const first = this.files.find(f => f.category === 'system' && f.size > 0)
