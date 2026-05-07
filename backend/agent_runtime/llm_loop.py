@@ -145,6 +145,7 @@ def run_tool_loop(agent: Dict[str, Any],
                 'thinking_budget': model.get('thinking_budget', 0),
                 'max_tokens': model.get('max_tokens', 32768),
                 'temperature': model.get('temperature'),
+                'vision_supported': bool(model.get('vision_supported', False)),
             }
             _logger.info("%s using model: %s (%s)", agent_id, model.get('name'), model.get('model_name'))
         else:
@@ -178,6 +179,28 @@ def run_tool_loop(agent: Dict[str, Any],
 
     # Create LLMClient with resolved model config
     llm = LLMClient(model_config=agent_model_config) if agent_model_config else llm_client
+
+    # If the model doesn't support vision, replace image content with a text instruction
+    # so the LLM can inform the user in their own language.
+    _vision_supported = bool((agent_model_config or {}).get('vision_supported', False))
+    if not _vision_supported:
+        _patched = []
+        for _msg in messages:
+            _content = _msg.get('content')
+            if _msg.get('role') == 'user' and isinstance(_content, list):
+                _has_img = any(isinstance(p, dict) and p.get('type') == 'image_url' for p in _content)
+                if _has_img:
+                    _text_parts = [p['text'] for p in _content if isinstance(p, dict) and p.get('type') == 'text']
+                    _user_text = _text_parts[0] if _text_parts else ''
+                    _note = (
+                        f"[System note: The user sent an image{(' with the message: ' + _user_text) if _user_text else ''}, "
+                        "but this model does not support image processing. "
+                        "Please inform the user politely that you cannot process images with the current model, "
+                        "and respond in the same language the user is using.]"
+                    )
+                    _msg = {**_msg, 'content': _note}
+            _patched.append(_msg)
+        messages = _patched
 
     timeout_retries = 0
     max_timeout_retries = int(db.get_setting('agent_timeout_retries', str(MAX_TIMEOUT_RETRIES)))

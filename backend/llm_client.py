@@ -109,6 +109,40 @@ def strip_thinking_tags(content: str) -> Tuple[str, Optional[str]]:
     return cleaned, thinking_content
 
 
+def _convert_image_url_to_claude(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert OpenAI-style image_url content blocks to Anthropic image+source format."""
+    result = []
+    for msg in messages:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            result.append(msg)
+            continue
+        new_parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "image_url":
+                url = (part.get("image_url") or {}).get("url", "")
+                if url.startswith("data:"):
+                    # data:<media_type>;base64,<data>
+                    try:
+                        header, b64data = url.split(",", 1)
+                        media_type = header.split(":")[1].split(";")[0]
+                    except (ValueError, IndexError):
+                        media_type, b64data = "image/jpeg", url
+                    new_parts.append({
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": b64data},
+                    })
+                else:
+                    new_parts.append({
+                        "type": "image",
+                        "source": {"type": "url", "url": url},
+                    })
+            else:
+                new_parts.append(part)
+        result.append({**msg, "content": new_parts})
+    return result
+
+
 class LLMClient:
     """Client for OpenAI-compatible LLM chat completion APIs.
 
@@ -276,6 +310,9 @@ class LLMClient:
         is_ollama_fmt = self.api_format == "ollama" or (
             self.base_url and "ollama.com" in self.base_url
         )
+        is_claude = (self.model or "").lower().startswith("claude") or (
+            self.base_url and "anthropic.com" in self.base_url
+        )
         url = (
             f"{self.base_url}/chat"
             if is_ollama_fmt
@@ -363,6 +400,10 @@ class LLMClient:
             for _msg in processed_messages:
                 _msg.pop("reasoning_content", None)
         # else: self.thinking=True, enable_thinking=False → leave reasoning_content as-is
+
+        # Claude API uses {"type":"image","source":{...}} instead of OpenAI's image_url format.
+        if is_claude:
+            processed_messages = _convert_image_url_to_claude(processed_messages)
 
         if is_ollama_fmt:
             payload = {
