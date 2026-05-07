@@ -19,7 +19,7 @@ _LOGS_DIR = os.path.join(_BASE_DIR, 'logs')
 
 
 def _recap_log_path(agent_id: str) -> str:
-    return os.path.join(_LOGS_DIR, agent_id, 'sessrecap.log')
+    return os.path.join(_LOGS_DIR, 'agents', agent_id, 'sessrecap.log')
 
 
 DEFAULT_SUMMARIZE_PROMPT = """You are a conversation summarizer. Create a factual summary of a conversation between a user and an AI assistant.

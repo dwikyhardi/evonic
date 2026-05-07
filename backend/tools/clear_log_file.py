@@ -8,9 +8,9 @@ def execute(agent: dict, args: dict) -> dict:
     if not agent_id:
         return {"error": "Agent ID not found in agent context."}
 
-    # Construct paths to logs/{agent_id}/llm.log and sessrecap.log
-    log_path = os.path.join("logs", agent_id, "llm.log")
-    recap_path = os.path.join("logs", agent_id, "sessrecap.log")
+    # Construct paths to logs/agents/{agent_id}/llm.log and sessrecap.log
+    log_path = os.path.join("logs", "agents", agent_id, "llm.log")
+    recap_path = os.path.join("logs", "agents", agent_id, "sessrecap.log")
 
     # Ensure directory exists
     os.makedirs(os.path.dirname(log_path), exist_ok=True)

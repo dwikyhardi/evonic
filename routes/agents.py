@@ -954,13 +954,13 @@ def api_chat_clear(agent_id):
 
     now = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     # Truncate agent's llm.log (same as /clear slash command)
-    log_path = os.path.join("logs", agent_id, "llm.log")
+    log_path = os.path.join("logs", "agents", agent_id, "llm.log")
     if os.path.exists(log_path):
         with open(log_path, "w") as f:
             f.write(f"# LLM Log — Cleared on {now} UTC\n")
 
     # Truncate agent's sessrecap.log
-    recap_path = os.path.join("logs", agent_id, "sessrecap.log")
+    recap_path = os.path.join("logs", "agents", agent_id, "sessrecap.log")
     if os.path.exists(recap_path):
         with open(recap_path, "w") as f:
             f.write(f"# Session Recap Log — Cleared on {now} UTC\n")
