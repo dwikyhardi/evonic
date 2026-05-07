@@ -101,7 +101,18 @@
         async loadFiles() {
             try {
                 const resp = await fetch('/api/logs/files');
-                this.files = await resp.json();
+                let filesData;
+                try {
+                    filesData = await resp.json();
+                } catch {
+                    throw new Error('Failed to parse server response — you may need to log in again.');
+                }
+                this.files = filesData;
+
+                // Validate that response is actually an array (avoid crash on {error: "..."})
+                if (!Array.isArray(this.files)) {
+                    throw new Error(this.files?.error || 'Server returned an unexpected response format');
+                }
 
                 // Build all options in a fragment first — only touch DOM on success
                 const fragment = document.createDocumentFragment();
@@ -161,7 +172,12 @@
 
             try {
                 const resp = await fetch(`/api/logs/read?file=${encodeURIComponent(filePath)}&lines=500`);
-                const data = await resp.json();
+                let data;
+                try {
+                    data = await resp.json();
+                } catch {
+                    throw new Error('Failed to parse server response — you may need to log in again.');
+                }
                 if (data.error) {
                     viewer.innerHTML = `<div class="text-red-400 py-4">${this._esc(data.error)}</div>`;
                     return;
@@ -314,7 +330,12 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({file: this.currentFile})
                 });
-                const data = await resp.json();
+                let data;
+                try {
+                    data = await resp.json();
+                } catch {
+                    throw new Error('Failed to parse server response — you may need to log in again.');
+                }
                 if (data.ok) {
                     if (typeof showToast === 'function') showToast('Log file cleared', 'success');
                     this.loadContent();
