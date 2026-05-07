@@ -2,8 +2,8 @@
 Kanban create task tool — create a new task on the Kanban board.
 
 Permission is controlled by setting 'kanban:create_task_super_only':
-- '0' (default/disabled): all agents can create tasks
-- '1' (enabled): only super agent can create tasks
+- '0' (disabled): all agents can create tasks
+- '1' (default/enabled): only super agent can create tasks (default)
 """
 
 from datetime import datetime, timezone
@@ -19,7 +19,7 @@ def execute(agent: dict, args: dict) -> dict:
     try:
         from backend.skills_manager import skills_manager
         config = skills_manager.get_skill_config('kanban')
-        super_only = bool(config.get('create_task_super_only', False))
+        super_only = bool(config.get('create_task_super_only', True))
     except Exception:
         super_only = True  # fail closed
 

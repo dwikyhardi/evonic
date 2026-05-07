@@ -11,7 +11,7 @@
       "name": "create_task_super_only",
       "label": "Create Task (Super Agent Only)",
       "type": "boolean",
-      "default": false,
+      "default": true,
       "description": "When enabled, only super agents can create new tasks. Regular agents will be denied."
     }
   ]
