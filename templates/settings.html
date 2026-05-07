@@ -1371,11 +1371,18 @@ block content %}
         const valid = ["general", "tools", "models", "logs"];
         const hash = location.hash.replace("#", "");
         if (valid.includes(hash)) {
+            console.log('[settings] hash=%s → calling showTab()', hash);
             showTab(hash);
             if (hash === "models")
                 document.addEventListener("DOMContentLoaded", loadModels);
-            if (hash === "logs" && window.logViewer)
-                document.addEventListener("DOMContentLoaded", () => logViewer.init());
+            if (hash === "logs") {
+                if (window.logViewer) {
+                    console.log('[settings] hash=logs → scheduling logViewer.init() on DOMContentLoaded');
+                    document.addEventListener("DOMContentLoaded", () => logViewer.init());
+                } else {
+                    console.warn('[settings] hash=logs but window.logViewer not ready yet');
+                }
+            }
         }
     })();
 
@@ -2226,8 +2233,13 @@ block content %}
         origShowTab(tabName);
         if (tabName === "models") {
             loadModels();
-        } else if (tabName === "logs" && window.logViewer) {
-            logViewer.init();
+        } else if (tabName === "logs") {
+            if (window.logViewer) {
+                console.log('[settings] showTab("logs") → calling logViewer.init()');
+                logViewer.init();
+            } else {
+                console.warn('[settings] showTab("logs") → window.logViewer not ready yet');
+            }
         }
     };
 

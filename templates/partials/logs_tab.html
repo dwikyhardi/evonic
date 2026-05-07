@@ -94,13 +94,17 @@
 
         async init() {
             if (this.initialized) return;
+            console.log('[logViewer] init() starting');
             await this.loadFiles();
             this.initialized = true;
+            console.log('[logViewer] init() complete, %d files loaded', this.files.length);
         },
 
         async loadFiles() {
+            console.log('[logViewer] loadFiles() starting');
             try {
                 const resp = await fetch('/api/logs/files');
+                console.log('[logViewer] /api/logs/files → %d %s', resp.status, resp.statusText);
                 let filesData;
                 try {
                     filesData = await resp.json();
@@ -112,6 +116,20 @@
                 // Validate that response is actually an array (avoid crash on {error: "..."})
                 if (!Array.isArray(this.files)) {
                     throw new Error(this.files?.error || 'Server returned an unexpected response format');
+                }
+
+                console.log('[logViewer] received %d log files', this.files.length);
+
+                const select = document.getElementById('log-file-select');
+                const viewer = document.getElementById('log-viewer');
+
+                // Handle empty file list
+                if (this.files.length === 0) {
+                    select.innerHTML = '<option value="">No log files found</option>';
+                    viewer.innerHTML = '<div class="text-gray-500 text-center py-8">No log files found in the logs directory.</div>';
+                    const statusEl = document.getElementById('log-status-info');
+                    if (statusEl) statusEl.textContent = 'No log files available';
+                    return;
                 }
 
                 // Build all options in a fragment first — only touch DOM on success
@@ -144,7 +162,6 @@
                 }
 
                 // Atomically replace select content
-                const select = document.getElementById('log-file-select');
                 select.innerHTML = '';
                 select.appendChild(fragment);
 
@@ -152,11 +169,12 @@
                 const first = this.files.find(f => f.category === 'system' && f.size > 0)
                              || this.files[0];
                 if (first) {
+                    console.log('[logViewer] auto-selecting %s', first.path);
                     select.value = first.path;
                     this.loadContent();
                 }
             } catch (e) {
-                console.error('Failed to load log files:', e);
+                console.error('[logViewer] loadFiles() failed:', e);
                 // Show error in select dropdown
                 const select = document.getElementById('log-file-select');
                 select.innerHTML = '<option value="">⚠ Failed to load log files</option>';
@@ -176,6 +194,7 @@
             const filePath = select.value;
             if (!filePath) return;
 
+            console.log('[logViewer] loadContent() → %s', filePath);
             this.currentFile = filePath;
             const viewer = document.getElementById('log-viewer');
             const loading = document.getElementById('log-loading');
@@ -183,6 +202,7 @@
 
             try {
                 const resp = await fetch(`/api/logs/read?file=${encodeURIComponent(filePath)}&lines=500`);
+                console.log('[logViewer] /api/logs/read → %d', resp.status);
                 let data;
                 try {
                     data = await resp.json();
@@ -194,6 +214,7 @@
                     return;
                 }
 
+                console.log('[logViewer] rendering %d lines', data.content ? data.content.length : 0);
                 this.currentLines = data.content;
                 this._render();
 
@@ -202,6 +223,7 @@
                 document.getElementById('log-status-info').textContent = `${filePath} \u2022 ${data.file_size_human}`;
                 document.getElementById('log-status-lines').textContent = `${data.total_lines} lines shown`;
             } catch (e) {
+                console.error('[logViewer] loadContent() failed:', e);
                 viewer.innerHTML = `<div class="text-red-400 py-4">Error: ${this._esc(e.message)}</div>`;
             } finally {
                 loading.classList.add('hidden');
@@ -371,6 +393,20 @@
 
     // Expose globally for tab integration
     window.logViewer = logViewer;
+
+    // Fallback: auto-init on DOMContentLoaded if the tab is active (handles race conditions)
+    function _initIfActive() {
+        const tab = document.getElementById('logs-tab');
+        if (tab && tab.classList.contains('active')) {
+            console.log('[logViewer] fallback init — logs tab is active');
+            logViewer.init();
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _initIfActive);
+    } else {
+        _initIfActive();
+    }
 
     // Re-init lucide icons for this partial
     if (typeof lucide !== 'undefined') {
