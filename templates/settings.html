@@ -296,6 +296,11 @@ block content %}
             </div>
         </div>
     </div>
+
+    <!-- Logs Tab -->
+    <div id="logs-tab" class="tab-content">
+        {% include 'partials/logs_tab.html' %}
+    </div>
 </div>
 
 <!-- Model Modal -->
@@ -579,12 +584,6 @@ block content %}
             </button>
         </div>
     </div>
-
-    <!-- Logs Tab -->
-    <div id="logs-tab" class="tab-content">
-        {% include 'partials/logs_tab.html' %}
-    </div>
-</div>
 
 <!-- Test Connection Modal (model endpoint test) -->
 <div id="connection-test-modal" class="modal">
@@ -1225,25 +1224,18 @@ block content %}
             .querySelector(`[onclick="showTab('${tabName}')"]`)
             .classList.add("active");
         location.hash = tabName;
-    }
 
-
-    const _origShowTab = showTab;
-    showTab = function (tabName) {
-        _origShowTab(tabName);
+        // Tab-specific initialization
         if (tabName === "general") {
             loadDefaultModel();
+        } else if (tabName === "models") {
+            loadModels();
+        } else if (tabName === "logs") {
+            if (window.logViewer) {
+                logViewer.init();
+            }
         }
-    };
-
-    // Load on page load if general tab is active
-    document.addEventListener("DOMContentLoaded", function () {
-        if (
-            document.getElementById("general-tab").classList.contains("active")
-        ) {
-            loadDefaultModel();
-        }
-    });
+    }
 
     // Initialize
     document.addEventListener("DOMContentLoaded", () => {
@@ -1371,18 +1363,7 @@ block content %}
         const valid = ["general", "tools", "models", "logs"];
         const hash = location.hash.replace("#", "");
         if (valid.includes(hash)) {
-            console.log('[settings] hash=%s → calling showTab()', hash);
-            showTab(hash);
-            if (hash === "models")
-                document.addEventListener("DOMContentLoaded", loadModels);
-            if (hash === "logs") {
-                if (window.logViewer) {
-                    console.log('[settings] hash=logs → scheduling logViewer.init() on DOMContentLoaded');
-                    document.addEventListener("DOMContentLoaded", () => logViewer.init());
-                } else {
-                    console.warn('[settings] hash=logs but window.logViewer not ready yet');
-                }
-            }
+            document.addEventListener("DOMContentLoaded", () => showTab(hash));
         }
     })();
 
@@ -2226,22 +2207,6 @@ block content %}
     function closeTestModal() {
         closeModal("connection-test-modal");
     }
-
-    // Load models/logs when their tabs are shown
-    const origShowTab = showTab;
-    showTab = function (tabName) {
-        origShowTab(tabName);
-        if (tabName === "models") {
-            loadModels();
-        } else if (tabName === "logs") {
-            if (window.logViewer) {
-                console.log('[settings] showTab("logs") → calling logViewer.init()');
-                logViewer.init();
-            } else {
-                console.warn('[settings] showTab("logs") → window.logViewer not ready yet');
-            }
-        }
-    };
 
     // ---- Default Model ----
 </script>

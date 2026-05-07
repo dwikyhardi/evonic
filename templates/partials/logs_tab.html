@@ -394,20 +394,6 @@
     // Expose globally for tab integration
     window.logViewer = logViewer;
 
-    // Fallback: auto-init on DOMContentLoaded if the tab is active (handles race conditions)
-    function _initIfActive() {
-        const tab = document.getElementById('logs-tab');
-        if (tab && tab.classList.contains('active')) {
-            console.log('[logViewer] fallback init — logs tab is active');
-            logViewer.init();
-        }
-    }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _initIfActive);
-    } else {
-        _initIfActive();
-    }
-
     // Re-init lucide icons for this partial
     if (typeof lucide !== 'undefined') {
         requestAnimationFrame(() => lucide.createIcons());
