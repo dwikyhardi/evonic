@@ -1211,6 +1211,22 @@ block content %}
             statusDiv.classList.remove("hidden");
         }
     }
+    // Tab Management
+    function showTab(tabName) {
+        document
+            .querySelectorAll(".tab-content")
+            .forEach((tab) => tab.classList.remove("active"));
+        document
+            .querySelectorAll(".tab-btn")
+            .forEach((btn) => btn.classList.remove("active"));
+
+        document.getElementById(`${tabName}-tab`).classList.add("active");
+        document
+            .querySelector(`[onclick="showTab('${tabName}')"]`)
+            .classList.add("active");
+        location.hash = tabName;
+    }
+
 
     const _origShowTab = showTab;
     showTab = function (tabName) {
@@ -1348,22 +1364,6 @@ block content %}
         await apiPut("/api/settings/max-concurrent-llm-per-model", {
             value: parseInt(value, 10),
         });
-    }
-
-    // Tab Management
-    function showTab(tabName) {
-        document
-            .querySelectorAll(".tab-content")
-            .forEach((tab) => tab.classList.remove("active"));
-        document
-            .querySelectorAll(".tab-btn")
-            .forEach((btn) => btn.classList.remove("active"));
-
-        document.getElementById(`${tabName}-tab`).classList.add("active");
-        document
-            .querySelector(`[onclick="showTab('${tabName}')"]`)
-            .classList.add("active");
-        location.hash = tabName;
     }
 
     // Restore tab from URL hash on page load
