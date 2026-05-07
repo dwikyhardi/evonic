@@ -1,15 +1,21 @@
 """
 safety_checker — Heuristic safety checks for file system operation paths.
 
-Blocks access to the .ssh/ directory to safeguard SSH private keys and
-configurations from accidental or malicious exposure.
+Checks:
+  - .ssh/ directory: hard-block to protect SSH keys and configurations.
+  - SQLite database files: requires_approval for .db/.sqlite/.sqlite3 files.
+  - Sensitive system paths: requires_approval for /etc, /proc, /sys, etc.
 
 Usage:
-    from backend.tools.safety_checker import check_ssh_path
+    from backend.tools.safety_checker import check_ssh_path, check_sensitive_path
 
     result = check_ssh_path("/home/user/.ssh/id_rsa")
     if result["blocked"]:
         return {"error": result["error"]}
+
+    result = check_sensitive_path("/etc/passwd")
+    if result["blocked"]:
+        return {"error": result["error"], "level": "requires_approval", ...}
 """
 
 import os
@@ -222,6 +228,98 @@ def check_sqlite_path(file_path: str, agent: dict = None) -> dict:
                         "reason": f"Canonical path resolves to database file: {basename}",
                         "requires_approval": True,
                     }
+    except (OSError, ValueError, RuntimeError):
+        pass
+
+    return {"blocked": False, "error": None, "reason": None, "requires_approval": False}
+
+
+# ---------------------------------------------------------------------------
+# Sensitive System Path Check
+# ---------------------------------------------------------------------------
+
+# System directories that should require user approval before access.
+# Each tuple: (prefix, description for error messages)
+_SENSITIVE_PREFIXES: list[tuple[str, str]] = [
+    ("/etc/", "system configuration directory (/etc)"),
+    ("/proc/", "process information pseudo-filesystem (/proc)"),
+    ("/sys/", "kernel/hardware interface (/sys)"),
+    ("/var/run/", "runtime data directory (/var/run)"),
+    ("/run/", "runtime data directory (/run)"),
+    ("/var/log/", "system log directory (/var/log)"),
+    ("/boot/", "boot configuration directory (/boot)"),
+    ("/dev/", "device files directory (/dev)"),
+]
+
+# Exact paths that are also sensitive (no trailing slash)
+_SENSITIVE_EXACT: list[tuple[str, str]] = [
+    ("/etc/passwd", "system user file (/etc/passwd)"),
+    ("/etc/shadow", "system password file (/etc/shadow)"),
+]
+
+
+def check_sensitive_path(file_path: str, agent: dict = None) -> dict:
+    """
+    Check if a file path targets a sensitive system directory.
+
+    Flags paths under /etc, /proc, /sys, /var/run, /var/log, /boot, /dev
+    with requires_approval so the user can confirm access.
+
+    Args:
+        file_path: The file path to check (relative or absolute).
+        agent: Optional agent context dict.
+
+    Returns:
+        {"blocked": bool, "error": str | None, "reason": str | None,
+         "requires_approval": bool}
+    """
+    if not file_path or not isinstance(file_path, str):
+        return {"blocked": False, "error": None, "reason": None, "requires_approval": False}
+
+    normalized = os.path.normpath(file_path.strip())
+
+    # Layer 1: Check against sensitive prefixes and exact paths
+    for prefix, desc in _SENSITIVE_PREFIXES:
+        if normalized.startswith(prefix) or normalized == prefix.rstrip("/"):
+            return {
+                "blocked": True,
+                "error": (
+                    f"Safety check: Access to {desc} requires approval. "
+                    f"Path '{file_path}' targets a sensitive system location."
+                ),
+                "reason": f"Sensitive system path detected: {desc}",
+                "requires_approval": True,
+            }
+
+    for exact, desc in _SENSITIVE_EXACT:
+        if normalized == exact:
+            return {
+                "blocked": True,
+                "error": (
+                    f"Safety check: Access to {desc} requires approval. "
+                    f"Path '{file_path}' targets a sensitive system file."
+                ),
+                "reason": f"Sensitive system file detected: {desc}",
+                "requires_approval": True,
+            }
+
+    # Layer 2: Canonical path resolution (catches symlink traversal)
+    try:
+        if os.path.isabs(normalized):
+            expanded = os.path.expanduser(normalized)
+            if os.path.exists(expanded) or os.path.lexists(expanded):
+                real = os.path.realpath(expanded)
+                for prefix, desc in _SENSITIVE_PREFIXES:
+                    if real.startswith(prefix) or real == prefix.rstrip("/"):
+                        return {
+                            "blocked": True,
+                            "error": (
+                                f"Safety check: Access to {desc} requires approval. "
+                                f"Canonical path resolves to a sensitive system location."
+                            ),
+                            "reason": f"Canonical path resolves to sensitive system path: {desc}",
+                            "requires_approval": True,
+                        }
     except (OSError, ValueError, RuntimeError):
         pass
 

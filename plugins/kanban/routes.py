@@ -585,9 +585,9 @@ def create_blueprint():
     def kanban_agent_propose():
         """Return a proposed round-robin assignment plan for unassigned todo tasks."""
         try:
-            from plugins.kanban.handler import _load_config, _parse_eligible_agents
+            from plugins.kanban.handler import _load_config, _get_kanban_skill_agents
             config = _load_config()
-            eligible = _parse_eligible_agents(config)
+            eligible = _get_kanban_skill_agents()
 
             if not eligible:
                 return jsonify({'proposals': [], 'eligible_agents': []})
@@ -614,13 +614,12 @@ def create_blueprint():
 
     @bp.route('/api/kanban/eligible-agents', methods=['GET'])
     def kanban_eligible_agents():
-        """Return the list of eligible agents (id + name) from plugin config."""
+        """Return the list of eligible agents (id + name) — agents with kanban skill."""
         try:
-            from plugins.kanban.handler import _load_config, _parse_eligible_agents
+            from plugins.kanban.handler import _get_kanban_skill_agents
             from models.db import db as main_db
 
-            config = _load_config()
-            eligible_ids = _parse_eligible_agents(config)
+            eligible_ids = _get_kanban_skill_agents()
 
             if not eligible_ids:
                 return jsonify({'agents': []})
@@ -632,8 +631,8 @@ def create_blueprint():
                 for a in all_agents
                 if a['id'] in eligible_set
             ]
-            # Preserve config order
-            agents.sort(key=lambda a: eligible_ids.index(a['id']))
+            # Sort by name for consistent presentation
+            agents.sort(key=lambda a: a['name'].lower())
 
             return jsonify({'agents': agents})
         except Exception as e:
@@ -644,14 +643,14 @@ def create_blueprint():
         """Use LLM to match unassigned tasks to best-fit eligible agents."""
         import re
         try:
-            from plugins.kanban.handler import _load_config, _parse_eligible_agents
+            from plugins.kanban.handler import _load_config, _get_kanban_skill_agents
             from backend.llm_client import get_llm_client
             from models.db import db as main_db
 
             config = _load_config()
-            eligible = _parse_eligible_agents(config)
+            eligible = _get_kanban_skill_agents()
             if not eligible:
-                return jsonify({'error': 'No eligible agents configured'}), 400
+                return jsonify({'error': 'No agents with kanban skill found'}), 400
 
             data = request.get_json()
             if not data or 'tasks' not in data:

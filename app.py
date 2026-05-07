@@ -65,6 +65,15 @@ app.register_blueprint(models_bp)
 app.register_blueprint(health_bp)
 app.register_blueprint(workplaces_bp)
 
+
+# ---- Backward-compatible redirect: /settings/* → /system/* ----
+@app.route('/settings')
+@app.route('/settings/<path:subpath>')
+def redirect_settings_to_system(subpath=None):
+    target = '/system' + ('/' + subpath if subpath else '')
+    return redirect(target, code=301)
+
+
 # Register plugin blueprints (routes from plugins)
 from backend.plugin_manager import plugin_manager
 for plugin_id, bp in plugin_manager.get_blueprints().items():
@@ -234,6 +243,12 @@ if not _reloader_active or _is_reloader_child:
                     continue  # empty session, skip
                 if _last.get('type') != 'user':
                     continue  # last message is agent/system — already replied
+
+                # Slash commands (e.g. /autopilot on, /clear) are system/control
+                # instructions that don't require an agent reply — skip them.
+                _content = (_last.get('content') or '').strip()
+                if _content.startswith('/'):
+                    continue
 
                 _unreplied_count += 1
                 _ts = _last.get('ts', 0)

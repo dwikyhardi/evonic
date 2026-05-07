@@ -104,7 +104,7 @@ class AgentMixin:
         clone['name'] = new_name
         clone['description'] = new_description
         clone['is_super'] = False
-        clone['enabled'] = False  # cloned agent starts disabled
+        clone['enabled'] = True  # cloned agent starts enabled
 
         self.create_agent(clone)
 

@@ -303,11 +303,31 @@ def _load_config() -> dict:
     return plugin_manager.get_plugin_config(PLUGIN_ID)
 
 
-def _parse_eligible_agents(config: dict) -> list:
-    raw = config.get('ELIGIBLE_AGENTS', '').strip()
-    if not raw:
+def _get_kanban_skill_agents() -> list:
+    """Return agent IDs that have the kanban skill (or are super agent).
+
+    Replaces the old ELIGIBLE_AGENTS config-driven filter.  Agents are
+    eligible to receive kanban notifications if and only if they have
+    the kanban skill assigned (or are the super agent).
+    """
+    try:
+        from models.db import db
+        from backend.skills_manager import skills_manager
+
+        if not skills_manager.is_skill_enabled('kanban'):
+            return []
+
+        agents = db.get_agents()
+        result = []
+        for agent in agents:
+            agent_id = agent['id']
+            if agent.get('is_super'):
+                result.append(agent_id)
+            elif 'kanban' in db.get_agent_skills(agent_id):
+                result.append(agent_id)
+        return result
+    except Exception:
         return []
-    return [a.strip() for a in raw.split(',') if a.strip()]
 
 
 # ─── Task helpers ─────────────────────────────────────────────────────────────
@@ -721,7 +741,7 @@ def _notify_stale_task(agent_id: str, task: dict, channel_type: str, sdk=None):
 def _scan_stale_tasks(sdk=None):
     """Scan for in-progress tasks the agent is no longer tracking and re-notify."""
     config = _load_config()
-    eligible = _parse_eligible_agents(config)
+    eligible = _get_kanban_skill_agents()
     if not eligible:
         return
     channel_type = config.get('CHANNEL_TYPE', 'telegram')
@@ -794,7 +814,7 @@ def _scan_and_notify(sdk=None) -> dict:
     which agents were notified and which were skipped and why.
     """
     config = _load_config()
-    eligible = _parse_eligible_agents(config)
+    eligible = _get_kanban_skill_agents()
     results = {'notified': 0, 'failed': 0, 'details': []}
     if not eligible:
         return results
@@ -898,7 +918,7 @@ def _scan_comments_for_followup(sdk=None):
     is reopened to in-progress and the agent is notified.
     """
     config = _load_config()
-    eligible = _parse_eligible_agents(config)
+    eligible = _get_kanban_skill_agents()
     if not eligible:
         return
 

@@ -127,6 +127,10 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     Clone
                 </button>
+                <button onclick="toggleEnabled()" id="toggle-enabled-btn" class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm {{ 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600' if agent.enabled != 0 else 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300' }} transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"/></svg>
+                    <span>{{ 'Disable' if agent.enabled != 0 else 'Enable' }}</span>
+                </button>
                 <button onclick="deleteAgent()" class="w-full text-left flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clip-rule="evenodd"/></svg>
                     Delete
@@ -138,7 +142,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
     <!-- Tabs -->
     <div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-700 overflow-x-auto flex-shrink-0" style="-webkit-overflow-scrolling: touch;">
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600" onclick="showTab('chat')" data-tab="chat">Chat</button>
-        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('general')" data-tab="general">Settings</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('general')" data-tab="general">System</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('knowledge')" data-tab="knowledge">Knowledge</button>
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('tools')" data-tab="tools">Tools</button>
         {% if not agent.is_super %}
@@ -1684,7 +1688,7 @@ async function showToolDetail(toolId) {
         document.getElementById('tool-test-status-real').classList.add('hidden');
         document.getElementById('tool-test-status-mock').classList.add('hidden');
 
-        document.getElementById('tool-detail-edit-link').href = `/settings#tools-${toolId}`;
+        document.getElementById('tool-detail-edit-link').href = `/system#tools-${toolId}`;
         document.getElementById('tool-backend-save-status').classList.add('hidden');
         switchToolTab('prod');
         document.getElementById('tool-detail-modal').classList.remove('hidden');
@@ -3249,6 +3253,7 @@ async function deleteAgent() {
 let _agentEnabled = {{ 1 if agent.enabled != 0 else 0 }};
 
 async function toggleEnabled() {
+    document.getElementById('gear-dropdown').classList.add('hidden');
     const newEnabled = !_agentEnabled;
     const action = newEnabled ? 'enable' : 'disable';
     const confirmMsg = newEnabled
@@ -3266,9 +3271,9 @@ async function toggleEnabled() {
     const btn = document.getElementById('toggle-enabled-btn');
     if (btn) {
         const label = newEnabled ? 'Disable' : 'Enable';
-        btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9"/></svg><span>${label}</span>`;
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"/></svg><span>${label}</span>`;
         btn.title = `${label} Agent`;
-        btn.className = `flex items-center gap-1.5 text-sm ${newEnabled ? 'text-gray-500 hover:text-gray-700' : 'text-green-600 hover:text-green-800'} transition-colors`;
+        btn.className = `w-full text-left flex items-center gap-2 px-4 py-2 text-sm transition-colors ${newEnabled ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600' : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'}`;
     }
 }
 </script>

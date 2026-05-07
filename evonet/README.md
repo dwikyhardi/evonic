@@ -1,4 +1,4 @@
-# Evonet — Evonic Cloud Home Connector
+# Evonet — Evonic Workplace Connector
 
 Evonet is a lightweight Go binary that runs on any device and connects it to an Evonic server via WebSocket. It enables agents to execute commands on that device without requiring SSH access, port forwarding, or a public IP address — similar to a reverse-tunnel, but purpose-built for agent workloads.
 
@@ -17,7 +17,7 @@ Evonet makes an outbound connection to the Evonic server and waits for JSON-RPC 
 
 ### Download from the Evonic UI (easiest)
 
-On a Cloud Home's detail page, click one of the platform buttons under **Download Pre-configured Binary**. The downloaded binary has your server URL and credentials pre-embedded — just run it, no pairing step needed.
+On a Workplace's detail page, click one of the platform buttons under **Download Pre-configured Binary**. The downloaded binary has your server URL and credentials pre-embedded — just run it, no pairing step needed.
 
 ```bash
 chmod +x evonet-linux-amd64
@@ -106,7 +106,7 @@ To run in headless mode on a desktop OS (e.g. as a service), pass `--no-gui`:
 
 Pairing is an alternative to downloading a pre-configured binary. Use it when you want to install Evonet manually and register the device yourself.
 
-**Step 1** — In the Evonic UI, open the Cloud Home's detail page and click **Generate Pairing Code**. A 6-character code (e.g., `X7KQ2M`) is shown with a 5-minute countdown.
+**Step 1** — In the Evonic UI, open the Workplace's detail page and click **Generate Pairing Code**. A 6-character code (e.g., `X7KQ2M`) is shown with a 5-minute countdown.
 
 **Step 2** — On the target device, run:
 
@@ -189,7 +189,7 @@ The config is appended after a magic marker (`\x00\x00EVONET_CFG\x00\x00`) and c
 ```ini
 # /etc/systemd/system/evonet.service
 [Unit]
-Description=Evonet Cloud Home Connector
+Description=Evonet Workplace Connector
 After=network.target
 
 [Service]
@@ -229,7 +229,7 @@ launchctl load ~/Library/LaunchAgents/com.evonic.evonet.plist
 
 ## Supported Operations
 
-When connected, agents can use these operations through a Cloud Home:
+When connected, agents can use these operations through a Workplace:
 
 | Operation | Description |
 |-----------|-------------|

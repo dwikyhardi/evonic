@@ -2,7 +2,6 @@
 Authentication Blueprint — admin login with Cloudflare Turnstile captcha.
 """
 
-import functools
 import requests
 from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 import config
@@ -10,17 +9,23 @@ import config
 auth_bp = Blueprint('auth', __name__)
 
 
-def login_required(f):
-    """Decorator that enforces authentication."""
-    @functools.wraps(f)
-    def decorated(*args, **kwargs):
-        if session.get('authenticated'):
-            return f(*args, **kwargs)
-        # API requests get 401, page requests get redirected
-        if request.path.startswith('/api/'):
-            return jsonify({'error': 'Authentication required'}), 401
-        return redirect(url_for('auth.login_page', next=request.path))
-    return decorated
+
+
+def _is_safe_redirect_url(target):
+    """Validate that a redirect target is a safe relative URL.
+
+    Rejects absolute URLs (http://..., https://..., etc.), protocol-relative
+    URLs (//evil.com), and anything else that doesn't start with a single /.
+    This prevents open redirect attacks.
+    """
+    # Reject anything containing :// (catches http://, https://, ftp://, etc.)
+    if '://' in target:
+        return False
+    # Reject protocol-relative URLs (//evil.com)
+    if target.startswith('//'):
+        return False
+    # Must be a relative path starting with /
+    return target.startswith('/')
 
 
 def _is_safe_redirect_url(target):

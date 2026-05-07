@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 PLUGIN_ID = 'agentapi'
 
 
-def on_turn_complete(event_data: dict):
+def on_turn_complete(event_data: dict, sdk):
     """Log API usage metrics when an agent finishes a turn.
 
     This is a best-effort hook: we don't have direct access to the
