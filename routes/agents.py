@@ -122,8 +122,17 @@ def agent_detail(agent_id):
         return "Agent not found", 404
     agent['system_prompt'] = _read_system_prompt(agent_id, fallback=agent.get('system_prompt', ''))
     from backend.agent_runtime import DEFAULT_SUMMARIZE_PROMPT
+    # Check if workspace directory exists and is valid
+    workspace_invalid = False
+    ws = agent.get('workspace', '').strip() if agent.get('workspace') else ''
+    if not ws:
+        workspace_invalid = True
+    elif not os.path.isdir(ws):
+        workspace_invalid = True
     return render_template('agent_detail.html', agent=agent,
-                           DEFAULT_SUMMARIZE_PROMPT=DEFAULT_SUMMARIZE_PROMPT)
+                           DEFAULT_SUMMARIZE_PROMPT=DEFAULT_SUMMARIZE_PROMPT,
+                           workspace_invalid=workspace_invalid,
+                           workspace_path=ws if ws else '(not set)')
 
 
 # ==================== Agent CRUD API ====================
