@@ -1328,9 +1328,13 @@ class AgentRuntime:
                     None
                 )
                 if last_user:
-                    if self._is_approval(last_user):
+                    last_user_text = (
+                        next((p['text'] for p in last_user if isinstance(p, dict) and p.get('type') == 'text'), '')
+                        if isinstance(last_user, list) else last_user
+                    )
+                    if self._is_approval(last_user_text):
                         ms.set_mode('execute', reason='user approved')
-                    elif last_user.startswith('[System/Task]'):
+                    elif last_user_text.startswith('[System/Task]'):
                         # System-triggered task (e.g. from a plugin): reset to fresh plan mode
                         # so the agent can start a new plan cycle for this task
                         # instead of being stuck in a stale plan from a previous task.
