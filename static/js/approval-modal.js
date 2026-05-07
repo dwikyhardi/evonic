@@ -19,9 +19,6 @@ const MODAL_HTML = `
                     <h3 id="ev-approval-title" class="text-base font-bold text-gray-900 dark:text-gray-100">Approval Required</h3>
                     <p id="ev-approval-agent" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5"></p>
                 </div>
-                <button id="ev-approval-close" class="flex-shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" aria-label="Close">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
             </div>
 
             <!-- Description -->
@@ -90,12 +87,6 @@ function ensureModal() {
     frag.innerHTML = MODAL_HTML;
     _modalRoot = frag.firstElementChild;
     document.body.appendChild(_modalRoot);
-
-    document.getElementById('ev-approval-close').addEventListener('click', closeModal);
-    document.getElementById('ev-approval-overlay').addEventListener('click', closeModal);
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && _open) closeModal();
-    });
 
     document.getElementById('ev-approval-reject-btn').addEventListener('click', function() {
         resolveApproval('reject');
