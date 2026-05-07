@@ -55,7 +55,7 @@ SESSION_BUFFER_CLEANUP_DELAY = 30.0 # Delay before cleaning up SSE session buffe
 
 
 def _llm_log_path(agent_id: str) -> str:
-    return os.path.join(_LOGS_DIR, agent_id, 'llm.log')
+    return os.path.join(_LOGS_DIR, 'agents', agent_id, 'llm.log')
 
 
 def _db_retry(
