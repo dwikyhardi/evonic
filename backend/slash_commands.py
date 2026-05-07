@@ -327,6 +327,12 @@ def _register_builtins():
                     if role == 'assistant' and msg.get('tool_calls') and not (msg.get('content') or '').strip():
                         continue
                     content = msg.get('content', '') or ''
+                    # Skip user slash commands to prevent the LLM from re-issuing them
+                    if role == 'user' and content.startswith('/'):
+                        continue
+                    # Skip assistant responses to slash commands (metadata.slash_command)
+                    if role == 'assistant' and msg.get('metadata', {}).get('slash_command'):
+                        continue
                     if content:
                         parts.append(f'[{role}]: {content}')
 
