@@ -750,15 +750,25 @@ class AgentRuntime:
             metadata: Optional extra metadata merged into the saved message record.
         """
         agent = db.get_agent(agent_id)
+        db_agent_id = agent_id  # Default: agent's own per-agent chat DB
+        if not agent:
+            # Check for in-memory sub-agent (spawned by a parent agent)
+            from backend.subagent_manager import subagent_manager
+            agent = subagent_manager.get(agent_id)
+            if agent:
+                db_agent_id = agent.get('parent_id', agent_id)
         if not agent:
             return {"response": "Agent not found.", "tool_trace": []}
 
-        # Block disabled agents (super agent is always allowed)
+        # Block disabled agents (super agent is always allowed; sub-agents inherit parent's enabled state)
         if not agent.get('is_super') and not agent.get('enabled', True):
             return {"response": "This agent is currently disabled.", "tool_trace": []}
 
-        # Get or create session
-        session_id = _db_retry(db.get_or_create_session, agent_id, external_user_id,
+        # Determine if this is a sub-agent (uses parent's per-agent chat DB)
+        is_subagent = agent.get('is_subagent', False)
+
+        # Get or create session (sub-agents use parent's per-agent chat DB)
+        session_id = _db_retry(db.get_or_create_session, db_agent_id, external_user_id,
                                channel_id, label="get/create session")
 
         # Slash command interception — execute before saving message or sending to LLM
@@ -772,12 +782,12 @@ class AgentRuntime:
             if response is not None:
                 # Command was recognized — save command echo and response, then return
                 _db_retry(db.add_chat_message, session_id, 'user', message,
-                          agent_id=agent_id, metadata={"slash_command": True},
+                          agent_id=db_agent_id, metadata={"slash_command": True},
                           label="save command message")
                 _db_retry(db.add_chat_message, session_id, 'assistant', response,
-                          agent_id=agent_id, metadata={"slash_command": True},
+                          agent_id=db_agent_id, metadata={"slash_command": True},
                           label="save command response")
-                _cl = chatlog_manager.get(agent_id, session_id)
+                _cl = chatlog_manager.get(db_agent_id, session_id)
                 _cl.append({'type': 'user', 'session_id': session_id, 'content': message,
                              'sender_id': external_user_id,
                              'metadata': {'slash_command': True}})
@@ -800,8 +810,8 @@ class AgentRuntime:
             meta['from_agent_id'] = sender_id
             meta['from_agent_name'] = sender_agent.get('name', sender_id) if sender_agent else sender_id
         _db_retry(db.add_chat_message, session_id, 'user', message or "[Image]",
-                  agent_id=agent_id, metadata=meta if meta else None, label="save user message")
-        _cl_user = chatlog_manager.get(agent_id, session_id)
+                  agent_id=db_agent_id, metadata=meta if meta else None, label="save user message")
+        _cl_user = chatlog_manager.get(db_agent_id, session_id)
         _cl_user_entry = {'type': 'user', 'session_id': session_id,
                            'content': message or '[Image]', 'sender_id': external_user_id}
         if meta:
@@ -845,9 +855,9 @@ class AgentRuntime:
             _ack_meta = {"busy_ack": True, "concurrency_limited": True,
                          "concurrency_active": _cap["active"], "concurrency_max": _cap["max"]}
             _db_retry(db.add_chat_message, session_id, 'assistant', _ack_text,
-                      agent_id=agent_id, metadata=_ack_meta,
+                      agent_id=db_agent_id, metadata=_ack_meta,
                       label="save busy ack")
-            chatlog_manager.get(agent_id, session_id).append({
+            chatlog_manager.get(db_agent_id, session_id).append({
                 'type': 'final',
                 'session_id': session_id,
                 'content': _ack_text,
@@ -909,7 +919,8 @@ class AgentRuntime:
         # Message buffering: debounce rapid messages, then queue
         buffer_seconds = agent.get('message_buffer_seconds', DEFAULT_BUFFER_SECONDS) or 0
         if buffer_seconds > 0:
-            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
+                                                    session_db_agent_id=db_agent_id if is_subagent else None),
                               send_via_channel=True)
             timer = threading.Timer(buffer_seconds, self._enqueue_buffered, args=(task,))
             timer.daemon = True
@@ -927,7 +938,8 @@ class AgentRuntime:
             return {"response": None, "buffered": True, "tool_trace": [], "timeline": []}
 
         # No buffering — queue immediately and wait for result
-        task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+        task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
+                                                session_db_agent_id=db_agent_id if is_subagent else None),
                           send_via_channel=False)
         self._message_queue.put(task)
         task.event.wait()
@@ -950,9 +962,11 @@ class AgentRuntime:
         """Build messages from DB, call LLM, trigger summarization, return response.
         Uses per-agent/per-model concurrency gate then per-session lock."""
         agent_id = agent['id']
+        # Sub-agents don't exist in the agents DB — use parent's ID for model lookup
+        db_agent_id = agent.get('_db_agent_id', agent_id)
         AgentRuntime._touch_session(ctx.session_id)
         try:
-            model = db.get_agent_default_model(agent_id)
+            model = db.get_agent_default_model(db_agent_id)
             model_id = model.get('id') if model else None
         except Exception as e:
             _logger.warning("Failed to get default model for agent %s, proceeding without model gating: %s", agent_id, e)
@@ -1363,7 +1377,7 @@ class AgentRuntime:
 
         # Agent state: restore or create, then check for user approval
         if agent.get('enable_agent_state'):
-            ms = self._restore_agent_state(agent_id)
+            ms = self._restore_agent_state(db_agent_id)
             is_new_session = ms is None
             if is_new_session:
                 ms = AgentState()
