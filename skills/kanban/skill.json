@@ -13,6 +13,20 @@
       "type": "boolean",
       "default": true,
       "description": "When enabled, only super agents can create new tasks. Regular agents will be denied."
+    },
+    {
+      "name": "edit_task_super_only",
+      "label": "Edit Task (Super Agent Only)",
+      "type": "boolean",
+      "default": true,
+      "description": "When enabled, only super agents can edit task title, description, or priority. Status updates remain controlled by the assignee check."
+    },
+    {
+      "name": "delete_task_super_only",
+      "label": "Delete Task (Super Agent Only)",
+      "type": "boolean",
+      "default": true,
+      "description": "When enabled, only super agents can delete tasks. Regular agents will be denied even before the human-approval prompt."
     }
   ]
 }

@@ -55,27 +55,6 @@ def _is_super_agent(agent_id):
     return agent_id and agent_id == _get_super_agent_id()
 
 
-def _load_permissions():
-    """Load permission settings from DB with defaults."""
-    defaults = {
-        'allow_task_creation': True,
-        'allow_task_editing': True,
-        'allow_task_deletion': False,
-    }
-    from models.db import db
-    stored = db.get_setting('plugin_config:kanban:PERMISSIONS')
-    if stored:
-        try:
-            perms = json.loads(stored)
-            if isinstance(perms, dict):
-                for k in defaults:
-                    if k in perms:
-                        defaults[k] = perms[k]
-        except (json.JSONDecodeError, ValueError):
-            pass
-    return defaults
-
-
 def _check_write_access(task, action='edit'):
     """Check if the requester can perform the given action.
 
@@ -86,27 +65,30 @@ def _check_write_access(task, action='edit'):
     if not agent_id or _is_super_agent(agent_id):
         return True, None
 
-    # For create action, check the kanban:create_task_super_only setting via skill config
-    if action == 'create':
+    # All permission checks now read from skill config
+    action_to_setting = {
+        'create': 'create_task_super_only',
+        'edit': 'edit_task_super_only',
+        'delete': 'delete_task_super_only',
+    }
+    setting_name = action_to_setting.get(action)
+    if setting_name:
         try:
             from backend.skills_manager import skills_manager
             config = skills_manager.get_skill_config('kanban')
-            super_only = bool(config.get('create_task_super_only', False))
+            super_only = bool(config.get(setting_name, True))
         except Exception:
             super_only = True  # fail closed
         if super_only:
-            return False, 'Forbidden: only the super agent can create tasks'
+            if action == 'create':
+                return False, 'Forbidden: only the super agent can create tasks'
+            if action == 'edit':
+                return False, 'Forbidden: only the super agent can edit tasks'
+            if action == 'delete':
+                return False, 'Forbidden: only the super agent can delete tasks'
+
+    if action == 'create':
         return True, None
-
-    perms = _load_permissions()
-
-    # Check permission gate
-    perm_key = 'allow_task_' + action
-    if not perms.get(perm_key, True):
-        if action == 'edit':
-            return False, 'Forbidden: task editing is restricted'
-        if action == 'delete':
-            return False, 'Forbidden: task deletion is restricted'
 
     if task is None:
         return False, 'Forbidden'
