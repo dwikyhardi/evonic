@@ -1233,7 +1233,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                         </div>`;
                     // Remove "No comments yet" placeholder if present
                     const $list = $('#comment-list');
-                    if ($list.find('.text-gray-400').length) $list.empty();
+                    $list.children('.text-sm.text-center.py-4').remove();
                     $list.append(card);
                     // Update comment count badge
                     const $count = $('#comment-count');
