@@ -73,26 +73,14 @@ if not os.path.isdir(_shared_db_dir):
 DB_PATH = os.path.join(_shared_db_dir, "evonic.db")
 TEST_DB_PATH = os.path.join(BASE_DIR, "seed", "test_db.sqlite")
 
-# Flask — auto-generate a persistent random SECRET_KEY if not provided via env
+# Flask — SECRET_KEY is mandatory; refuse to start without it (CWE-798 mitigation)
 _SECRET_KEY_ENV = os.getenv("SECRET_KEY")
-if _SECRET_KEY_ENV:
-    SECRET_KEY = _SECRET_KEY_ENV
-else:
-    _key_file = os.path.join(BASE_DIR, ".secret_key")
-    try:
-        with open(_key_file, "r") as _kf:
-            SECRET_KEY = _kf.read().strip()
-        if not SECRET_KEY:
-            raise ValueError("empty key file")
-    except (FileNotFoundError, ValueError):
-        import secrets
-        SECRET_KEY = secrets.token_hex(32)
-        # Atomically write with restricted permissions
-        _fd = os.open(_key_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            os.write(_fd, SECRET_KEY.encode("utf-8"))
-        finally:
-            os.close(_fd)
+if not _SECRET_KEY_ENV:
+    raise RuntimeError(
+        "SECRET_KEY is not set. "
+        "Add 'SECRET_KEY=<your-random-key>' to your .env file and restart the server."
+    )
+SECRET_KEY = _SECRET_KEY_ENV
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = _get_env_int("PORT", 8080, min_val=1, max_val=65535)
 DEBUG = os.getenv("DEBUG", "1") == "1"
