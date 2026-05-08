@@ -440,6 +440,11 @@ def _reconstruct_llm_messages(entries: List[dict]) -> List[Dict[str, Any]]:
             i += 1
 
         elif etype == 'user':
+            # Skip slash command user messages — they are handled directly by
+            # the command executor and must never enter LLM context.
+            if (entry.get('metadata') or {}).get('slash_command'):
+                i += 1
+                continue
             _pending_reasoning = ''  # reasoning before a user message is irrelevant
             _pending_tool_ids = []
             msg: Dict[str, Any] = {'role': 'user', 'content': content}
@@ -463,6 +468,11 @@ def _reconstruct_llm_messages(entries: List[dict]) -> List[Dict[str, Any]]:
             i += 1
 
         elif etype == 'system':
+            # Skip slash command responses — they were saved with metadata.slash_command
+            # and must never enter LLM context.
+            if (entry.get('metadata') or {}).get('slash_command'):
+                i += 1
+                continue
             # System injections were sent as user messages to the LLM
             _pending_tool_ids = []
             messages.append({'role': 'user', 'content': content})

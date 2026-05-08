@@ -772,13 +772,15 @@ class AgentRuntime:
             if response is not None:
                 # Command was recognized — save command echo and response, then return
                 _db_retry(db.add_chat_message, session_id, 'user', message,
-                          agent_id=agent_id, label="save command message")
+                          agent_id=agent_id, metadata={"slash_command": True},
+                          label="save command message")
                 _db_retry(db.add_chat_message, session_id, 'assistant', response,
                           agent_id=agent_id, metadata={"slash_command": True},
                           label="save command response")
                 _cl = chatlog_manager.get(agent_id, session_id)
                 _cl.append({'type': 'user', 'session_id': session_id, 'content': message,
-                             'sender_id': external_user_id})
+                             'sender_id': external_user_id,
+                             'metadata': {'slash_command': True}})
                 _cl.append({'type': 'system', 'session_id': session_id, 'content': response,
                              'metadata': {'slash_command': True}})
                 # Signal the client to clear the chat UI when the clear command was used
@@ -1162,6 +1164,16 @@ class AgentRuntime:
             meta = msg.get('metadata') or {}
             return bool(meta.get('busy_ack') or meta.get('busy_rejection') or meta.get('evonet_offline'))
 
+        def _is_slash_command_msg(msg: dict) -> bool:
+            """Skip slash command user messages and their assistant responses.
+
+            Slash commands are handled directly by the command executor and must
+            never enter LLM context. If they leak into context the LLM may try to
+            process them (e.g., re-issuing /restart via its restart tool).
+            """
+            meta = msg.get('metadata') or {}
+            return bool(meta.get('slash_command'))
+
         def _apply_vision(msg: dict) -> dict:
             """Apply vision formatting for user messages with image_url if agent supports it."""
             if msg.get('role') != 'user' or not agent.get('vision_enabled'):
@@ -1207,6 +1219,14 @@ class AgentRuntime:
             while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
                 tail_start += 1
             for msg in conv_msgs[tail_start:]:
+                # Skip slash command messages — they are handled directly by the
+                # command executor and must never enter LLM context. Both the user
+                # command echo and the assistant response carry metadata.slash_command.
+                role = msg.get('role', '')
+                if role == 'user' and (msg.get('content') or '').startswith('/'):
+                    continue
+                if (msg.get('metadata') or {}).get('slash_command'):
+                    continue
                 messages.append(_apply_vision(msg))
         else:
             # Fall back to SQLite (pre-migration sessions with no JSONL data)
@@ -1217,12 +1237,12 @@ class AgentRuntime:
                 while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') != 'user':
                     tail_start += 1
                 for msg in raw_tail[tail_start:]:
-                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg):
+                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
                         messages.append(_ctx.build_message_entry(msg, agent))
             else:
                 history = db.get_session_messages(ctx.session_id, limit=50, agent_id=db_agent_id)
                 for msg in history:
-                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg):
+                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
                         messages.append(_ctx.build_message_entry(msg, agent))
 
         # Ensure messages don't end with assistant role (causes prefill error with some APIs)
