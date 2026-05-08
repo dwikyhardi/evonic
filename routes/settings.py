@@ -552,6 +552,27 @@ def api_max_concurrent_llm_per_model():
     return jsonify({'value': int(val)})
 
 
+@settings_bp.route('/api/settings/agent-queue-workers', methods=['GET', 'PUT'])
+def api_agent_queue_workers():
+    """Get or set the number of agent queue worker threads (1-32)."""
+    from models.db import db
+    if request.method == 'PUT':
+        data = request.get_json()
+        value = max(1, min(32, int(data.get('value', config.AGENT_QUEUE_WORKERS))))
+        db.set_setting('agent_queue_workers', str(value))
+        result = {'success': True, 'value': value}
+        try:
+            from backend.agent_runtime import agent_runtime
+            info = agent_runtime.resize_workers(value)
+            if info.get('note'):
+                result['note'] = info['note']
+        except Exception:
+            pass
+        return jsonify(result)
+    val = db.get_setting('agent_queue_workers', str(config.AGENT_QUEUE_WORKERS))
+    return jsonify({'value': int(val)})
+
+
 @settings_bp.route('/api/settings/events-dispatch', methods=['GET', 'PUT'])
 def api_events_dispatch():
     """Get or set the global events dispatch toggle."""

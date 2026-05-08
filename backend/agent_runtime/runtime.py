@@ -516,11 +516,18 @@ class AgentRuntime:
         self._buffer_timers: Dict[str, threading.Timer] = {}
         self._buffer_lock = threading.Lock()
         self._workers: list[threading.Thread] = []
-        for i in range(AGENT_QUEUE_WORKERS):
+        # Read worker count from DB (user-configurable), fall back to config default
+        try:
+            from models.db import db as _db
+            _db_workers = _db.get_setting('agent_queue_workers')
+            initial_workers = max(1, min(32, int(_db_workers))) if _db_workers else AGENT_QUEUE_WORKERS
+        except Exception:
+            initial_workers = AGENT_QUEUE_WORKERS
+        for i in range(initial_workers):
             t = threading.Thread(target=self._worker, name=f'agent-worker-{i}', daemon=True)
             t.start()
             self._workers.append(t)
-        _logger.info("Started %d queue worker(s)", AGENT_QUEUE_WORKERS)
+        _logger.info("Started %d queue worker(s)", initial_workers)
         AgentRuntime._llm_serializer._concurrency_mgr = ConcurrencyManager()
         self._session_skill_mds: Dict[str, Dict[str, str]] = {}    # session_id -> {skill_id: system_md}
         self._session_skill_tools: Dict[str, Dict[str, list]] = {}  # session_id -> {skill_id: [tool_defs]}
@@ -548,6 +555,27 @@ class AgentRuntime:
                 except Exception:
                     pass
             self._buffer_timers.clear()
+
+    def resize_workers(self, desired: int) -> dict:
+        """Dynamically adjust worker thread count.
+
+        Spawns new workers immediately if desired > current.
+        Shrinking requires restart (threads block on queue.get).
+        Returns {"previous": int, "current": int, "note": str|None}.
+        """
+        desired = max(1, min(32, desired))
+        current = len(self._workers)
+        note = None
+        if desired > current:
+            for i in range(current, desired):
+                t = threading.Thread(target=self._worker, name=f'agent-worker-{i}', daemon=True)
+                t.start()
+                self._workers.append(t)
+            _logger.info("Resized agent workers from %d to %d", current, desired)
+        elif desired < current:
+            note = "Decrease takes effect after restart"
+            _logger.info("Agent workers decrease requested (%d -> %d); takes effect after restart", current, desired)
+        return {"previous": current, "current": len(self._workers), "note": note}
 
     def _worker(self) -> None:
         while True:

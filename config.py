@@ -138,7 +138,7 @@ EVAL_MAX_TOOL_ITERATIONS = _get_env_int("EVAL_MAX_TOOL_ITERATIONS", 30, min_val=
 AGENT_MAX_TOOL_RESULT_CHARS = _get_env_int("AGENT_MAX_TOOL_RESULT_CHARS", 8000, min_val=1, max_val=1_048_576)
 AGENT_MAX_SUMMARIZE_BATCH = _get_env_int("AGENT_MAX_SUMMARIZE_BATCH", 20, min_val=1, max_val=500)
 AGENT_TIMEOUT_RETRIES = _get_env_int("AGENT_TIMEOUT_RETRIES", 2, min_val=0, max_val=20)
-AGENT_QUEUE_WORKERS = _get_env_int("AGENT_QUEUE_WORKERS", 2, min_val=1, max_val=32)
+AGENT_QUEUE_WORKERS = _get_env_int("AGENT_QUEUE_WORKERS", 5, min_val=1, max_val=32)
 
 # Release version (written by supervisor during staging; "dev" in flat-repo mode)
 EVONIC_VERSION = "dev"
