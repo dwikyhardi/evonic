@@ -21,12 +21,14 @@ import (
 
 // Client manages the WebSocket connection to the Evonic connector relay.
 type Client struct {
-	cfg      *config.Config
-	exec     *executor.Executor
-	conn     *websocket.Conn
-	mu       sync.Mutex
-	running  atomic.Bool
-	stopCh   chan struct{}
+	cfg            *config.Config
+	exec           *executor.Executor
+	conn           *websocket.Conn
+	mu             sync.Mutex
+	running        atomic.Bool
+	stopCh         chan struct{}
+	OnConnected    func() // called after successful connect (from Run's goroutine)
+	OnDisconnected func() // called when message loop ends while still running (retrying)
 }
 
 func New(cfg *config.Config, exec *executor.Executor) *Client {
@@ -48,8 +50,15 @@ func (c *Client) Run() {
 			log.Printf("[evonet] Connection failed: %v", err)
 		} else {
 			log.Printf("[evonet] Connected to %s (home: %s)", c.cfg.ServerURL, c.cfg.HomeName)
+			if c.OnConnected != nil {
+				c.OnConnected()
+			}
 			if err := c.messageLoop(); err != nil {
 				log.Printf("[evonet] Disconnected: %v", err)
+			}
+			// Only fire OnDisconnected if we are going to retry (not user-initiated stop)
+			if c.running.Load() && c.OnDisconnected != nil {
+				c.OnDisconnected()
 			}
 			// Reset backoff if the connection was healthy for more than 10s
 			if time.Since(connectedAt) > 10*time.Second {

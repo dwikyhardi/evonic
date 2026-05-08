@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"io"
 	"log"
 	"net/http"
@@ -17,7 +18,9 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/evonic/evonet/internal/config"
@@ -71,6 +74,11 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 	statusLabel := widget.NewLabel("")
 	statusLabel.Truncation = fyne.TextTruncateEllipsis
 
+	connectedText := canvas.NewText("Connected.", color.RGBA{R: 0, G: 180, B: 0, A: 255})
+	connectedText.TextSize = theme.TextSize()
+	connectedText.Alignment = fyne.TextAlignLeading
+	connectedText.Hide()
+
 	toggleBtn := widget.NewButton("Stop", nil)
 	toggleBtn.Importance = widget.DangerImportance
 
@@ -78,7 +86,7 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 
 	topBar := container.NewBorder(nil, nil, nil,
 		container.NewHBox(resetBtn, toggleBtn),
-		statusLabel,
+		container.NewStack(statusLabel, connectedText),
 	)
 	connectorView := container.NewBorder(topBar, nil, nil, nil, logScroll)
 
@@ -92,16 +100,34 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 		exec := executor.New(workDir(cfg), true) // GUI always verbose
 		client = ws.New(cfg, exec)
 		running = true
+		connectedText.Hide()
+		statusLabel.Show()
 		statusLabel.SetText("Connecting to " + cfg.ServerURL + "...")
 		toggleBtn.SetText("Stop")
 		toggleBtn.Importance = widget.DangerImportance
 		toggleBtn.Refresh()
+
+		client.OnConnected = func() {
+			fyne.Do(func() {
+				statusLabel.Hide()
+				connectedText.Show()
+			})
+		}
+		client.OnDisconnected = func() {
+			fyne.Do(func() {
+				connectedText.Hide()
+				statusLabel.Show()
+				statusLabel.SetText("Connecting to " + cfg.ServerURL + "...")
+			})
+		}
 
 		go func() {
 			log.Printf("[evonet] Connecting to %s...", cfg.ServerURL)
 			client.Run()
 			fyne.Do(func() {
 				running = false
+				connectedText.Hide()
+				statusLabel.Show()
 				statusLabel.SetText("Stopped — click Start to reconnect")
 				toggleBtn.SetText("Start")
 				toggleBtn.Importance = widget.HighImportance
