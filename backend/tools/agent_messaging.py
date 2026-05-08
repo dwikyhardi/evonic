@@ -220,6 +220,10 @@ def _exec_send_agent_message(args: dict, agent_context: dict) -> dict:
     # Validate target agent
     target_agent = db.get_agent(target_id)
     if not target_agent:
+        # Check for in-memory sub-agent
+        from backend.subagent_manager import subagent_manager
+        target_agent = subagent_manager.get(target_id)
+    if not target_agent:
         _logger.warning("Agent '%s' tried to message non-existent target '%s'.", sender_id, target_id)
         return {'error': f"Agent '{target_id}' not found."}
     if not target_agent.get('is_super') and not target_agent.get('enabled', True):
