@@ -344,7 +344,7 @@ def _register_builtins():
                     if role == 'user' and content.startswith('/'):
                         continue
                     # Skip assistant responses to slash commands (metadata.slash_command)
-                    if role == 'assistant' and msg.get('metadata', {}).get('slash_command'):
+                    if role == 'assistant' and (msg.get('metadata') or {}).get('slash_command'):
                         continue
                     if content:
                         parts.append(f'[{role}]: {content}')
