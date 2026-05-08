@@ -297,6 +297,14 @@ def _register_builtins():
         if not super_agent or super_agent.get('id') != agent_id:
             return "Permission denied: /restart is only available to the super agent."
 
+        # Persist caller info so the new process can send "Evonic ready!" after boot
+        import json
+        db.set_setting('restart_greeting_needed', json.dumps({
+            'channel_id': channel_id,
+            'external_user_id': external_user_id,
+            'session_id': session_id,
+        }))
+
         def _do_restart():
             import time
             import resource

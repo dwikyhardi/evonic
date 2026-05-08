@@ -165,31 +165,22 @@ if not _reloader_active or _is_reloader_child:
                 _data = _json.loads(_restart_flag)
                 _channel_id = _data.get('channel_id')
                 _user_id = _data.get('external_user_id')
-                _context = _data.get('context', '')
-                _log.info("Sending system notification (channel=%s, user=%s, context_len=%d)",
-                           _channel_id, _user_id, len(_context))
+                _log.info("Sending restart ready notification (channel=%s, user=%s)",
+                           _channel_id, _user_id)
 
-                _super_agent = db.get_super_agent()
-                if not _super_agent:
-                    _log.warning("No super agent found, skipping greeting")
-                    return
-
-                # Build self-contained system notification (like kanban task reminders)
-                _trigger_msg = '[SYSTEM] Restart greeting needed\n'
-                if _context and _context.strip():
-                    _trigger_msg += f'\n<restart_context>\n{_context}\n</restart_context>\n'
-
-                from backend.agent_runtime import agent_runtime
-                agent_runtime.handle_message(
-                    agent_id=_super_agent['id'],
-                    external_user_id=_user_id,
-                    message=_trigger_msg,
-                    channel_id=_channel_id,
-                )
+                # Send "Evonic ready!" directly via channel, bypassing LLM
+                from backend.channels.registry import channel_manager
+                _channel = channel_manager.get_channel_instance(_channel_id)
+                if _channel:
+                    _channel.send_message(_user_id, "Evonic ready!")
+                    _log.info("Restart ready message sent")
+                else:
+                    _log.warning("Channel %s not found, cannot send restart ready message",
+                                 _channel_id)
 
                 # Clear flag after successful send
                 db.set_setting('restart_greeting_needed', '')
-                _log.info("System notification sent, flag cleared")
+                _log.info("Restart greeting flag cleared")
 
             except Exception as _e:
                 _log.error("Failed to send restart notification: %s", _e, exc_info=True)
