@@ -152,40 +152,80 @@ if not _reloader_active or _is_reloader_child:
     from backend.scheduler import scheduler as global_scheduler
     global_scheduler.start()
 
-    # If this boot was triggered by /restart, send a system notification to the agent
-    _restart_flag = db.get_setting('restart_greeting_needed')
-    if _restart_flag:
+    # If this boot was triggered by /restart, send "Evonic ready!" (no LLM)
+    _restart_ready_flag = db.get_setting('restart_ready_needed')
+    if _restart_ready_flag:
         import threading as _threading
         import json as _json
 
-        def _send_restart_notification():
+        def _send_restart_ready():
             import time as _time
             _time.sleep(5.0)  # Wait for channels + agent_runtime to fully initialize
             try:
-                _data = _json.loads(_restart_flag)
+                _data = _json.loads(_restart_ready_flag)
                 _channel_id = _data.get('channel_id')
                 _user_id = _data.get('external_user_id')
-                _log.info("Sending restart ready notification (channel=%s, user=%s)",
+                _log.info("Sending 'Evonic ready!' (channel=%s, user=%s)",
                            _channel_id, _user_id)
 
-                # Send "Evonic ready!" directly via channel, bypassing LLM
                 from backend.channels.registry import channel_manager
                 _channel = channel_manager.get_channel_instance(_channel_id)
                 if _channel:
                     _channel.send_message(_user_id, "Evonic ready!")
-                    _log.info("Restart ready message sent")
+                    _log.info("'Evonic ready!' sent")
                 else:
                     _log.warning("Channel %s not found, cannot send restart ready message",
                                  _channel_id)
 
-                # Clear flag after successful send
-                db.set_setting('restart_greeting_needed', '')
-                _log.info("Restart greeting flag cleared")
+                db.set_setting('restart_ready_needed', '')
+                _log.info("Restart ready flag cleared")
 
             except Exception as _e:
-                _log.error("Failed to send restart notification: %s", _e, exc_info=True)
+                _log.error("Failed to send restart ready message: %s", _e, exc_info=True)
 
-        _threading.Thread(target=_send_restart_notification, daemon=True).start()
+        _threading.Thread(target=_send_restart_ready, daemon=True).start()
+
+    # If this boot was triggered by restart tool, send LLM greeting with context
+    _restart_greeting_flag = db.get_setting('restart_greeting_needed')
+    if _restart_greeting_flag:
+        import threading as _threading
+        import json as _json
+
+        def _send_restart_greeting():
+            import time as _time
+            _time.sleep(5.0)  # Wait for channels + agent_runtime to fully initialize
+            try:
+                _data = _json.loads(_restart_greeting_flag)
+                _channel_id = _data.get('channel_id')
+                _user_id = _data.get('external_user_id')
+                _context = _data.get('context', '')
+                _log.info("Sending restart greeting (channel=%s, user=%s, context_len=%d)",
+                           _channel_id, _user_id, len(_context))
+
+                _super_agent = db.get_super_agent()
+                if not _super_agent:
+                    _log.warning("No super agent found, skipping greeting")
+                    return
+
+                _trigger_msg = '[SYSTEM] Restart greeting needed\n'
+                if _context and _context.strip():
+                    _trigger_msg += f'\n<restart_context>\n{_context}\n</restart_context>\n'
+
+                from backend.agent_runtime import agent_runtime
+                agent_runtime.handle_message(
+                    agent_id=_super_agent['id'],
+                    external_user_id=_user_id,
+                    message=_trigger_msg,
+                    channel_id=_channel_id,
+                )
+
+                db.set_setting('restart_greeting_needed', '')
+                _log.info("Restart greeting sent, flag cleared")
+
+            except Exception as _e:
+                _log.error("Failed to send restart greeting: %s", _e, exc_info=True)
+
+        _threading.Thread(target=_send_restart_greeting, daemon=True).start()
 
     # ----------------------------------------------------------------
     # Startup check: scan all active sessions for unreplied user messages

@@ -299,10 +299,9 @@ def _register_builtins():
 
         # Persist caller info so the new process can send "Evonic ready!" after boot
         import json
-        db.set_setting('restart_greeting_needed', json.dumps({
+        db.set_setting('restart_ready_needed', json.dumps({
             'channel_id': channel_id,
             'external_user_id': external_user_id,
-            'session_id': session_id,
         }))
 
         def _do_restart():
