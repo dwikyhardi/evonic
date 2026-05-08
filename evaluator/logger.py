@@ -18,7 +18,7 @@ from pathlib import Path
 class TestLogger:
     """Handles per-test logging to JSON files"""
     
-    def __init__(self, base_dir: str = "logs"):
+    def __init__(self, base_dir: str = "logs/eval"):
         self.base_dir = base_dir
         self.current_run_dir: Optional[Path] = None
         self.run_id: Optional[int] = None
