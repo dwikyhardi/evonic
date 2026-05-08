@@ -256,14 +256,10 @@ class ToolRegistry:
 def _builtin_read_factory(agent_context: dict):
     """Factory for the built-in 'read' tool scoped to an agent's KB directory."""
     agent_id = agent_context.get('id', '')
-    # For remote agents (those with a workplace_id), KB files live on the evonic
-    # server at agents/{agent_id}/kb/ — NOT on the remote workspace.  Always use
-    # the local server path in that case, matching what /_self/ resolution does.
     workplace_id = agent_context.get('workplace_id')
-    # KB files always live on the evonic server at agents/{agent_id}/kb/,
-    # regardless of whether the agent has a workspace configured.
-    # The workspace path is where bash/runpy tools execute — it has
-    # nothing to do with where KB files are stored.
+    # KB files always live on the evonic server at agents/{agent_id}/kb/.
+    # The agent's workspace path is where bash/runpy tools execute — it
+    # has nothing to do with where KB files are stored.
     base_dir = os.path.normpath(os.path.join(
         os.path.dirname(os.path.abspath(__file__)), '..', '..', 'agents', agent_id, 'kb'
     ))
