@@ -346,16 +346,16 @@ def enforce_auth():
 
 
 if __name__ == '__main__':
-    from models.db import db as _db
-    _dm = _db.get_default_model()
-    if _dm:
-        _log.info("LLM Base URL : %s", _dm.get('base_url'))
-        _log.info("LLM Model    : %s", _dm.get('model_name'))
-        _key = _dm.get('api_key', '')
-        masked_key = (_key[:8] + '...' + _key[-4:]) if len(_key) > 12 else ('***' if _key else '(not set)')
-        _log.info("LLM API Key  : %s", masked_key)
-    else:
-        _log.info("LLM Model    : No default model configured in database")
+#    from models.db import db as _db
+#    _dm = _db.get_default_model()
+#    if _dm:
+#        _log.info("LLM Base URL : %s", _dm.get('base_url'))
+#        _log.info("LLM Model    : %s", _dm.get('model_name'))
+#        _key = _dm.get('api_key', '')
+#        masked_key = (_key[:8] + '...' + _key[-4:]) if len(_key) > 12 else ('***' if _key else '(not set)')
+#        _log.info("LLM API Key  : %s", masked_key)
+#    else:
+#        _log.info("LLM Model    : No default model configured in database")
     app.run(
         host=config.HOST,
         port=config.PORT,
