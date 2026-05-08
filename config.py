@@ -73,13 +73,39 @@ if not os.path.isdir(_shared_db_dir):
 DB_PATH = os.path.join(_shared_db_dir, "evonic.db")
 TEST_DB_PATH = os.path.join(BASE_DIR, "seed", "test_db.sqlite")
 
-# Flask — SECRET_KEY is mandatory; refuse to start without it (CWE-798 mitigation)
+# Flask — SECRET_KEY: auto-generate once and persist to .env if missing
 _SECRET_KEY_ENV = os.getenv("SECRET_KEY")
 if not _SECRET_KEY_ENV:
-    raise RuntimeError(
-        "SECRET_KEY is not set. "
-        "Add 'SECRET_KEY=<your-random-key>' to your .env file and restart the server."
-    )
+    import secrets
+    import tempfile
+
+    _SECRET_KEY_ENV = secrets.token_urlsafe(48)
+    _env_path = os.path.join(BASE_DIR, ".env")
+
+    # Atomic write: update existing .env or create a new one
+    if os.path.exists(_env_path):
+        with open(_env_path, "r") as _f:
+            _lines = _f.readlines()
+        # Append SECRET_KEY (it's not present since the env var was empty)
+        if _lines and not _lines[-1].endswith("\n"):
+            _lines.append("\n")
+        _lines.append(f"SECRET_KEY={_SECRET_KEY_ENV}\n")
+        _tmp_fd, _tmp_path = tempfile.mkstemp(dir=os.path.dirname(_env_path), prefix=".env.")
+        try:
+            with os.fdopen(_tmp_fd, "w") as _f:
+                _f.writelines(_lines)
+            os.replace(_tmp_path, _env_path)
+        except Exception:
+            if os.path.exists(_tmp_path):
+                os.unlink(_tmp_path)
+            raise
+    else:
+        with open(_env_path, "w") as _f:
+            _f.write(f"SECRET_KEY={_SECRET_KEY_ENV}\n")
+
+    os.environ["SECRET_KEY"] = _SECRET_KEY_ENV
+    _logger.info("Generated new SECRET_KEY and saved to .env")
+
 SECRET_KEY = _SECRET_KEY_ENV
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = _get_env_int("PORT", 8080, min_val=1, max_val=65535)
