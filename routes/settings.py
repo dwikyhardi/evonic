@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from typing import Dict, Any
@@ -6,6 +7,8 @@ from flask import Blueprint, render_template, jsonify, request
 
 import config
 from models.db import db
+
+_logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -558,7 +561,10 @@ def api_agent_queue_workers():
     from models.db import db
     if request.method == 'PUT':
         data = request.get_json()
-        value = max(1, min(32, int(data.get('value', config.AGENT_QUEUE_WORKERS))))
+        raw_value = int(data.get('value', config.AGENT_QUEUE_WORKERS))
+        if raw_value > 32:
+            _logger.warning("Agent queue workers requested %d capped to max 32", raw_value)
+        value = max(1, min(32, raw_value))
         db.set_setting('agent_queue_workers', str(value))
         result = {'success': True, 'value': value}
         try:
