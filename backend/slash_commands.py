@@ -499,7 +499,23 @@ def _register_builtins():
 
         lines = []
         lines.append(f"**Status \u2014 {agent.get('name', agent_id)}**")
-        lines.append(f"Model: {agent.get('model', 'unknown')}")
+
+        # Model — resolve the same way the runtime does:
+        # 1. Agent's default_model_id → llm_models table (agent-specific model config)
+        # 2. Fallback: agent.model raw string (General Settings override)
+        # 3. Otherwise: unknown
+        model = db.get_agent_default_model(agent_id)
+        if model:
+            model_name = model.get("name", "unknown")
+            model_id = model.get("model_name", "")
+            if model_id:
+                lines.append(f"Model: {model_name} ({model_id})")
+            else:
+                lines.append(f"Model: {model_name}")
+        elif agent.get("model"):
+            lines.append(f"Model: {agent['model']} (string override)")
+        else:
+            lines.append("Model: unknown")
 
         # Agent state: mode, focus, plan file
         state_content = agent_chat_manager.get(agent_id).get_agent_state()
@@ -541,7 +557,6 @@ def _register_builtins():
             lines.append("Workspace: not configured")
 
         # Toggles
-        lines.append("")
         lines.append("Toggles:")
         sandbox = "enabled" if agent.get("sandbox_enabled") else "disabled"
         safety = "enabled" if agent.get("safety_checker_enabled") else "disabled"
@@ -555,14 +570,12 @@ def _register_builtins():
         # Tools and skills count
         tools = db.get_agent_tools(agent_id)
         skills = db.get_agent_skills(agent_id)
-        lines.append("")
         lines.append(f"Tools: {len(tools)}")
         lines.append(f"Skills: {len(skills)}")
 
         # Channels
         channels = db.get_channels(agent_id)
         if channels:
-            lines.append("")
             lines.append("Channels:")
             from backend.channels.registry import channel_manager
             for ch in channels:
@@ -573,7 +586,9 @@ def _register_builtins():
                 status = "connected" if is_connected else "disconnected"
                 lines.append(f"  {ch_name} ({ch_type}) \u2014 {status}")
 
-        return "\n".join(lines)
+        # Double newline between every field so markdown renders each as
+        # a separate paragraph (single \n would collapse into one line).
+        return "\n\n".join(lines)
 
     command_registry.register(
         "status",
