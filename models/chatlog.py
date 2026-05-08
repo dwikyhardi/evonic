@@ -368,6 +368,52 @@ class ChatLog:
 # LLM message reconstruction
 # ------------------------------------------------------------------
 
+def _fix_interleaved_user_messages(msgs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Fix user/system messages recorded between a tool_call and its tool_output.
+
+    When a user sends a message while a tool is still executing, the chatlog records
+    the user message before the tool_output (by wall-clock order). But the LLM
+    actually received them in the opposite order: tool result first, then user message
+    on the next iteration. Reorder so tool responses immediately follow their
+    assistant/tool_calls message, with deferred user/system messages placed after.
+    """
+    result: List[Dict[str, Any]] = []
+    i = 0
+    while i < len(msgs):
+        msg = msgs[i]
+        if msg.get('role') == 'assistant' and msg.get('tool_calls'):
+            tc_ids = {tc['id'] for tc in msg.get('tool_calls', [])}
+            j = i + 1
+            deferred: List[Dict[str, Any]] = []
+            tool_responses: List[Dict[str, Any]] = []
+            found_ids: set = set()
+            while j < len(msgs):
+                next_msg = msgs[j]
+                next_role = next_msg.get('role', '')
+                next_tc_id = next_msg.get('tool_call_id', '')
+                if next_role == 'tool' and next_tc_id in tc_ids:
+                    tool_responses.append(next_msg)
+                    found_ids.add(next_tc_id)
+                    j += 1
+                elif next_role in ('user', 'system') and not tool_responses:
+                    # Defer: encountered before any tool response — was recorded
+                    # out-of-order due to mid-execution injection.
+                    deferred.append(next_msg)
+                    j += 1
+                else:
+                    break
+                if found_ids == tc_ids:
+                    break  # All expected tool responses collected
+            result.append(msg)
+            result.extend(tool_responses)
+            result.extend(deferred)
+            i = j
+        else:
+            result.append(msg)
+            i += 1
+    return result
+
+
 def _reconstruct_llm_messages(entries: List[dict]) -> List[Dict[str, Any]]:
     """Convert a list of JSONL entries to the OpenAI messages array format.
 
@@ -483,7 +529,7 @@ def _reconstruct_llm_messages(entries: List[dict]) -> List[Dict[str, Any]]:
             # Skip turn_begin, turn_end, pending
             i += 1
 
-    return messages
+    return _fix_interleaved_user_messages(messages)
 
 
 # ------------------------------------------------------------------
