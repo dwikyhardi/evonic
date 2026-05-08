@@ -107,7 +107,33 @@ def configure(
     """
     global _configured
     if _configured:
-        return  # idempotent — safe to call multiple times
+        # Idempotent — but re-apply settings that depend on env vars.
+        # This handles the case where configure() was called before load_dotenv()
+        # (e.g., from the CLI entry point) and the env var is now available.
+        if console:
+            root = logging.getLogger()
+            for h in root.handlers:
+                # Only apply ConsoleFilter to the console handler (stdout),
+                # not to file handlers (RotatingFileHandler is a StreamHandler
+                # subclass but writes to a file, not stdout).
+                if (
+                    isinstance(h, logging.StreamHandler)
+                    and h.stream is sys.stdout
+                ):
+                    console_quiet = os.environ.get("EVONIC_LOG_CONSOLE_QUIET", "")
+                    if console_quiet:
+                        patterns = [p.strip() for p in console_quiet.split(",") if p.strip()]
+                        if patterns and not any(
+                            isinstance(f, ConsoleFilter) for f in h.filters
+                        ):
+                            h.addFilter(ConsoleFilter(patterns))
+        # Re-apply EVONIC_LOG_QUIET (logger-level quiet) in case it was missed.
+        quiet = os.environ.get("EVONIC_LOG_QUIET", "").split(",")
+        for name in quiet:
+            name = name.strip()
+            if name:
+                logging.getLogger(name).setLevel(logging.ERROR)
+        return
 
     # Resolve env vars / defaults
     level = level or os.environ.get("EVONIC_LOG_LEVEL", _DEFAULT_LOG_LEVEL).upper()
