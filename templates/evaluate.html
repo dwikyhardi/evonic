@@ -685,23 +685,23 @@ function fetchSummary() {
 
         let statsHtml = '';
         if (data.total_tokens || data.tok_per_sec || data.total_duration_ms) {
-            statsHtml = '<div class="border-t border-gray-100 pt-4"><div class="grid grid-cols-2 sm:grid-cols-3 gap-3">';
+            statsHtml = '<div class="border-t border-gray-100 dark:border-gray-700 pt-4"><div class="grid grid-cols-2 sm:grid-cols-3 gap-3">';
             if (data.total_tokens) {
-                statsHtml += `<div class="rounded-lg bg-gray-50 p-3 text-center">
-                    <div class="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Tokens</div>
-                    <div class="text-lg font-bold text-gray-700">${data.total_tokens.toLocaleString()}</div>
+                statsHtml += `<div class="rounded-lg bg-gray-50 dark:bg-gray-700/50 p-3 text-center">
+                    <div class="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide font-medium mb-1">Tokens</div>
+                    <div class="text-lg font-bold text-gray-700 dark:text-gray-200">${data.total_tokens.toLocaleString()}</div>
                 </div>`;
             }
             if (data.tok_per_sec) {
-                statsHtml += `<div class="rounded-lg bg-gray-50 p-3 text-center">
-                    <div class="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Speed</div>
-                    <div class="text-lg font-bold text-gray-700">${data.tok_per_sec} <span class="text-xs font-normal text-gray-400">tok/s</span></div>
+                statsHtml += `<div class="rounded-lg bg-gray-50 dark:bg-gray-700/50 p-3 text-center">
+                    <div class="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide font-medium mb-1">Speed</div>
+                    <div class="text-lg font-bold text-gray-700 dark:text-gray-200">${data.tok_per_sec} <span class="text-xs font-normal text-gray-400 dark:text-gray-500">tok/s</span></div>
                 </div>`;
             }
             if (data.total_duration_ms) {
-                statsHtml += `<div class="rounded-lg bg-gray-50 p-3 text-center">
-                    <div class="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Duration</div>
-                    <div class="text-lg font-bold text-gray-700">${(data.total_duration_ms / 1000).toFixed(1)}<span class="text-xs font-normal text-gray-400">s</span></div>
+                statsHtml += `<div class="rounded-lg bg-gray-50 dark:bg-gray-700/50 p-3 text-center">
+                    <div class="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide font-medium mb-1">Duration</div>
+                    <div class="text-lg font-bold text-gray-700 dark:text-gray-200">${(data.total_duration_ms / 1000).toFixed(1)}<span class="text-xs font-normal text-gray-400 dark:text-gray-500">s</span></div>
                 </div>`;
             }
             statsHtml += '</div></div>';
@@ -715,12 +715,12 @@ function fetchSummary() {
                 <!-- Summary Details Card (Left) -->
                 <div class="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm p-5">
                     <div class="flex items-center gap-2 mb-3">
-                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                         </svg>
-                        <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Summary</h4>
+                        <h4 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Summary</h4>
                     </div>
-                    <p class="text-gray-700 leading-relaxed mb-4">"${data.summary}"</p>
+                    <p class="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">"${data.summary}"</p>
                     ${statsHtml}
                 </div>
 
