@@ -481,6 +481,106 @@ def _register_builtins():
         "Force-clear focus mode — use when agent is stuck in focus after a failed task",
     )
 
+    # /status — Show agent status information
+    def status_handler(
+        session_id: str,
+        agent_id: str,
+        external_user_id: str,
+        channel_id: Optional[str],
+        args: str,
+    ) -> str:
+        from models.db import db
+        from backend.agent_state import AgentState
+        from models.chat import agent_chat_manager
+
+        agent = db.get_agent(agent_id)
+        if not agent:
+            return "Error: Agent not found."
+
+        lines = []
+        lines.append(f"**Status \u2014 {agent.get('name', agent_id)}**")
+        lines.append(f"Model: {agent.get('model', 'unknown')}")
+
+        # Agent state: mode, focus, plan file
+        state_content = agent_chat_manager.get(agent_id).get_agent_state()
+        if state_content:
+            ms = AgentState.deserialize(state_content)
+            lines.append(f"Mode: {ms.mode}")
+            if ms.focus:
+                reason = f" \u2014 {ms.focus_reason}" if ms.focus_reason else ""
+                lines.append(f"Focus: yes{reason}")
+            else:
+                lines.append("Focus: no")
+            if ms.plan_file:
+                plan_path = os.path.join(os.path.dirname(__file__), "..", ms.plan_file)
+                if os.path.exists(plan_path):
+                    lines.append(f"Plan file: {ms.plan_file}")
+        else:
+            lines.append("Mode: plan")
+            lines.append("Focus: no")
+
+        # Workplace
+        workplace_id = agent.get("workplace_id")
+        if workplace_id:
+            workplace = db.get_workplace(workplace_id)
+            if workplace:
+                wp_name = workplace.get("name", "unknown")
+                wp_type = workplace.get("type", "unknown")
+                wp_status = workplace.get("status", "disconnected")
+                lines.append(f"Workplace: {wp_name} ({wp_type}, {wp_status})")
+            else:
+                lines.append("Workplace: not found")
+        else:
+            lines.append("Workplace: none")
+
+        # Workspace
+        workspace = agent.get("workspace")
+        if workspace:
+            lines.append(f"Workspace: {workspace}")
+        else:
+            lines.append("Workspace: not configured")
+
+        # Toggles
+        lines.append("")
+        lines.append("Toggles:")
+        sandbox = "enabled" if agent.get("sandbox_enabled") else "disabled"
+        safety = "enabled" if agent.get("safety_checker_enabled") else "disabled"
+        vision = "enabled" if agent.get("vision_enabled") else "disabled"
+        agent_msg = "enabled" if agent.get("agent_messaging_enabled") else "disabled"
+        lines.append(f"  Sandbox: {sandbox}")
+        lines.append(f"  Safety Checker: {safety}")
+        lines.append(f"  Vision: {vision}")
+        lines.append(f"  Agent Messaging: {agent_msg}")
+
+        # Tools and skills count
+        tools = db.get_agent_tools(agent_id)
+        skills = db.get_agent_skills(agent_id)
+        lines.append("")
+        lines.append(f"Tools: {len(tools)}")
+        lines.append(f"Skills: {len(skills)}")
+
+        # Channels
+        channels = db.get_channels(agent_id)
+        if channels:
+            lines.append("")
+            lines.append("Channels:")
+            from backend.channels.registry import channel_manager
+            for ch in channels:
+                ch_name = ch.get("name", "unknown")
+                ch_type = ch.get("type", "unknown")
+                ch_id = ch.get("id", "")
+                is_connected = channel_manager.is_running(ch_id)
+                status = "connected" if is_connected else "disconnected"
+                lines.append(f"  {ch_name} ({ch_type}) \u2014 {status}")
+
+        return "\n".join(lines)
+
+    command_registry.register(
+        "status",
+        status_handler,
+        "Show agent status information",
+    )
+
 
 # Register builtins at import time
 _register_builtins()
