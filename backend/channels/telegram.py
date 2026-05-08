@@ -80,14 +80,17 @@ class TelegramChannel(BaseChannel):
         )
 
     def start(self):
+        _logger.info("Telegram channel %s connecting (agent: %s)...", self.channel_id, self.agent_id)
         try:
             from telegram import Update
             from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
         except ImportError:
+            _logger.error("Telegram channel %s: python-telegram-bot not installed", self.channel_id)
             raise RuntimeError("python-telegram-bot not installed. Run: pip install python-telegram-bot")
 
         bot_token = self.config.get('bot_token', '')
         if not bot_token:
+            _logger.error("Telegram channel %s: bot token is missing", self.channel_id)
             raise ValueError("Bot token is required for Telegram channel.")
 
         from backend.agent_runtime import agent_runtime
@@ -442,6 +445,7 @@ class TelegramChannel(BaseChannel):
                 loop.close()
                 return
             self._running = True
+            _logger.info("Telegram channel %s connected and polling (agent: %s)", channel_id, agent_id)
             loop.run_forever()
 
         self._thread = threading.Thread(target=run_polling, daemon=True)
@@ -451,6 +455,7 @@ class TelegramChannel(BaseChannel):
     def stop(self):
         if not self._running:
             return
+        _logger.info("Telegram channel %s disconnecting...", self.channel_id)
         self._running = False
         from backend.event_stream import event_stream
         if self._approval_required_handler:
@@ -473,6 +478,7 @@ class TelegramChannel(BaseChannel):
         # Wait for the polling thread to exit (up to 10s)
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=10)
+        _logger.info("Telegram channel %s disconnected", self.channel_id)
 
     def _run_async(self, coro):
         """Run a coroutine on the bot's event loop from any thread."""

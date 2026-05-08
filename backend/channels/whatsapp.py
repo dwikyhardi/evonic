@@ -204,6 +204,11 @@ class WhatsAppChannel(BaseChannel):
                 if not self._running:
                     break
                 _logger.debug("[bridge] %s", line.decode().rstrip())
+            # If we exit the loop while still running, the bridge process died unexpectedly
+            if self._running:
+                self._running = False
+                _logger.warning("WhatsApp bridge process exited unexpectedly for channel %s (port %s)",
+                               self.channel_id, self._bridge_port)
         except Exception as e:
             _logger.error("WhatsApp bridge failed to start for channel %s: %s", self.channel_id, e)
 
@@ -382,7 +387,7 @@ class WhatsAppChannel(BaseChannel):
         try:
             self._bridge_post('/typing', {'to': to})
         except Exception as e:
-            _logger.debug("WhatsApp typing indicator failed for %s: %s", external_user_id, e)
+            _logger.warning("WhatsApp typing indicator failed for %s: %s", external_user_id, e)
 
     def get_qr(self) -> dict:
         """Fetch QR code data from the bridge."""

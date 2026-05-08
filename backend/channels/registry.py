@@ -27,21 +27,23 @@ class ChannelManager:
 
         channel_data = db.get_channel(channel_id)
         if not channel_data:
+            _logger.warning("Channel %s not found in database — cannot start", channel_id)
             return False
 
         if not channel_data.get('enabled'):
-            _logger.debug("Skipping disabled channel %s", channel_id)
+            _logger.info("Skipping disabled channel %s", channel_id)
             return False
 
         # Don't start channels for disabled agents
         agent = db.get_agent(channel_data['agent_id'])
         if agent and not agent.get('enabled', True):
-            _logger.debug("Skipping channel %s — agent %s is disabled", channel_id, channel_data['agent_id'])
+            _logger.info("Skipping channel %s — agent %s is disabled", channel_id, channel_data['agent_id'])
             return False
 
         chan_type = channel_data.get('type')
         cls = CHANNEL_TYPES.get(chan_type)
         if not cls:
+            _logger.error("Unknown channel type '%s' for channel %s", chan_type, channel_id)
             raise ValueError(f"Unknown channel type: {chan_type}")
 
         config = channel_data.get('config', {})
@@ -49,18 +51,23 @@ class ChannelManager:
             import json
             config = json.loads(config)
 
+        _logger.info("Starting channel %s (type: %s, agent: %s)", channel_id, chan_type, channel_data['agent_id'])
         instance = cls(channel_id, channel_data['agent_id'], config)
         instance.start()
         self._active[channel_id] = instance
+        _logger.info("Channel %s (%s) started successfully for agent %s", channel_id, chan_type, channel_data['agent_id'])
         return True
 
     def stop_channel(self, channel_id: str) -> bool:
         """Stop a running channel."""
         instance = self._active.get(channel_id)
         if not instance:
+            _logger.warning("Channel %s not found in active list — nothing to stop", channel_id)
             return False
+        _logger.info("Stopping channel %s", channel_id)
         instance.stop()
         del self._active[channel_id]
+        _logger.info("Channel %s stopped", channel_id)
         return True
 
     def get_channel_instance(self, channel_id: str) -> BaseChannel | None:
@@ -74,6 +81,7 @@ class ChannelManager:
     def start_all_enabled(self):
         """Start all enabled channels from DB (called at app startup).
         Skips channels belonging to disabled agents."""
+        _logger.info("Starting all enabled channels...")
         agents = db.get_agents()
         for agent in agents:
             if not agent.get('enabled', True):
@@ -84,12 +92,16 @@ class ChannelManager:
                     try:
                         self.start_channel(ch['id'])
                     except Exception as e:
-                        _logger.error("Failed to start channel %s: %s", ch['id'], e)
+                        _logger.error("Failed to start channel %s (type: %s): %s",
+                                      ch['id'], ch.get('type', 'unknown'), e)
+        _logger.info("Finished starting all enabled channels")
 
     def stop_all(self):
         """Stop all running channels."""
+        _logger.info("Stopping all channels (%d active)...", len(self._active))
         for channel_id in list(self._active.keys()):
             self.stop_channel(channel_id)
+        _logger.info("All channels stopped")
 
 
 # Global instance
