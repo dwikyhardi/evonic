@@ -87,6 +87,9 @@ venv.bak/
 !.env.example
 !.env.template
 
+# Auto-generated secret key (used as fallback when SECRET_KEY env is unset)
+.secret_key
+
 # -------------------------------
 # Databases
 # -------------------------------
