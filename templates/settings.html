@@ -120,6 +120,28 @@ block content %}
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
+            <div
+                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div>
+                    <div class="font-medium text-gray-800 dark:text-gray-100">
+                        Agent Queue Workers
+                    </div>
+                    <div class="text-sm text-gray-500 mt-0.5">
+                        Number of worker threads processing agent messages.
+                        Increase takes effect immediately; decrease requires
+                        restart.
+                    </div>
+                </div>
+                <input
+                    type="number"
+                    id="agent-queue-workers-input"
+                    min="1"
+                    max="32"
+                    onchange="saveAgentQueueWorkers(this.value)"
+                    class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+            </div>
             <!-- Default LLM Model -->
             <div
                 class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -1274,6 +1296,10 @@ block content %}
         if (res6 != null)
             document.getElementById("max-concurrent-per-model-input").value =
                 res6.value;
+        const res7 = await apiGet("/api/settings/agent-queue-workers");
+        if (res7 != null)
+            document.getElementById("agent-queue-workers-input").value =
+                res7.value;
         const res3 = await apiGet("/api/settings/theme");
         if (res3) updateThemeButtons(res3.theme);
     }
@@ -1364,6 +1390,12 @@ block content %}
 
     async function saveMaxConcurrentPerModel(value) {
         await apiPut("/api/settings/max-concurrent-llm-per-model", {
+            value: parseInt(value, 10),
+        });
+    }
+
+    async function saveAgentQueueWorkers(value) {
+        await apiPut("/api/settings/agent-queue-workers", {
             value: parseInt(value, 10),
         });
     }
