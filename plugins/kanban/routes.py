@@ -629,11 +629,35 @@ def create_blueprint():
             agents = [
                 {'id': a['id'], 'name': a.get('name', a['id'])}
                 for a in all_agents
-                if a['id'] in eligible_set
+                if a['id'] in eligible_set and a.get('enabled', 1)
             ]
             # Sort by name for consistent presentation
             agents.sort(key=lambda a: a['name'].lower())
 
+            return jsonify({'agents': agents})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @bp.route('/api/kanban/all-agents', methods=['GET'])
+    def kanban_all_agents():
+        """Return ALL agents (id + name + has_kanban flag) for the assignee dropdown."""
+        try:
+            from plugins.kanban.handler import _get_kanban_skill_agents
+            from models.db import db as main_db
+
+            eligible_ids = set(_get_kanban_skill_agents())
+            all_agents = main_db.get_agents()
+            # Exclude disabled agents from the assignment dropdown
+            agents = [
+                {
+                    'id': a['id'],
+                    'name': a.get('name', a['id']),
+                    'has_kanban': a['id'] in eligible_ids,
+                }
+                for a in all_agents
+                if a.get('enabled', 1)
+            ]
+            agents.sort(key=lambda a: a['name'].lower())
             return jsonify({'agents': agents})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
