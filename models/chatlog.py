@@ -395,9 +395,13 @@ def _fix_interleaved_user_messages(msgs: List[Dict[str, Any]]) -> List[Dict[str,
                     tool_responses.append(next_msg)
                     found_ids.add(next_tc_id)
                     j += 1
-                elif next_role in ('user', 'system') and not tool_responses:
-                    # Defer: encountered before any tool response — was recorded
-                    # out-of-order due to mid-execution injection.
+                elif next_role in ('user', 'system'):
+                    # Defer: user/system message was recorded out-of-order due to
+                    # mid-execution injection. This can happen before ANY tool response
+                    # OR between tool responses (e.g., tc1 done, user sends message,
+                    # tc2 still running). Always defer to after all tool responses so
+                    # the API sees tool messages immediately following the tool_calls
+                    # assistant message.
                     deferred.append(next_msg)
                     j += 1
                 else:
