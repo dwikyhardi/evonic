@@ -3,13 +3,19 @@ import sys
 import logging
 
 # Load .env file — prefer envcrypt (supports encrypted values), fall back to dotenv
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib', 'envcrypt', 'libs', 'python'))
-try:
-    import envcrypt
-    envcrypt.load(".env")
-except Exception:
-    from dotenv import load_dotenv
-    load_dotenv()
+_envcrypt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib', 'envcrypt', 'libs', 'python')
+sys.path.append(_envcrypt_path)
+
+# Only try envcrypt if the config file (~/.envcrypt.yaml) exists
+# Note: load_dotenv() for plain .env is handled by the entrypoint (app.py)
+# before importing config, so it's not needed here.
+_envcrypt_config = os.path.join(os.path.expanduser('~'), '.envcrypt.yaml')
+if os.path.exists(_envcrypt_config):
+    try:
+        import envcrypt
+        envcrypt.load(".env")
+    except Exception:
+        pass  # .env already loaded by the entrypoint
 
 _logger = logging.getLogger(__name__)
 
@@ -67,8 +73,26 @@ if not os.path.isdir(_shared_db_dir):
 DB_PATH = os.path.join(_shared_db_dir, "evonic.db")
 TEST_DB_PATH = os.path.join(BASE_DIR, "seed", "test_db.sqlite")
 
-# Flask
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+# Flask — auto-generate a persistent random SECRET_KEY if not provided via env
+_SECRET_KEY_ENV = os.getenv("SECRET_KEY")
+if _SECRET_KEY_ENV:
+    SECRET_KEY = _SECRET_KEY_ENV
+else:
+    _key_file = os.path.join(BASE_DIR, ".secret_key")
+    try:
+        with open(_key_file, "r") as _kf:
+            SECRET_KEY = _kf.read().strip()
+        if not SECRET_KEY:
+            raise ValueError("empty key file")
+    except (FileNotFoundError, ValueError):
+        import secrets
+        SECRET_KEY = secrets.token_hex(32)
+        # Atomically write with restricted permissions
+        _fd = os.open(_key_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(_fd, SECRET_KEY.encode("utf-8"))
+        finally:
+            os.close(_fd)
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = _get_env_int("PORT", 8080, min_val=1, max_val=65535)
 DEBUG = os.getenv("DEBUG", "1") == "1"
