@@ -206,5 +206,32 @@
         ]
       }
     }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "kanban_get_comments",
+      "description": "Retrieve paginated comments from a Kanban task. Returns comments ordered newest first.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "The ID of the task to retrieve comments from."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of comments to return. Default 10, max 100."
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Number of comments to skip (for pagination). Default 0."
+          }
+        },
+        "required": [
+          "task_id"
+        ]
+      }
+    }
   }
 ]
