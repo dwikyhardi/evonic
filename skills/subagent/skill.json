@@ -1,0 +1,10 @@
+{
+  "id": "subagent",
+  "name": "Sub-Agent Spawner",
+  "version": "1.0.0",
+  "description": "Spawn ad-hoc sub-agents that inherit your capabilities for parallel work. Sub-agents communicate via the agent messaging protocol and are auto-destroyed after 10 minutes of idle.",
+  "author": "Evonic",
+  "tools_file": "tools.json",
+  "lazy_tools": true,
+  "variables": []
+}

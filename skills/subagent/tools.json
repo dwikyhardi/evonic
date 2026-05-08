@@ -1,0 +1,48 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "subagent_spawn",
+      "description": "Spawn a new sub-agent that inherits your model, tools, skills, and system prompt. The sub-agent runs in parallel and communicates results back to you via the agent messaging protocol. Use this to parallelize independent work — each sub-agent processes one task concurrently. Sub-agents are auto-destroyed after 10 minutes of idle. Returns the sub-agent's ID.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "A clear, self-contained task description for the sub-agent. Include all necessary context — the sub-agent starts with your same tools and skills but has no knowledge of your current conversation."
+          }
+        },
+        "required": ["task"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "subagent_destroy",
+      "description": "Destroy a sub-agent by its ID. Use this to clean up a sub-agent when you no longer need it, or to stop one that isn't behaving as expected.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sub_agent_id": {
+            "type": "string",
+            "description": "The ID of the sub-agent to destroy."
+          }
+        },
+        "required": ["sub_agent_id"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "subagent_list",
+      "description": "List all your live sub-agents. Returns their IDs, creation times, and last activity times.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  }
+]
