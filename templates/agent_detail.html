@@ -906,6 +906,60 @@ let currentEditFile = null;
 let agentTools = [];
 let chatLoaded = false;
 
+// --- Chat input draft persistence (localStorage) ---
+(function() {
+    const DRAFT_KEY = 'chat_draft_' + AGENT_ID;
+
+    function saveDraft() {
+        const input = document.getElementById('chat-input');
+        if (!input) return;
+        const val = input.value;
+        if (val.trim()) {
+            try { localStorage.setItem(DRAFT_KEY, val); } catch(e) { /* quota exceeded, ignore */ }
+        } else {
+            try { localStorage.removeItem(DRAFT_KEY); } catch(e) {}
+        }
+    }
+
+    function restoreDraft() {
+        const input = document.getElementById('chat-input');
+        if (!input) return;
+        try {
+            const saved = localStorage.getItem(DRAFT_KEY);
+            if (saved && saved.trim()) {
+                input.value = saved;
+                // Trigger height auto-resize
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 150) + 'px';
+                input.style.overflowY = input.scrollHeight > 150 ? 'auto' : 'hidden';
+            }
+        } catch(e) { /* ignore */ }
+    }
+
+    function clearDraft() {
+        try { localStorage.removeItem(DRAFT_KEY); } catch(e) {}
+    }
+
+    // Expose clearDraft so sendChat() can call it
+    window._clearChatDraft = clearDraft;
+
+    // Save on input
+    document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('chat-input');
+        if (input) {
+            input.addEventListener('input', saveDraft);
+            // Also save on blur for extra safety
+            input.addEventListener('blur', saveDraft);
+        }
+    });
+
+    // Restore on load
+    $(function() { restoreDraft(); });
+
+    // Safety net: save on page unload
+    $(window).on('beforeunload', saveDraft);
+})();
+
 // Avatar upload handler
 document.addEventListener('DOMContentLoaded', function() {
     const avatarInput = document.getElementById('avatar-input');
@@ -2613,6 +2667,7 @@ async function sendChat() {
     if (!msg) return;
     input.value = '';
     input.style.height = 'auto';
+    window._clearChatDraft();
     chatUI.appendMessage('user', msg);
     // Capture the user message wrapper for anchoring the thinking bubble
     const container = document.getElementById('chat-messages');
