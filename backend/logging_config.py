@@ -14,16 +14,17 @@ Usage:
 Format: [LEVEL] [module.path] message
 
 Environment variables:
-    EVONIC_LOG_LEVEL     — default log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    EVONIC_LOG_FILE      — path to log file (default: logs/evonic.log); empty = disable file
-    EVONIC_LOG_MAX_BYTES — max log file size before rotation (default: 5 MB)
-    EVONIC_LOG_BACKUPS   — number of rotated backup files to keep (default: 3)
-    EVONIC_LOG_QUIET     — comma-separated list of module names to silence (default: WARNING level)
-    EVONIC_LOG_ROUTES    — semicolon-separated route entries; each entry is file_path:pattern1,pattern2
-                           where patterns are fnmatch globs matched against logger names.
-                           Default: logs/agent.log:backend.agent_runtime.*,backend.agent_state;
-                                    logs/channels.log:backend.channels.*;
-                                    logs/evaluator.log:evaluator.*
+    EVONIC_LOG_LEVEL          — default log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    EVONIC_LOG_FILE           — path to log file (default: logs/evonic.log); empty = disable file
+    EVONIC_LOG_MAX_BYTES      — max log file size before rotation (default: 5 MB)
+    EVONIC_LOG_BACKUPS        — number of rotated backup files to keep (default: 3)
+    EVONIC_LOG_QUIET          — comma-separated list of module names to silence globally (sets to ERROR level)
+    EVONIC_LOG_CONSOLE_QUIET  — comma-separated list of fnmatch glob patterns; matching logs are hidden from console only (via Filter on StreamHandler)
+    EVONIC_LOG_ROUTES         — semicolon-separated route entries; each entry is file_path:pattern1,pattern2
+                                where patterns are fnmatch globs matched against logger names.
+                                Default: logs/agent.log:backend.agent_runtime.*,backend.agent_state;
+                                         logs/channels.log:backend.channels.*;
+                                         logs/evaluator.log:evaluator.*
 """
 
 import fnmatch
@@ -62,6 +63,23 @@ class RouteFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         return any(
+            fnmatch.fnmatch(record.name, p) for p in self.patterns
+        )
+
+
+class ConsoleFilter(logging.Filter):
+    """Filter that rejects log records whose logger name matches any of the
+    given fnmatch glob patterns (e.g. 'apscheduler.scheduler').
+
+    This is intended for the console handler only — file handlers are unaffected.
+    """
+
+    def __init__(self, patterns: list[str], name: str = ""):
+        super().__init__(name)
+        self.patterns = patterns
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not any(
             fnmatch.fnmatch(record.name, p) for p in self.patterns
         )
 
@@ -120,6 +138,12 @@ def configure(
     if console:
         ch = logging.StreamHandler(sys.stdout)
         ch.setFormatter(formatter)
+        # Console-only filter: hide specific modules from stdout
+        console_quiet = os.environ.get("EVONIC_LOG_CONSOLE_QUIET", "")
+        if console_quiet:
+            patterns = [p.strip() for p in console_quiet.split(",") if p.strip()]
+            if patterns:
+                ch.addFilter(ConsoleFilter(patterns))
         root.addHandler(ch)
 
     # File handler with rotation
