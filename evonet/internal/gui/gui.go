@@ -86,7 +86,7 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 
 	topBar := container.NewBorder(nil, nil, nil,
 		container.NewHBox(resetBtn, toggleBtn),
-		container.NewStack(statusLabel, connectedText),
+		container.NewStack(statusLabel, container.NewPadded(connectedText)),
 	)
 	connectorView := container.NewBorder(topBar, nil, nil, nil, logScroll)
 
