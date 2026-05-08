@@ -587,7 +587,20 @@ def _exec_restart(args: dict, agent_context: dict = None) -> dict:
 
         if last_messages:
             parts.append('=== LAST MESSAGES ===')
-            for msg in last_messages:
+            # Pre-pass: find indices of restart tool calls + their triggering user messages
+            _restart_idx = set()
+            for _i, _m in enumerate(last_messages):
+                _tcs = _m.get('tool_calls') or []
+                if _m.get('role') == 'assistant' and any(
+                    isinstance(_tc, dict) and _tc.get('function', {}).get('name') == 'restart'
+                    for _tc in (_tcs if isinstance(_tcs, list) else [])
+                ):
+                    _restart_idx.add(_i)
+                    if _i > 0:
+                        _restart_idx.add(_i - 1)
+            for _i, msg in enumerate(last_messages):
+                if _i in _restart_idx:
+                    continue
                 role = msg.get('role', 'unknown')
                 if role == 'tool':
                     continue
