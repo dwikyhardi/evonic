@@ -107,6 +107,13 @@ def api_update_model(model_id):
     if not data:
         return jsonify({"success": False, "error": "No data provided"}), 400
 
+    # If api_key is sent as empty string, remove it from updates to
+    # preserve the existing value. This prevents accidental overwrite
+    # when the edit modal shows an empty api_key field (for security,
+    # the GET endpoint never returns the actual api_key).
+    if "api_key" in data and not data["api_key"]:
+        del data["api_key"]
+
     # If setting as default, unset other defaults
     if data.get("is_default"):
         with db._connect() as conn:
