@@ -1264,7 +1264,7 @@ class AgentRuntime:
             messages.pop()
 
         # Inject long-term memories (position 1, right after system prompt)
-        memory_section = get_memories_for_context(agent_id, messages)
+        memory_section = get_memories_for_context(db_agent_id, messages)
         if memory_section:
             messages.insert(1, {"role": "system", "content": memory_section})
 
@@ -1313,7 +1313,7 @@ class AgentRuntime:
             tools = _ctx.build_tools(agent)
 
             # Build agent context for tool backends
-            assigned_tool_ids = db.get_agent_tools(agent_id)
+            assigned_tool_ids = db.get_agent_tools(db_agent_id)
 
             # Resolve workspace: workplace config takes priority over agent.workspace.
             # For cloud workplaces, never fall back to the agent's /workspace path —
@@ -1350,7 +1350,7 @@ class AgentRuntime:
                 'safety_checker_enabled': agent.get('safety_checker_enabled', 1),
                 'disable_parallel_tool_execution': agent.get('disable_parallel_tool_execution', 0),
                 'disable_turn_prefetch': agent.get('disable_turn_prefetch', 0),
-                'variables': db.get_agent_variables_dict(agent_id),
+                'variables': db.get_agent_variables_dict(db_agent_id),
             }
         # Propagate agent_message_depth and from_agent_id from incoming message metadata
         if ctx.external_user_id.startswith("__agent__"):
@@ -1415,7 +1415,7 @@ class AgentRuntime:
             stop_event=self._get_stop_event(ctx.session_id),
             session_skill_mds=self._session_skill_mds,
             session_skill_tools=self._session_skill_tools,
-            llm_log_path=_llm_log_path(agent_id),
+            llm_log_path=_llm_log_path(db_agent_id),
             inject_queue=self._get_inject_queue(ctx.session_id),
             session_db_agent_id=db_agent_id,
         )
