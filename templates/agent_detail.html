@@ -2704,7 +2704,11 @@ async function sendChat() {
             if (!data.success) {
                 chatUI.appendMessage('error', 'Error: ' + (data.error || 'Unknown error'));
             } else {
-                chatUI.appendMessage('assistant', data.response);
+                const $resp = chatUI.appendMessage('assistant', data.response);
+                // Reposition the slash command response immediately after the user
+                // message so it doesn't appear below an active thinking bubble that
+                // turn_split may have inserted in the meantime.
+                if (userMsgEl && $resp && $resp.length) $(userMsgEl).after($resp);
                 await syncLastChatTs();
             }
         } catch(e) {
