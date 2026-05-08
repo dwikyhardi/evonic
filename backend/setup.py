@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import secrets
 import subprocess
 import tempfile
 
@@ -386,6 +387,13 @@ def run_setup(
     resolved_base_url = (base_url or provider_cfg["base_url"]).rstrip("/")
 
     try:
+        # 0. Generate SECRET_KEY if not already set — critical for session security
+        if not os.getenv("SECRET_KEY"):
+            _key = secrets.token_urlsafe(48)
+            env_path = os.path.join(config.BASE_DIR, ".env")
+            _update_env_var(env_path, "SECRET_KEY", _key)
+            os.environ["SECRET_KEY"] = _key
+
         # 1. Create model in DB as default
         model_id = f"setup_{provider}"
         # Derive api_format: ollama + local → openai, ollama + remote → ollama native
