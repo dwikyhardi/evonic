@@ -423,6 +423,7 @@ class LLMClient:
                 "model": self.model,
                 "messages": processed_messages,
                 "max_tokens": max_tokens,
+                "stream": False,
             }
             if effective_temperature is not None:
                 payload["temperature"] = effective_temperature
