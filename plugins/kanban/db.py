@@ -455,6 +455,28 @@ class KanbanDB:
             ).fetchone()
         return dict(row) if row else None
 
+    def get_comments_paginated(self, task_id: str, limit: int = 10, offset: int = 0) -> dict:
+        """Get comments for a task with pagination, ordered DESC (newest first).
+
+        Returns:
+            dict with 'comments' (list of comment dicts) and 'total' (int).
+        """
+        with self._connect() as conn:
+            count_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM comments WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            total = count_row[0] if count_row else 0
+
+            rows = conn.execute(
+                "SELECT * FROM comments WHERE task_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (task_id, limit, offset),
+            ).fetchall()
+        return {
+            'comments': [dict(r) for r in rows],
+            'total': total,
+        }
+
     # ─── Activity Log ──────────────────────────────────────────────────────────
 
     def add_activity(self, task_id: str, action: str, details: str = None) -> dict | None:

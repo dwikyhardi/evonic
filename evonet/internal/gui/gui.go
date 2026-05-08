@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -84,9 +86,15 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 
 	resetBtn := widget.NewButton("Reset", nil)
 
-	topBar := container.NewBorder(nil, nil, nil,
+	aboutBtn := widget.NewButton("About", nil)
+	aboutBtn.Importance = widget.LowImportance
+	aboutBtn.OnTapped = func() {
+		showAboutDialog(w)
+	}
+
+	topBar := container.NewBorder(nil, nil, aboutBtn,
 		container.NewHBox(resetBtn, toggleBtn),
-		container.NewStack(statusLabel, connectedText),
+		container.NewStack(statusLabel, container.NewPadded(connectedText)),
 	)
 	connectorView := container.NewBorder(topBar, nil, nil, nil, logScroll)
 
@@ -161,6 +169,48 @@ func showConnectorView(a fyne.App, w fyne.Window, root *fyne.Container, cfg *con
 	})
 
 	startClient()
+}
+
+// showAboutDialog displays the About modal with app info, version, creator, and links.
+func showAboutDialog(w fyne.Window) {
+	xURL, _ := url.Parse("https://x.com/anvie")
+	ghURL, _ := url.Parse("https://github.com/anvie")
+
+	title := widget.NewLabelWithStyle("Evonet", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+
+	desc := widget.NewLabel(
+		"Evonic Cloud Home connector.\n" +
+			"Connects your device to an Evonic server via WebSocket,\n" +
+			"allowing AI agents to execute commands remotely\n" +
+			"without SSH or a public IP.",
+	)
+	desc.Alignment = fyne.TextAlignCenter
+	desc.Wrapping = fyne.TextWrapWord
+
+	version := widget.NewLabelWithStyle("Version 1.0.0 (GUI Mac)", fyne.TextAlignCenter, fyne.TextStyle{Italic: true})
+
+	separator := widget.NewSeparator()
+
+	creator := widget.NewLabelWithStyle("Created by Robin Syihab (@anvie)", fyne.TextAlignCenter, fyne.TextStyle{})
+
+	xLink := widget.NewHyperlink("X (Twitter): @anvie", xURL)
+	xLink.Alignment = fyne.TextAlignCenter
+
+	ghLink := widget.NewHyperlink("GitHub: github.com/anvie", ghURL)
+	ghLink.Alignment = fyne.TextAlignCenter
+
+	content := container.NewVBox(
+		title,
+		separator,
+		desc,
+		version,
+		separator,
+		creator,
+		xLink,
+		ghLink,
+	)
+
+	dialog.ShowCustom("About Evonet", "Close", container.NewPadded(content), w)
 }
 
 // showPairingView renders the pairing form into root. Must be called from main goroutine.
