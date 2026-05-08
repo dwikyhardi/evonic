@@ -1,7 +1,7 @@
-//go:build windows || darwin
+//go:build (windows || darwin) && !headless
 
 // Package gui provides the desktop GUI for Evonet.
-// Only compiled on Windows and macOS.
+// Only compiled on Windows and macOS (excluded when built with -tags headless).
 package gui
 
 import (
@@ -24,6 +24,9 @@ import (
 	"github.com/evonic/evonet/internal/executor"
 	"github.com/evonic/evonet/internal/ws"
 )
+
+// GUIAvailable returns true — the real GUI is compiled in.
+func GUIAvailable() bool { return true }
 
 // RunGUI launches the connector window directly (config already available).
 // Must be called from the main goroutine.

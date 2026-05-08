@@ -95,8 +95,8 @@ func autoRun() bool {
 
 	switch runtime.GOOS {
 	case "windows", "darwin":
-		if noGUI {
-			break // fall through to Linux headless path below
+		if noGUI || !gui.GUIAvailable() {
+			break // fall through to Linux / headless path below
 		}
 		// Desktop: load full config (embedded + config.yaml from pairing)
 		cfg, _ := config.Load("")

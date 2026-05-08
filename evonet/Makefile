@@ -15,21 +15,26 @@ build:
 	mkdir -p $(DIST)
 	$(GO) build $(GOFLAGS) -o $(DIST)/$(BINARY) .
 
-## Build for Linux (amd64)
+## Build CLI binary for Linux (amd64) — full GUI included (Fyne + CGo work natively on Linux).
 build-linux:
 	mkdir -p $(DIST)
 	GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(DIST)/$(BINARY)-linux-amd64 .
 
-## Build for macOS (arm64 + amd64)
+## Build CLI binary for macOS (arm64 + amd64) — headless / no GUI.
+## Uses -tags headless so it compiles on Linux without macOS CGo/OpenGL headers.
+## For a real GUI .app build, run build-gui-macos on a Mac.
 build-macos:
 	mkdir -p $(DIST)
-	GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -o $(DIST)/$(BINARY)-darwin-arm64 .
-	GOOS=darwin GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(DIST)/$(BINARY)-darwin-amd64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -tags headless -o $(DIST)/$(BINARY)-darwin-arm64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build $(GOFLAGS) -tags headless -o $(DIST)/$(BINARY)-darwin-amd64 .
 
-## Build for Windows (amd64)
+## Build CLI binary for Windows (amd64) — headless / no GUI.
+## Uses -tags headless so it compiles on Linux without mingw-w64 CGo toolchain.
+## For a GUI binary (with hidden console), use build-gui-windows (fyne-cross) or
+## build-gui-windows-native (requires mingw-w64).
 build-windows:
 	mkdir -p $(DIST)
-	GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(DIST)/$(BINARY)-windows-amd64.exe .
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -tags headless -o $(DIST)/$(BINARY)-windows-amd64.exe .
 
 ## Build all platforms into dist/
 build-all: build-linux build-macos build-windows
