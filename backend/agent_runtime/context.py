@@ -293,9 +293,12 @@ def build_tools(agent: Dict[str, Any]) -> List[Dict[str, Any]]:
     tools = []
 
     # Always include built-in tools (read, etc.)
+    # Pass workplace_id so built-in factories can tailor descriptions for remote agents
+    # (e.g. read() tool mentions /_self/kb/ when workplace_id is set).
     agent_context = {
         'id': agent['id'],
         'is_super': bool(agent.get('is_super')),
+        'workplace_id': agent.get('workplace_id'),
     }
     tools.extend(tool_registry.get_builtin_tools(agent_context))
 

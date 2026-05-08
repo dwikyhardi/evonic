@@ -269,22 +269,32 @@ def _builtin_read_factory(agent_context: dict):
         base_dir = os.path.normpath(os.path.join(agent_workspace, 'kb'))
     base_dir = os.path.normpath(base_dir)
 
+    # Tailor description for remote agents who see /_self/kb/ in their system prompt
+    _is_remote = bool(workplace_id)
+    _desc = (
+        "Read a file from this agent's knowledge base (KB). "
+        + ("Pass a bare filename (e.g. 'notes.md') or a /_self/ path (e.g. '/_self/kb/notes.md'). "
+           if _is_remote else
+           "Pass a bare filename only — no paths (e.g. 'notes.md', not '/kb/notes.md'). ")
+        + "This tool is ONLY for KB files. "
+        "To read any other file (source code, logs, workspace files), use read_file instead."
+    )
+    _param_desc = (
+        "Bare KB filename (e.g. 'notes.md') or /_self/ path (e.g. '/_self/kb/notes.md')."
+        if _is_remote else
+        "Bare KB filename, e.g. 'notes.md'. No slashes or paths."
+    )
     tool_def = {
         "type": "function",
         "function": {
             "name": "read",
-            "description": (
-                "Read a file from this agent's knowledge base (KB). "
-                "Pass a bare filename only — no paths (e.g. 'notes.md', not '/kb/notes.md'). "
-                "This tool is ONLY for KB files. "
-                "To read any other file (source code, logs, workspace files), use read_file instead."
-            ),
+            "description": _desc,
             "parameters": {
                 "type": "object",
                 "properties": {
                     "filename": {
                         "type": "string",
-                        "description": "Bare KB filename, e.g. 'notes.md'. No slashes or paths."
+                        "description": _param_desc
                     }
                 },
                 "required": ["filename"]
