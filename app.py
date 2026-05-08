@@ -49,6 +49,31 @@ app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 # Global upload size limit (defense-in-depth for all endpoints)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
 
+# Long-lived caching for /static/*. Templates already use ?v=N cache busters,
+# so the browser will fetch a fresh URL whenever an asset is bumped. This
+# replaces Flask's default `Cache-Control: no-cache` (which forces a 304
+# revalidation roundtrip for every script/CSS on every page navigation —
+# the main cause of perceived inter-page lag in this app).
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 year
+
+
+@app.after_request
+def _add_immutable_static_cache(response):
+    """Promote /static/* responses to `public, max-age=…, immutable`.
+
+    Flask's default `send_from_directory` only sets `max-age`; adding
+    `immutable` lets browsers skip even the conditional GET on warm
+    navigations.
+    """
+    try:
+        if request.path.startswith('/static/') and response.status_code == 200:
+            response.headers['Cache-Control'] = (
+                'public, max-age=31536000, immutable'
+            )
+    except Exception:
+        pass
+    return response
+
 # Trust proxy headers from Cloudflare / nginx / any reverse proxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)

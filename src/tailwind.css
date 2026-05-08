@@ -1,0 +1,7 @@
+/* Input file for the Tailwind CLI. The CLI scans the files listed in
+   tailwind.config.js (`content`) and produces static/css/tailwind.css,
+   which replaces the 398 KB JIT runtime previously shipped as
+   static/js/tailwindcss.js. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
