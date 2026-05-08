@@ -263,7 +263,7 @@ def _builtin_read_factory(agent_context: dict):
     agent_workspace = agent_context.get('workspace')
     if workplace_id or not agent_workspace:
         base_dir = os.path.normpath(os.path.join(
-            os.path.dirname(__file__), '..', '..', 'agents', agent_id, 'kb'
+            os.path.dirname(os.path.abspath(__file__)), '..', '..', 'agents', agent_id, 'kb'
         ))
     else:
         base_dir = os.path.normpath(os.path.join(agent_workspace, 'kb'))
