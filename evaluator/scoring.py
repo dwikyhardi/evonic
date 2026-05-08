@@ -238,7 +238,7 @@ JANGAN menyebut nama model. JANGAN gunakan emoji. JANGAN gunakan bullet/list. La
 
             if response.get("success") and response.get("response"):
                 from evaluator.llm_client import strip_thinking_tags
-                content = llm_client.extract_content(response["response"])
+                content = llm_client.extract_content(response)
                 if content:
                     content, _ = strip_thinking_tags(content)
                     content = content.strip().strip('"').strip()
