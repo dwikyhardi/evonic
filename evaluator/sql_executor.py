@@ -24,29 +24,33 @@ class SQLExecutor:
             return validation_result
 
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
+            conn = sqlite3.connect(self.db_path)
+            try:
+                with conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
 
-                cursor.execute(query)
+                    cursor.execute(query)
 
-                clean = strip_sql_comments(query).upper()
-                if clean.startswith("SELECT") or clean.startswith("WITH"):
-                    rows = cursor.fetchall()
-                    result = [dict(row) for row in rows]
-                    return {
-                        "success": True,
-                        "result": result,
-                        "row_count": len(result),
-                        "columns": [description[0] for description in cursor.description] if cursor.description else []
-                    }
-                else:
-                    conn.commit()
-                    return {
-                        "success": True,
-                        "result": "Non-SELECT query executed",
-                        "affected_rows": cursor.rowcount
-                    }
+                    clean = strip_sql_comments(query).upper()
+                    if clean.startswith("SELECT") or clean.startswith("WITH"):
+                        rows = cursor.fetchall()
+                        result = [dict(row) for row in rows]
+                        return {
+                            "success": True,
+                            "result": result,
+                            "row_count": len(result),
+                            "columns": [description[0] for description in cursor.description] if cursor.description else []
+                        }
+                    else:
+                        conn.commit()
+                        return {
+                            "success": True,
+                            "result": "Non-SELECT query executed",
+                            "affected_rows": cursor.rowcount
+                        }
+            finally:
+                conn.close()
                     
         except sqlite3.Error as e:
             return {
@@ -147,7 +151,8 @@ class SQLExecutor:
     def get_sample_data_info(self) -> Dict[str, Any]:
         """Get information about the test database schema"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            conn = sqlite3.connect(self.db_path)
+            try:
                 cursor = conn.cursor()
                 
                 # Get table names
@@ -174,6 +179,8 @@ class SQLExecutor:
                     "tables": tables,
                     "table_info": table_info
                 }
+            finally:
+                conn.close()
                 
         except Exception as e:
             return {

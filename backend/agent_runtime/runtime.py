@@ -698,7 +698,9 @@ class AgentRuntime:
         except Exception:
             pass
         # Schedule next cleanup
-        threading.Timer(30.0, self._stale_timer_cleanup).start()
+        t = threading.Timer(30.0, self._stale_timer_cleanup)
+        t.daemon = True
+        t.start()
 
     def request_stop(self, session_id: str) -> None:
         """Signal the agent loop for this session to stop after the current LLM call.
