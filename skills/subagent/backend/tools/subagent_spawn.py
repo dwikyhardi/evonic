@@ -29,6 +29,20 @@ def execute(agent: dict, args: dict) -> dict:
         return {'error': str(e)}
 
     parent_name = parent_agent.get('name', parent_id)
+
+    # Derive report_to so _on_final_answer can forward the sub-agent's
+    # result back to the parent's user-facing session.
+    report_to_id = agent.get('user_id', '')
+    report_to_channel_id = agent.get('channel_id', '') or ''
+    if report_to_id.startswith('__agent__'):
+        human_sess = db.get_latest_human_session(parent_id)
+        if human_sess:
+            report_to_id = human_sess.get('external_user_id', '')
+            report_to_channel_id = human_sess.get('channel_id') or ''
+        else:
+            report_to_id = ''
+            report_to_channel_id = ''
+
     result = notify_agent(
         agent_id=sub_id,
         tag=f"AGENT/{parent_name}",
@@ -43,6 +57,8 @@ def execute(agent: dict, args: dict) -> dict:
             'from_agent_name': parent_name,
             'agent_message_depth': 1,
             'subagent_spawn': True,
+            'report_to_id': report_to_id,
+            'report_to_channel_id': report_to_channel_id,
         },
     )
 

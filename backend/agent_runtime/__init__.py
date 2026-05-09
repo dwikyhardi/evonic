@@ -136,6 +136,11 @@ try:
     from backend.event_stream import event_stream
     event_stream.on('agent_busy_changed', _on_agent_busy_changed)
     event_stream.on('summary_updated', _on_summary_updated)
+    # Auto-forward sub-agent/inter-agent replies to the originating agent's session.
+    # Must be registered here (not lazily in agent_messaging.py) so it fires
+    # regardless of whether agent_messaging tools have been loaded yet.
+    from backend.tools.agent_messaging import _on_final_answer
+    event_stream.on('final_answer', _on_final_answer)
 except Exception:
     pass
 

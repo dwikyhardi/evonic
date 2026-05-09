@@ -107,7 +107,9 @@ def notify_agent(agent_id: str, tag: str, message: str,
             channel_id = session_info.get('channel_id')
             target_session_id = session_id
         else:
-            target_session_id = db.get_or_create_session(_db_agent_id, external_user_id, channel_id)
+            target_session_id = db.get_or_create_session(
+                agent_id, external_user_id, channel_id,
+                db_agent_id=_db_agent_id)
     except Exception as e:
         _logger.error(
             "notify_agent: failed to get/create session for agent '%s' "

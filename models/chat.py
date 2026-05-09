@@ -425,6 +425,27 @@ class AgentChatDB:
             conn.commit()
             return True
 
+    def archive_sessions_by_agent_id(self, agent_id: str) -> int:
+        """Archive all non-archived sessions whose agent_id matches.
+
+        Used to clean up sub-agent sessions when the sub-agent is destroyed.
+        Returns the number of sessions archived.
+        """
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id FROM chat_sessions WHERE agent_id = ? AND (archived IS NULL OR archived = 0)",
+                (agent_id,))
+            session_ids = [row[0] for row in cursor.fetchall()]
+            for sid in session_ids:
+                cursor.execute("DELETE FROM chat_messages WHERE session_id = ?", (sid,))
+                cursor.execute("DELETE FROM chat_summaries WHERE session_id = ?", (sid,))
+                cursor.execute(
+                    "UPDATE chat_sessions SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (sid,))
+            conn.commit()
+            return len(session_ids)
+
     def has_session(self, session_id: str) -> bool:
         with self._connect() as conn:
             cursor = conn.cursor()

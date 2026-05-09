@@ -93,7 +93,7 @@ class TurnPrefetcher:
             fresh_tools = _ctx.build_tools(agent)
 
             # Rebuild agent context
-            assigned_tool_ids = db.get_agent_tools(agent_id)
+            assigned_tool_ids = db.get_agent_tools(db_agent_id)
             fresh_agent_context = {
                 'id': agent_id,
                 'name': agent.get('name', ''),
