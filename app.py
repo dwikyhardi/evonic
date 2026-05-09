@@ -238,8 +238,8 @@ if not _reloader_active or _is_reloader_child:
                 _total_sessions += 1
                 _session_id = _sess['id']
                 try:
-                    _clog = ChatLog(_agent_id, _session_id)
-                    _last = _clog.get_last_entry(types=_unreplied_types)
+                    with ChatLog(_agent_id, _session_id) as _clog:
+                        _last = _clog.get_last_entry(types=_unreplied_types)
                 except Exception:
                     continue
 

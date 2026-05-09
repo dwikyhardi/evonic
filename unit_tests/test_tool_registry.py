@@ -85,10 +85,13 @@ class TestDatabaseToolOperations:
         """Verify tools table exists after init"""
         from models.db import db
         import sqlite3
-        with sqlite3.connect(db.db_path) as conn:
+        conn = sqlite3.connect(db.db_path)
+        try:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tools'")
             assert cursor.fetchone() is not None
+        finally:
+            conn.close()
 
     def test_upsert_and_get_tool(self, use_test_database):
         """Create a tool, read it back, verify fields"""
@@ -160,12 +163,15 @@ class TestDatabaseToolOperations:
         """Verify tool_ids column added to domains/levels/tests"""
         from models.db import db
         import sqlite3
-        with sqlite3.connect(db.db_path) as conn:
+        conn = sqlite3.connect(db.db_path)
+        try:
             for table in ('domains', 'levels', 'tests'):
                 cursor = conn.cursor()
                 cursor.execute(f"PRAGMA table_info({table})")
                 cols = [row[1] for row in cursor.fetchall()]
                 assert 'tool_ids' in cols, f"tool_ids column missing in {table}"
+        finally:
+            conn.close()
 
     def test_js_mock_response_stored_as_string(self, use_test_database):
         """JavaScript mock responses are stored as-is (string)"""
