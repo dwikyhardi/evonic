@@ -72,11 +72,35 @@ DEFAULT_CONFIG = {
     'health_timeout': 10,
     'monitor_duration': 60,
     'keep_releases': 3,
-    'python_bin': sys.executable,
+    # python_bin defaults via detect_python_bin() at load time so the install
+    # venv (not the system interpreter) is preferred when supervisor runs.
+    'python_bin': None,
     'uv_bin': None,
     'telegram_bot_token': '',
     'telegram_chat_id': '',
 }
+
+
+def detect_python_bin(app_root: str) -> str:
+    """Return the install venv's python if available, else fall back to sys.executable.
+
+    Mirrors ``supervisor/migrate.detect_python_bin``. Duplicated rather than
+    cross-imported because supervisor must remain stdlib-only.
+    """
+    if is_windows():
+        candidates = [
+            os.path.join(app_root, '.venv', 'Scripts', 'python.exe'),
+            os.path.join(app_root, 'venv', 'Scripts', 'python.exe'),
+        ]
+    else:
+        candidates = [
+            os.path.join(app_root, '.venv', 'bin', 'python'),
+            os.path.join(app_root, 'venv', 'bin', 'python'),
+        ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return sys.executable
 
 # ---------------------------------------------------------------------------
 # Config
@@ -91,6 +115,17 @@ def load_config(config_path: str) -> dict:
         log.warning(f'Config file not found: {config_path} — using defaults')
     except json.JSONDecodeError as e:
         log.error(f'Config parse error: {e} — using defaults')
+
+    # Validate python_bin: prefer install venv if config value is missing or
+    # points at an interpreter that no longer exists. Avoids inheriting the
+    # system python that migrate.py may have captured at install time.
+    py = cfg.get('python_bin')
+    if not py or not os.path.exists(py):
+        resolved = detect_python_bin(cfg['app_root'])
+        if py and py != resolved:
+            log.warning(f'python_bin={py!r} not found; using {resolved}')
+        cfg['python_bin'] = resolved
+
     return cfg
 
 # ---------------------------------------------------------------------------
@@ -329,12 +364,22 @@ def start_daemon(release_path: str, app_root: str) -> tuple:
 
 
 def start_daemon_from_current(app_root: str) -> tuple:
-    """Resolve current pointer and start daemon from that release."""
+    """Resolve current pointer and start daemon from that release.
+
+    Re-links shared/ items first. The release worktree's ``db``, ``.env`` etc.
+    may be missing or stale (manual cleanup, partial worktree, broken update);
+    without re-linking, ``config.py`` would resolve to empty paths and the app
+    would render the first-run setup screen on top of an existing install.
+    """
     tag = get_current_release(app_root)
     if not tag:
         log.error('Cannot start daemon: no current release pointer found')
         return False, 0
     release_path = os.path.join(app_root, 'releases', tag)
+    try:
+        link_shared_dirs(app_root, release_path)
+    except Exception as e:
+        log.warning(f'link_shared_dirs failed before start: {e}')
     return start_daemon(release_path, app_root)
 
 # ---------------------------------------------------------------------------
@@ -503,7 +548,14 @@ def create_venv_and_install(release_path: str, python_bin: str,
 # ---------------------------------------------------------------------------
 
 def link_shared_dirs(app_root: str, release_path: str) -> None:
-    """Symlink shared/ items into the release directory."""
+    """Symlink shared/ items into the release directory.
+
+    Idempotent: a link that already resolves to the correct shared target is
+    left untouched. A real (non-symlink) directory at the link path is *not*
+    deleted — that path may hold user data and the caller must clean it up
+    manually before retrying. This makes the function safe to invoke on every
+    daemon (re)start.
+    """
     shared_root = os.path.join(app_root, 'shared')
 
     for name, is_dir in SHARED_ITEMS:
@@ -515,11 +567,19 @@ def link_shared_dirs(app_root: str, release_path: str) -> None:
             log.debug(f'Shared item not found, skipping: {target}')
             continue
 
-        # Remove whatever git worktree put there
         if os.path.islink(link):
+            try:
+                if os.path.realpath(link) == os.path.realpath(target):
+                    continue  # already correctly linked
+            except OSError:
+                pass
             os.unlink(link)
         elif os.path.isdir(link):
-            shutil.rmtree(link)
+            log.error(
+                f'Refusing to replace real directory at {link} with symlink '
+                f'to {target}. Move or remove it manually before retrying.'
+            )
+            continue
         elif os.path.exists(link):
             os.unlink(link)
 

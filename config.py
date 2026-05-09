@@ -60,7 +60,24 @@ def get_evaluator_type(domain: str) -> str:
 
 # Database paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_shared_db_dir = os.path.join(BASE_DIR, "shared", "db")
+
+
+def _resolve_app_root(base_dir: str) -> str:
+    """Return the app root directory.
+
+    In release mode the running code lives under ``<app_root>/releases/<tag>/``.
+    Mutable state (``shared/``, ``current`` symlink) lives at the app root, so
+    config must resolve to the grandparent in that case. In flat-repo mode the
+    app root *is* the directory containing this file.
+    """
+    parent = os.path.dirname(base_dir)
+    if os.path.basename(parent) == "releases":
+        return os.path.dirname(parent)
+    return base_dir
+
+
+APP_ROOT = _resolve_app_root(BASE_DIR)
+_shared_db_dir = os.path.join(APP_ROOT, "shared", "db")
 if not os.path.isdir(_shared_db_dir):
     os.makedirs(_shared_db_dir, exist_ok=True)
 
@@ -84,10 +101,10 @@ LOG_FULL_RESPONSE = os.getenv("LOG_FULL_RESPONSE", "0") == "1"
 
 # Raw LLM API call logging (markdown)
 LLM_API_LOG_ENABLED = os.getenv("LLM_API_LOG_ENABLED", "0") == "1"
-LLM_API_LOG_FILE = os.getenv("LLM_API_LOG_FILE", os.path.join(BASE_DIR, "logs", "llm_api_calls.md"))
+LLM_API_LOG_FILE = os.getenv("LLM_API_LOG_FILE", os.path.join(APP_ROOT, "logs", "llm_api_calls.md"))
 
 # Event stream logging to file
-EVENT_LOG_FILE = os.getenv("EVENT_LOG_FILE", os.path.join(BASE_DIR, "logs", "events.log"))
+EVENT_LOG_FILE = os.getenv("EVENT_LOG_FILE", os.path.join(APP_ROOT, "logs", "events.log"))
 
 # Docker sandbox configuration (shared by runpy, bash, etc.)
 SANDBOX_WORKSPACE = os.getenv("SANDBOX_WORKSPACE", BASE_DIR)

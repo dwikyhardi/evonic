@@ -217,6 +217,29 @@ def start_server(port=None, host=None, debug=None, daemon=False):
     if debug:
         print("Debug mode: ON")
 
+    # Foreground release-mode parity: if the app was migrated to release-based
+    # layout, exec the release's python on its app.py (mirrors daemon path).
+    # Falls through to legacy in-process import when no release is staged.
+    current_link = os.path.join(ROOT, "current")
+    sup_cfg_path = os.path.join(ROOT, "supervisor", "config.json")
+    release_mode = os.path.islink(current_link) and os.path.exists(sup_cfg_path)
+    if release_mode:
+        release_path = os.path.realpath(current_link)
+        if sys.platform == "win32":
+            release_py = os.path.join(release_path, ".venv", "Scripts", "python.exe")
+        else:
+            release_py = os.path.join(release_path, ".venv", "bin", "python")
+        release_app = os.path.join(release_path, "app.py")
+        if os.path.exists(release_py) and os.path.exists(release_app):
+            print(EVONIC_BANNER)
+            print(f"Starting server (Ctrl+C to stop)")
+            print(f"Host: {host}")
+            print(f"Port: {port}")
+            print(f"URL: http://{host if host != '0.0.0.0' else 'localhost'}:{port}")
+            os.chdir(release_path)
+            os.execv(release_py, [release_py, release_app])
+            # execv replaces the process; lines below unreachable.
+
     try:
         from app import app
     except ModuleNotFoundError as e:

@@ -37,6 +37,31 @@ SHARED_MOVES = [
 PLUGIN_CONFIG_GLOB = 'plugins/*/config.json'
 
 
+def detect_python_bin(app_root: str) -> str:
+    """Return the install venv's python if available, else fall back to sys.executable.
+
+    When migration is invoked via the system interpreter (e.g. ``/usr/bin/python3``),
+    persisting that into ``supervisor/config.json`` causes the supervisor to build
+    release venvs from the system python instead of the venv the user originally
+    installed against. Detecting the install venv keeps the dependency baseline
+    consistent across releases.
+    """
+    if sys.platform == 'win32':
+        candidates = [
+            os.path.join(app_root, '.venv', 'Scripts', 'python.exe'),
+            os.path.join(app_root, 'venv', 'Scripts', 'python.exe'),
+        ]
+    else:
+        candidates = [
+            os.path.join(app_root, '.venv', 'bin', 'python'),
+            os.path.join(app_root, 'venv', 'bin', 'python'),
+        ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return sys.executable
+
+
 def info(msg):
     print(f'[migrate] {msg}')
 
@@ -211,7 +236,10 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
                     subprocess.run(['cmd', '/c', 'mklink', '/J',
                                     str(link), str(target)], check=True)
                 else:
-                    os.symlink(str(target), str(link),
+                    # Relative symlink: portable across repo relocation
+                    # (matches supervisor.link_shared_dirs).
+                    rel_target = os.path.relpath(str(target), os.path.dirname(str(link)))
+                    os.symlink(rel_target, str(link),
                                target_is_directory=is_dir)
         if not dry_run:
             mark_done(state, state_file, 'link_shared')
@@ -257,7 +285,7 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
                 'health_timeout': 10,
                 'monitor_duration': 60,
                 'keep_releases': 3,
-                'python_bin': sys.executable,
+                'python_bin': detect_python_bin(str(root)),
                 'uv_bin': None,
                 'telegram_bot_token': '',
                 'telegram_chat_id': '',
