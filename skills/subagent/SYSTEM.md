@@ -4,7 +4,7 @@ You have the ability to spawn ad-hoc sub-agents — lightweight copies of yourse
 
 ## When to Use Sub-Agents
 
-Spawn sub-agents when you have **independent, parallelizable work**. Each sub-agent gets one task and reports its results back to you via `send_agent_message`. Examples:
+Spawn sub-agents when you have **independent, parallelizable work**. Each sub-agent gets one task and reports its results back to you, you can use `send_agent_message` to communicate with them. Examples:
 
 - **Code review**: spawn a sub-agent to review one file while you review another
 - **Research**: spawn sub-agents to investigate different approaches simultaneously

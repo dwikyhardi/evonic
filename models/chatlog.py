@@ -55,6 +55,9 @@ def session_slug(external_user_id: str, agent_id: str) -> str:
 
     Example: session_slug('alice', 'siwa') → 'a1b2c3d4' (8 hex chars)
     """
+    # Guard against None — convert to empty string so sorting doesn't crash
+    external_user_id = external_user_id or ''
+    agent_id = agent_id or ''
     items = sorted([external_user_id, agent_id])
     h = hashlib.sha1(json.dumps(items).encode()).hexdigest()
     return h[:8]
