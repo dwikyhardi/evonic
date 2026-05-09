@@ -35,6 +35,47 @@ def validate_env_keys(env: dict) -> tuple:
     return env, None
 
 
+def file_stat_code(path: str) -> str:
+    """Return a Python code snippet that prints exists/size/is_binary for *path*.
+
+    Used by SSH-based backends (SSHBackend, RemoteWorkplaceBackend,
+    CloudWorkplaceBackend) to query file metadata on a remote host.
+    The snippet prints ``exists=0|1 size=<int> is_binary=0|1`` on a
+    single line, parseable by :func:`parse_file_stat_output`.
+    """
+    return f"""
+import os
+p = {repr(path)}
+if not os.path.exists(p):
+    print('exists=0 size=0 is_binary=0')
+else:
+    size = os.path.getsize(p)
+    try:
+        chunk = open(p, 'rb').read(8192)
+        is_binary = b'\\x00' in chunk
+    except Exception:
+        is_binary = True
+    print(f'exists=1 size={{size}} is_binary={{1 if is_binary else 0}}')
+"""
+
+
+def parse_file_stat_output(output: str) -> dict:
+    """Parse the ``exists=… size=… is_binary=…`` output produced by :func:`file_stat_code`.
+
+    Returns ``{'exists': bool, 'size': int, 'is_binary': bool}``.
+    On parse failure, returns ``{'exists': False, 'size': 0, 'is_binary': False}``.
+    """
+    try:
+        parts = dict(kv.split('=') for kv in output.strip().split())
+        return {
+            'exists': parts.get('exists') == '1',
+            'size': int(parts.get('size', 0)),
+            'is_binary': parts.get('is_binary') == '1',
+        }
+    except Exception:
+        return {'exists': False, 'size': 0, 'is_binary': False}
+
+
 # ---------------------------------------------------------------------------
 # Abstract base
 # ---------------------------------------------------------------------------
