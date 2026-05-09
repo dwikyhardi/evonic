@@ -2,36 +2,12 @@
   "id": "caveman",
   "name": "Caveman",
   "version": "1.0.0",
-  "description": "Ultra-compressed communication mode. Cuts token usage ~75% by making agents speak like caveman while keeping full technical accuracy. Supports intensity levels: lite, full, ultra, wenyan variants.",
+  "description": "Ultra-compressed communication mode. Cuts token usage ~75% by making agents speak like caveman while keeping full technical accuracy. Supports intensity levels: lite, full, ultra.",
   "author": "Evonic",
   "enabled": true,
-  "nav_items": [
-    {
-      "label": "Caveman",
-      "path": "/caveman"
-    }
-  ],
-  "routes": [
-    {
-      "path": "/caveman",
-      "methods": [
-        "GET"
-      ],
-      "handler": "page"
-    },
-    {
-      "path": "/api/caveman",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "handler": "api"
-    }
-  ],
   "events": [
     "message_received",
     "processing_started",
-    "turn_complete",
     "final_answer"
   ],
   "variables": [
@@ -40,14 +16,7 @@
       "label": "Default Caveman Mode",
       "type": "string",
       "default": "full",
-      "description": "Default caveman intensity level. Options: off, lite, full, ultra, wenyan-lite, wenyan-full, wenyan-ultra"
-    },
-    {
-      "name": "TRACK_STATS",
-      "label": "Track Token Stats",
-      "type": "boolean",
-      "default": true,
-      "description": "Track token usage and estimated savings per session"
+      "description": "Default caveman intensity level. Options: off, lite, full, ultra"
     }
   ]
 }
