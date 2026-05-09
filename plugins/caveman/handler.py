@@ -3,26 +3,15 @@ Caveman — event handlers.
 Uses message_interceptor to inject compression rules into LLM context.
 """
 
-import time
 import logging
 
 _logger = logging.getLogger(__name__)
 
-# Per-agent state: {agent_id: {"mode": str, "start_time": float, ...}}
+# Per-agent state: {agent_id: {"mode": str, ...}}
 _agent_state = {}
 
-# Lifetime stats (persists in memory while plugin is loaded)
-_lifetime_stats = {
-    "total_output_tokens": 0,
-    "total_input_tokens": 0,
-    "total_turns": 0,
-    "sessions_tracked": 0,
-    "mode_switches": 0,
-}
-
-MODES = ("off", "lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra")
+MODES = ("off", "lite", "full", "ultra")
 DEFAULT_MODE = "full"
-TRACK_STATS = True
 
 CAVEMAN_RULES = {
     "lite": """CAVEMAN MODE: LITE
@@ -54,35 +43,6 @@ Rules:
 - Fragments expected. Telegram style
 - Keep all technical terms recognizable — no invented abbreviations
 - Auto-clarity: drop ultra mode for security warnings or irreversible actions.""",
-
-    "wenyan-lite": """CAVEMAN MODE: WENYAN-LITE
-Style: Classical Chinese (文言文) lite compression.
-Rules:
-- Use classical Chinese sentence particles sparingly: 也, 矣, 乎
-- Short phrases over full sentences
-- Mix modern and classical vocabulary
-- Compress common expressions: 然而 → 然, 因为 → 因, 所以 → 故
-- Keep technical terms in English
-- Professional but compressed.""",
-
-    "wenyan-full": """CAVEMAN MODE: WENYAN-FULL
-Style: Classical Chinese (文言文) full compression.
-Rules:
-- Classical particles: 也, 矣, 乎, 哉, 耳
-- Subject-verb-object compressed to essential characters
-- Drop connectives where context clear
-- 故 for "therefore", 然 for "however", 若 for "if"
-- Tech terms stay in English
-- Fragments, telegraphic style.""",
-
-    "wenyan-ultra": """CAVEMAN MODE: WENYAN-ULTRA
-Style: Classical Chinese (文言文) maximum compression.
-Rules:
-- Minimal characters per concept
-- Classical grammar only
-- Tech terms abbreviated even in English
-- Only most essential information preserved
-- Use for quick status updates and code snippets.""",
 }
 
 # Command response messages (pre-computed)
@@ -104,11 +64,6 @@ def _get_agent_state(agent_id, sdk=None):
                 default = cfg
         _agent_state[agent_id] = {
             "mode": "off",
-            "start_time": time.time(),
-            "output_tokens": 0,
-            "input_tokens": 0,
-            "turns": 0,
-            "mode_switches": 0,
         }
     return _agent_state[agent_id]
 
@@ -122,8 +77,6 @@ def _handle_command(text, agent_id):
         s = _get_agent_state(agent_id)
         mode = s.get("_default_mode", DEFAULT_MODE)
         s["mode"] = mode
-        _lifetime_stats["mode_switches"] += 1
-        s["mode_switches"] += 1
         return True, _CMD_RESPONSES["activated"].format(mode=mode)
 
     # /caveman <mode>
@@ -135,8 +88,6 @@ def _handle_command(text, agent_id):
                 s["mode"] = "off"
                 return True, _CMD_RESPONSES["deactivated"]
             s["mode"] = mode
-            _lifetime_stats["mode_switches"] += 1
-            s["mode_switches"] += 1
             return True, _CMD_RESPONSES["mode_set"].format(mode=mode)
         return True, _CMD_RESPONSES["unknown_mode"].format(mode=mode, valid=", ".join(MODES))
 
@@ -153,40 +104,16 @@ def _handle_command(text, agent_id):
         s["_pending_action"] = action
         return True, _CMD_RESPONSES["sub_skill"].format(action=action)
 
-    # Stats
-    if t == "/caveman-stats":
-        s = _get_agent_state(agent_id)
-        elapsed = time.time() - s["start_time"]
-        mins = int(elapsed / 60)
-        lines = [
-            "=== CAVEMAN STATS ===",
-            f"Mode: {s['mode']}",
-            f"Session turns: {s['turns']}",
-            f"Session output tokens: {s['output_tokens']}",
-            f"Session input tokens: {s['input_tokens']}",
-            f"Session mode switches: {s['mode_switches']}",
-            f"Session duration: {mins}m",
-            "",
-            "--- Lifetime ---",
-            f"Total turns: {_lifetime_stats['total_turns']}",
-            f"Total output tokens: {_lifetime_stats['total_output_tokens']}",
-            f"Total input tokens: {_lifetime_stats['total_input_tokens']}",
-            f"Sessions tracked: {_lifetime_stats['sessions_tracked']}",
-            f"Total mode switches: {_lifetime_stats['mode_switches']}",
-        ]
-        return True, "\n".join(lines)
-
     # Help
     if t == "/caveman-help":
         lines = [
             "=== CAVEMAN HELP ===",
             "/caveman — activate default mode",
-            "/caveman <mode> — set mode (lite/full/ultra/wenyan-lite/wenyan-full/wenyan-ultra)",
+            "/caveman <mode> — set mode (lite/full/ultra)",
             "/caveman off — deactivate",
             "/caveman-commit — caveman-style commit message",
             "/caveman-review — caveman code review",
             "/caveman-compress — compress text to caveman style",
-            "/caveman-stats — show token stats",
             "/caveman-help — this help",
         ]
         return True, "\n".join(lines)
@@ -197,17 +124,11 @@ def _handle_command(text, agent_id):
 def _message_interceptor(agent_id, content, messages):
     """Inject caveman rules into LLM context.
 
-    Called synchronously in the LLM loop at two points:
-    1. Pre-turn (content=''): before first LLM call — detect commands, inject rules
-    2. Pre-final (content=...): before final answer — track stats
+    Called synchronously in the LLM loop before the first LLM call to detect
+    caveman commands and inject the active mode's rules.
     """
-    # Pre-final: track stats
+    # Pre-final hook — nothing to do.
     if content:
-        s = _agent_state.get(agent_id)
-        if s and s["mode"] != "off":
-            s["turns"] += 1
-            _lifetime_stats["total_turns"] += 1
-            _lifetime_stats["sessions_tracked"] = len(_agent_state)
         return None
 
     # Pre-turn: find latest user message
@@ -241,7 +162,7 @@ def _message_interceptor(agent_id, content, messages):
 
 
 def on_message_received(event, sdk):
-    """Track incoming messages for stats."""
+    """Initialize agent state and capture the configured default mode."""
     agent_id = event.get("agent_id", "")
     if not agent_id:
         return
@@ -251,27 +172,8 @@ def on_message_received(event, sdk):
     s["_default_mode"] = sdk.config.get("DEFAULT_MODE", DEFAULT_MODE)
 
 
-def on_turn_complete(event, sdk):
-    """Track token usage for stats."""
-    agent_id = event.get("agent_id", "")
-    if not agent_id:
-        return
-
-    s = _get_agent_state(agent_id)
-
-    usage = event.get("usage", event.get("token_usage", {}))
-    out_tokens = usage.get("output_tokens", usage.get("completion_tokens", 0)) or 0
-    in_tokens = usage.get("input_tokens", usage.get("prompt_tokens", 0)) or 0
-
-    s["output_tokens"] += out_tokens
-    s["input_tokens"] += in_tokens
-
-    _lifetime_stats["total_output_tokens"] += out_tokens
-    _lifetime_stats["total_input_tokens"] += in_tokens
-
-
 def on_final_answer(event, sdk):
-    """Log caveman-styled response for stats."""
+    """Log caveman-styled response."""
     agent_id = event.get("agent_id", "")
     s = _agent_state.get(agent_id)
 
