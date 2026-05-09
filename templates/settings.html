@@ -165,6 +165,43 @@ block content %}
                     class="ml-4 w-20 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
+            <!-- Task Classifier -->
+            <div
+                class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <div class="font-medium text-gray-800 dark:text-gray-100">
+                            Task Classifier
+                        </div>
+                        <div class="text-sm text-gray-500 mt-0.5">
+                            Automatically classify tasks as trivial or complex.
+                            Trivial tasks skip planning and execute directly.
+                        </div>
+                    </div>
+                    {{ toggle(id='task-classifier-toggle',
+                    onchange='saveTaskClassifier()',
+                    extra_class='flex-shrink-0 ml-4') }}
+                </div>
+                <div class="flex flex-col sm:flex-row items-center gap-3">
+                    <select
+                        id="task-classifier-model-select"
+                        class="w-full sm:flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                        <option value="">Use default model</option>
+                    </select>
+                    <button
+                        onclick="saveTaskClassifier()"
+                        class="btn-primary px-4 py-2 text-sm w-full sm:w-auto"
+                    >
+                        Save
+                    </button>
+                </div>
+                <div
+                    id="task-classifier-status"
+                    class="mt-2 text-sm hidden"
+                ></div>
+            </div>
             <!-- Default LLM Model -->
             <div
                 class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
@@ -1329,6 +1366,57 @@ block content %}
                 res8.value;
         const res3 = await apiGet("/api/settings/theme");
         if (res3) updateThemeButtons(res3.theme);
+        await loadTaskClassifier();
+    }
+
+    async function loadTaskClassifier() {
+        try {
+            const [settingsRes, modelsRes] = await Promise.all([
+                fetch("/api/settings/task-classifier").then(r => r.json()),
+                fetch("/api/models").then(r => r.json()),
+            ]);
+            const toggle = document.getElementById("task-classifier-toggle");
+            if (toggle) toggle.checked = settingsRes.enabled;
+            const select = document.getElementById("task-classifier-model-select");
+            if (select) {
+                const models = modelsRes.models || [];
+                select.innerHTML =
+                    '<option value="">Use default model</option>' +
+                    models.map(m =>
+                        `<option value="${m.id}" ${settingsRes.model_id === m.id ? "selected" : ""}>${m.name} (${m.model_name})</option>`
+                    ).join("");
+            }
+        } catch (e) {
+            console.warn("Could not load task classifier settings:", e);
+        }
+    }
+
+    async function saveTaskClassifier() {
+        const enabled = document.getElementById("task-classifier-toggle")?.checked ?? true;
+        const modelId = document.getElementById("task-classifier-model-select")?.value || "";
+        const statusDiv = document.getElementById("task-classifier-status");
+        try {
+            const response = await fetch("/api/settings/task-classifier", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled, model_id: modelId }),
+            });
+            const result = await response.json();
+            if (result.success) {
+                statusDiv.className = "mt-2 text-sm text-green-600";
+                statusDiv.textContent = "Task classifier settings saved!";
+                statusDiv.classList.remove("hidden");
+                setTimeout(() => statusDiv.classList.add("hidden"), 3000);
+            } else {
+                statusDiv.className = "mt-2 text-sm text-red-600";
+                statusDiv.textContent = "Error: " + (result.error || "Failed to save");
+                statusDiv.classList.remove("hidden");
+            }
+        } catch (e) {
+            statusDiv.className = "mt-2 text-sm text-red-600";
+            statusDiv.textContent = "Error: " + e.message;
+            statusDiv.classList.remove("hidden");
+        }
     }
 
     async function togglePublicHistory(enabled) {
