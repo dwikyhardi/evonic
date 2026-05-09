@@ -15,6 +15,10 @@ def execute(agent: dict, args: dict) -> dict:
     if not parent_id:
         return {'error': 'Cannot determine parent agent ID from context.'}
 
+    # Sub-agents cannot spawn further sub-agents
+    if agent.get('is_subagent'):
+        return {'error': 'Sub-agents cannot spawn other sub-agents.'}
+
     task = args.get('task', '').strip()
     if not task:
         return {'error': 'A task description is required. Use subagent_spawn({task: "..."}).'}

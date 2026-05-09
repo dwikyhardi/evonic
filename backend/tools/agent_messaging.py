@@ -217,6 +217,21 @@ def _exec_send_agent_message(args: dict, agent_context: dict) -> dict:
             )
         }
 
+    # Sub-agents can only message their parent agent
+    if agent_context.get('is_subagent'):
+        parent_id = agent_context.get('parent_id', '')
+        if target_id != parent_id:
+            _logger.warning(
+                "Sub-agent '%s' tried to message '%s' — blocked (can only message parent '%s').",
+                sender_id, target_id, parent_id,
+            )
+            return {
+                'error': (
+                    f"Sub-agents can only send messages to their parent agent ('{parent_id}'). "
+                    f"End your turn with a response — it will be automatically forwarded to the parent."
+                )
+            }
+
     # Validate target agent
     target_agent = db.get_agent(target_id)
     if not target_agent:
