@@ -516,11 +516,13 @@ class AgentRuntime:
         self._buffer_timers: Dict[str, threading.Timer] = {}
         self._buffer_lock = threading.Lock()
         self._workers: list[threading.Thread] = []
-        for i in range(AGENT_QUEUE_WORKERS):
+        # Ensure enough workers for sub-agent parallelism (max 10 sub-agents + parent + headroom)
+        _num_workers = max(AGENT_QUEUE_WORKERS, 12)
+        for i in range(_num_workers):
             t = threading.Thread(target=self._worker, name=f'agent-worker-{i}', daemon=True)
             t.start()
             self._workers.append(t)
-        _logger.info("Started %d queue worker(s)", AGENT_QUEUE_WORKERS)
+        _logger.info("Started %d queue worker(s)", _num_workers)
         AgentRuntime._llm_serializer._concurrency_mgr = ConcurrencyManager()
         self._session_skill_mds: Dict[str, Dict[str, str]] = {}    # session_id -> {skill_id: system_md}
         self._session_skill_tools: Dict[str, Dict[str, list]] = {}  # session_id -> {skill_id: [tool_defs]}
@@ -895,6 +897,15 @@ class AgentRuntime:
                     self._buffer_timers.pop(session_id, None)
                 raise
             return {"response": None, "buffered": True, "tool_trace": [], "timeline": []}
+
+        # Inter-agent messages: fire-and-forget (don't block the sender's worker thread).
+        # The sub-agent/target processes asynchronously and results are delivered via
+        # _on_final_answer auto-forward, not via the return value.
+        if external_user_id and external_user_id.startswith('__agent__'):
+            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+                              send_via_channel=False)
+            self._message_queue.put(task)
+            return {"response": None, "async": True, "tool_trace": [], "timeline": []}
 
         # No buffering — queue immediately and wait for result
         task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
