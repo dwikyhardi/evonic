@@ -64,15 +64,14 @@ class TelegramChannel(BaseChannel):
 
     def get_system_instructions(self) -> str | None:
         return (
-            "Telegram Formatting Constraint:\n"
+            "IMPORTANT — Telegram Formatting Constraint:\n"
             "You are responding via Telegram which uses PLAIN TEXT only. "
             "Markdown formatting (bold, italic, code blocks, headers, bullet lists, "
             "blockquotes, inline code, links) is NOT supported and will appear as "
             "raw symbols, making your response unreadable.\n\n"
-            "Strictly follow these rules:\n"
-            "- Do not use uppercase for all text\n"
-            "- Never use markdown symbols: **, *, `, ```, #, -, >, [], ()\n"
-            "- Use uppercase only and only for emphasis instead of bold/italic\n"
+            "STRICTLY FOLLOW THESE RULES:\n"
+            "- NEVER use markdown symbols: **, *, `, ```, #, -, >, [], ()\n"
+            "- Use UPPERCASE for emphasis instead of bold/italic\n"
             "- Use numbered lists (1. 2. 3.) for lists\n"
             "- Use indentation with spaces for structure\n"
             "- Use plain URLs without markdown link syntax\n"
