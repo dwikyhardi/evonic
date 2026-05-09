@@ -1103,6 +1103,9 @@ class EvaluationEngine:
         from evaluator.tools import tool_framework
         _client = run_llm_client or llm_client
 
+        # Read max tool iterations from DB (respects web UI override)
+        max_tool_iterations = int(db.get_setting('max_tool_iterations', str(MAX_TOOL_ITERATIONS)))
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -1167,11 +1170,11 @@ class EvaluationEngine:
             )
             messages.append({"role": "user", "content": plan_msg})
 
-        for iteration in range(MAX_TOOL_ITERATIONS):
+        for iteration in range(max_tool_iterations):
             # Estimate prompt tokens from messages (rough: 1 token ≈ 4 chars)
             prompt_chars = sum(len(m.get("content", "") or "") for m in messages)
             est_tokens = prompt_chars // 4
-            self._log(f'[TOOL-LOOP] Iteration {iteration + 1}/{MAX_TOOL_ITERATIONS} (~{est_tokens}tok)')
+            self._log(f'[TOOL-LOOP] Iteration {iteration + 1}/{max_tool_iterations} (~{est_tokens}tok)')
             
             # Initialize turn log
             turn_log = {

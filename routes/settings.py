@@ -579,6 +579,20 @@ def api_agent_queue_workers():
     return jsonify({'value': int(val)})
 
 
+@settings_bp.route('/api/settings/max-tool-iterations', methods=['GET', 'PUT'])
+def api_max_tool_iterations():
+    """Get or set the maximum tool-call iterations per agent turn and per evaluation (1-1000)."""
+    from models.db import db
+    if request.method == 'PUT':
+        data = request.get_json()
+        raw_value = int(data.get('value', config.AGENT_MAX_TOOL_ITERATIONS))
+        value = max(1, min(1000, raw_value))
+        db.set_setting('max_tool_iterations', str(value))
+        return jsonify({'success': True, 'value': value})
+    val = db.get_setting('max_tool_iterations', str(config.AGENT_MAX_TOOL_ITERATIONS))
+    return jsonify({'value': int(val)})
+
+
 @settings_bp.route('/api/settings/events-dispatch', methods=['GET', 'PUT'])
 def api_events_dispatch():
     """Get or set the global events dispatch toggle."""
