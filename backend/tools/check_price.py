@@ -32,7 +32,7 @@ def execute(agent, args: dict) -> dict:
     total = 0
     current = start
     while current < end:
-        is_weekend = current.weekday() in (4, 5, 6)
+        is_weekend = current.weekday() in (5, 6)
         price = rate["weekend"] if is_weekend else rate["weekday"]
         prices.append({
             "date": current.strftime("%Y-%m-%d"),
