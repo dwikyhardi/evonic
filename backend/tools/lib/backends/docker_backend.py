@@ -150,7 +150,7 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
 
     cmd = [
         'run', '-d',
-	'--rm',
+	    '--rm',
         '--name', name,
         f'--memory={SANDBOX_MEMORY_LIMIT}',
         f'--cpus={SANDBOX_CPU_LIMIT}',
