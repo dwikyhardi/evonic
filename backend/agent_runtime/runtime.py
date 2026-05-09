@@ -1417,7 +1417,7 @@ class AgentRuntime:
         # but a long-running tool loop never calls subagent_manager.get()
         # so last_active_at is never refreshed.
         _sa_heartbeat = None
-        if is_subagent:
+        if agent.get('is_subagent'):
             from backend.subagent_manager import subagent_manager as _sam
             _sam._touch(agent_id)  # immediate touch before loop starts
 
