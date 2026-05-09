@@ -186,9 +186,11 @@ class ChatDelegationMixin:
         session = self._chat_db(agent_id).get_session(session_id)
         if not session:
             return None
-        # Enrich with agent and channel info from main DB
-        agent = self.get_agent(agent_id)
-        session['agent_name'] = agent['name'] if agent else 'Unknown'
+        # Enrich with agent and channel info from main DB.
+        # Sub-agents have no DB entry, so fall back to the session's own agent_id.
+        agent = self.get_agent(session.get('agent_id') or agent_id)
+        session['agent_name'] = (agent['name'] if agent
+                                 else (session.get('agent_id') or 'Unknown'))
         if session.get('channel_id'):
             ch = self.get_channel(session['channel_id'])
             session['channel_type'] = ch.get('type') if ch else None
@@ -275,11 +277,12 @@ class ChatDelegationMixin:
 
                 union_body = " UNION ALL ".join(arms)
                 data_sql = f"""
-                    SELECT combined.*, ag.name AS agent_name,
+                    SELECT combined.*,
+                           COALESCE(ag.name, combined.agent_id) AS agent_name,
                            ch.type AS channel_type, ch.name AS channel_name,
                            peer.name AS peer_agent_name
                     FROM ({union_body}) combined
-                    JOIN agents ag ON ag.id = combined.agent_id
+                    LEFT JOIN agents ag ON ag.id = combined.agent_id
                     LEFT JOIN channels ch ON ch.id = combined.channel_id
                     LEFT JOIN agents peer ON (
                         combined.external_user_id LIKE '__agent__%'
