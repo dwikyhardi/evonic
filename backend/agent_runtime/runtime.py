@@ -749,6 +749,11 @@ class AgentRuntime:
             image_url: Optional base64 data URL or http URL for vision-enabled agents.
             metadata: Optional extra metadata merged into the saved message record.
         """
+        # Normalize external_user_id — system-internal messages (e.g. restart
+        # greeting) may arrive with None when no external user is associated.
+        if external_user_id is None:
+            external_user_id = '__system__'
+
         agent = db.get_agent(agent_id)
         db_agent_id = agent_id  # Default: agent's own per-agent chat DB
         if not agent:
