@@ -296,6 +296,7 @@ def stop_daemon(app_root: str, timeout: int = 15) -> bool:
         return True
     if not _is_process_alive(pid):
         log.info(f'Daemon PID {pid} not alive — already stopped')
+        _remove_daemon_pid(app_root)
         return True
 
     log.info(f'Sending SIGTERM to daemon PID {pid}')
@@ -306,12 +307,14 @@ def stop_daemon(app_root: str, timeout: int = 15) -> bool:
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
+            _remove_daemon_pid(app_root)
             return True
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not _is_process_alive(pid):
             log.info(f'Daemon PID {pid} stopped')
+            _remove_daemon_pid(app_root)
             return True
         time.sleep(0.5)
 
@@ -325,7 +328,33 @@ def stop_daemon(app_root: str, timeout: int = 15) -> bool:
         except ProcessLookupError:
             pass
     time.sleep(1)
+    _remove_daemon_pid(app_root)
     return not _is_process_alive(pid)
+
+
+def _write_daemon_pid(app_root: str, pid: int) -> None:
+    """Persist the running daemon's PID so the CLI can find it.
+
+    The CLI's ``evonic status`` and ``evonic stop`` read this file; without it
+    they report the server as not running even when supervisor has a live
+    daemon underneath.
+    """
+    pid_file = _pid_file(app_root)
+    try:
+        os.makedirs(os.path.dirname(pid_file), exist_ok=True)
+        with open(pid_file, 'w') as f:
+            f.write(str(pid))
+    except OSError as e:
+        log.warning(f'Could not write daemon PID file {pid_file}: {e}')
+
+
+def _remove_daemon_pid(app_root: str) -> None:
+    pid_file = _pid_file(app_root)
+    try:
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+    except OSError as e:
+        log.warning(f'Could not remove daemon PID file {pid_file}: {e}')
 
 
 def start_daemon(release_path: str, app_root: str) -> tuple:
@@ -360,6 +389,7 @@ def start_daemon(release_path: str, app_root: str) -> tuple:
         return False, proc.pid
 
     log.info(f'Daemon started with PID {proc.pid}')
+    _write_daemon_pid(app_root, proc.pid)
     return True, proc.pid
 
 

@@ -20,8 +20,22 @@ for lib_dir in ("lib",):
         sys.path.insert(0, lib_path)
 
 
-# PID file location
-PID_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "run")
+# PID file location.
+#
+# After migration to the release-based layout the canonical run/ directory
+# lives at ``<app_root>/shared/run/`` (supervisor writes the daemon PID
+# there). Pre-migration installs still use ``<install_root>/run/``. Resolve
+# whichever is present so ``evonic status``/``evonic stop`` find a daemon
+# regardless of whether it was launched by the legacy in-process path or by
+# supervisor.
+def _resolve_pid_dir():
+    shared_run = os.path.join(ROOT, "shared", "run")
+    if os.path.isdir(shared_run):
+        return shared_run
+    return os.path.join(ROOT, "run")
+
+
+PID_DIR = _resolve_pid_dir()
 PID_FILE = os.path.join(PID_DIR, "evonic.pid")
 
 
