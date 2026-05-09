@@ -17,6 +17,7 @@ _logger = logging.getLogger(__name__)
 
 # Auto-destroy after 10 minutes of idle
 _SUBAGENT_IDLE_TTL = 600  # seconds
+_MAX_SUBAGENTS_PER_PARENT = 10
 
 
 class SubAgent:
@@ -76,6 +77,16 @@ class SubAgentManager:
             raise ValueError("parent_agent must have an 'id'")
 
         with self._lock:
+            active_count = sum(
+                1 for s in self._subagents.values()
+                if s.parent_id == parent_id
+            )
+            if active_count >= _MAX_SUBAGENTS_PER_PARENT:
+                raise ValueError(
+                    f"Cannot spawn more sub-agents: limit of "
+                    f"{_MAX_SUBAGENTS_PER_PARENT} active sub-agents reached. "
+                    f"Destroy existing sub-agents first."
+                )
             counter = self._counters.get(parent_id, 0) + 1
             self._counters[parent_id] = counter
 
