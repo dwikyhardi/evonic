@@ -256,7 +256,7 @@ class TestEmptyResponseRecovery(unittest.TestCase):
         """Run run_tool_loop with patched db/tool_registry/LLMClient/event_stream."""
         run_tool_loop = _llm_loop_mod.run_tool_loop
         mock_db = MagicMock()
-        mock_db.get_setting.return_value = '0'
+        mock_db.get_setting.side_effect = lambda key, default=None: default or '0'
         mock_db.add_chat_message.return_value = None
         mock_db.upsert_agent_state.return_value = None
         mock_db.get_agent_default_model.return_value = None
@@ -332,7 +332,7 @@ class TestContextSizeCompaction(unittest.TestCase):
         """Run run_tool_loop with patched db/tool_registry/LLMClient/event_stream."""
         run_tool_loop = _llm_loop_mod.run_tool_loop
         mock_db = MagicMock()
-        mock_db.get_setting.return_value = '0'
+        mock_db.get_setting.side_effect = lambda key, default=None: default or '0'
         mock_db.add_chat_message.return_value = None
         mock_db.get_agent_default_model.return_value = None
         mock_db.get_summary.return_value = None
