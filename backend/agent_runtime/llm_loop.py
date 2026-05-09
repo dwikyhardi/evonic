@@ -1162,7 +1162,11 @@ def run_tool_loop(agent: Dict[str, Any],
             messages.append(inj_msg)
 
     _logger.error("Maximum tool iterations reached (%d)", max_tool_iterations)
-    error_msg = f"LLM Error: Maximum tool iterations reached ({max_tool_iterations}). The model could not produce a final answer."
+    error_msg = (
+        f"LLM Error: Maximum tool iterations reached ({max_tool_iterations}). "
+        f"The model could not produce a final answer within this limit. "
+        f"You can increase this limit in System Settings → General → Max Tool Iterations."
+    )
     _max_dur = round(time.time() - _loop_start_time, 1)
     db.add_chat_message(session_id, 'assistant', error_msg, agent_id=db_agent_id,
                         metadata={"error": True, "timeline": timeline, "thinking_duration": _max_dur})
