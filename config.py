@@ -76,13 +76,37 @@ TEST_DB_PATH = os.path.join(BASE_DIR, "seed", "test_db.sqlite")
 # Flask — SECRET_KEY: auto-generate once and persist to .env if missing
 _SECRET_KEY_ENV = os.getenv("SECRET_KEY")
 if not _SECRET_KEY_ENV:
+    # Double-check: maybe .env has SECRET_KEY but the env var wasn't loaded yet
+    # (e.g. daemonized subprocess, systemd, or restart via exec)
+    import re as _re
+    _env_path = os.path.join(BASE_DIR, ".env")
+    _found_in_file = False
+    if os.path.exists(_env_path):
+        try:
+            with open(_env_path, "r") as _f:
+                for _line in _f:
+                    _stripped = _line.strip()
+                    if not _stripped or _stripped.startswith("#"):
+                        continue
+                    _m = _re.match(r"^SECRET_KEY=(.+)", _stripped)
+                    if _m:
+                        _SECRET_KEY_ENV = _m.group(1).strip()
+                        _found_in_file = True
+                        _logger.info("Loaded SECRET_KEY from .env file")
+                        break
+        except Exception:
+            pass
+
+if not _SECRET_KEY_ENV:
     import secrets
     import tempfile
 
     _SECRET_KEY_ENV = secrets.token_urlsafe(48)
-    _env_path = os.path.join(BASE_DIR, ".env")
 
     # Atomic write: update existing .env or create a new one
+    if _found_in_file and os.path.exists(_env_path):
+        # SECRET_KEY was found in .env but couldn't be parsed — do NOT append duplicate
+        _logger.warning(".env has SECRET_KEY but value could not be read; generating new one anyway")
     if os.path.exists(_env_path):
         with open(_env_path, "r") as _f:
             _lines = _f.readlines()
