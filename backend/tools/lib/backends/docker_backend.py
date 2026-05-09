@@ -12,6 +12,7 @@ Extracted from the original runpy.py and bash.py container pool logic.
 import atexit
 import os
 import re
+import signal
 import subprocess
 import threading
 import time
@@ -60,6 +61,7 @@ _PATH_PREFIX = (
 _containers: dict = {}   # session_id -> {container_id, last_used, created_at, first_call, workspace}
 _pool_lock = threading.Lock()
 _reaper_started = False
+_monitor_started = False
 
 
 def _ensure_reaper_running() -> None:
@@ -70,6 +72,61 @@ def _ensure_reaper_running() -> None:
         _reaper_started = True
     t = threading.Thread(target=_reaper_loop, daemon=True, name='docker-backend-reaper')
     t.start()
+
+
+def _ensure_monitor_running() -> None:
+    global _monitor_started
+    with _pool_lock:
+        if _monitor_started:
+            return
+        _monitor_started = True
+    t = threading.Thread(target=_monitor_loop, daemon=True, name='docker-backend-monitor')
+    t.start()
+
+
+def _monitor_loop() -> None:
+    while True:
+        time.sleep(60)
+        try:
+            fd_count = len(os.listdir(f'/proc/{os.getpid()}/fd'))
+        except Exception:
+            fd_count = -1
+
+        with _pool_lock:
+            count = len(_containers)
+            at_limit = count >= SANDBOX_MAX_CONTAINERS
+            stale_count = sum(1 for info in _containers.values()
+                            if time.time() - info['last_used'] > SANDBOX_IDLE_TIMEOUT)
+
+        if fd_count > 400:
+            print(f'[docker_backend] CRITICAL: FD count={fd_count} — approaching limit, shutting down to prevent cascade')
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        level = 'WARNING' if at_limit or stale_count > 0 else 'INFO'
+        print(f'[docker_backend] Pool status: {count}/{SANDBOX_MAX_CONTAINERS} containers, {stale_count} stale, fd={fd_count}')
+        if at_limit:
+            print(f'[docker_backend] WARNING: pool at capacity — LRU eviction will occur on next allocation')
+
+
+def get_pool_status() -> dict:
+    """Return current pool state for monitoring/debugging."""
+    with _pool_lock:
+        containers = []
+        for sid, info in _containers.items():
+            containers.append({
+                'session_id': sid[:12],
+                'container_id': info['container_id'][:12],
+                'created_at': info['created_at'],
+                'last_used': info['last_used'],
+                'workspace': info.get('workspace'),
+                'first_call': info.get('first_call', False)
+            })
+        return {
+            'pool_size': len(_containers),
+            'max_containers': SANDBOX_MAX_CONTAINERS,
+            'idle_timeout': SANDBOX_IDLE_TIMEOUT,
+            'containers': containers
+        }
 
 
 def _reaper_loop() -> None:
@@ -172,7 +229,9 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
         stderr = result.stderr.strip()
         if 'already in use' in stderr or 'Conflict' in stderr:
             print(f'[docker_backend] Stale container found for {name} — removing and retrying')
-            _docker('rm', '-f', name)
+            rm_result = _docker('rm', '-f', name)
+            if rm_result.returncode != 0:
+                print(f'[docker_backend] WARNING: failed to remove stale container {name}: {rm_result.stderr.strip()}')
             result = _docker(*cmd)
 
     if result.returncode != 0:
@@ -188,6 +247,7 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
             'workspace': effective_workspace,
         }
     _ensure_reaper_running()
+    _ensure_monitor_running()
     return container_id, None
 
 
@@ -202,6 +262,9 @@ def _destroy_container(session_id: str) -> dict:
     result = _docker('rm', '-f', container_id)
     if result.returncode == 0:
         return {'result': 'container_destroyed', 'container_id': container_id[:12]}
+    print(f'[docker_backend] WARNING: docker rm failed for {container_id[:12]}: {result.stderr.strip()} - re-adding to pool')
+    with _pool_lock:
+        _containers[session_id] = info
     return {'error': f'docker rm failed: {result.stderr.strip()}'}
 
 

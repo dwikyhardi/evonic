@@ -17,23 +17,7 @@ block content %}
 
     <!-- General Tab -->
     <div id="general-tab" class="tab-content active">
-        <div class="space-y-4 max-w-xl">
-            <div
-                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
-            >
-                <div>
-                    <div class="font-medium text-gray-800 dark:text-gray-100">
-                        Public History
-                    </div>
-                    <div class="text-sm text-gray-500 mt-0.5">
-                        Allow unauthenticated users to view the history and
-                        detail pages (read-only).
-                    </div>
-                </div>
-                {{ toggle(id='public-history-toggle',
-                onchange='togglePublicHistory(this.checked)',
-                extra_class='flex-shrink-0 ml-4') }}
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div
                 class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
             >
@@ -52,7 +36,7 @@ block content %}
                     id="agent-timeout-retries-input"
                     min="0"
                     max="10"
-                    onchange="saveAgentTimeoutRetries(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -74,7 +58,7 @@ block content %}
                     id="llm-max-retries-input"
                     min="0"
                     max="20"
-                    onchange="saveLlmMaxRetries(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -95,7 +79,7 @@ block content %}
                     id="max-concurrent-per-agent-input"
                     min="0"
                     max="20"
-                    onchange="saveMaxConcurrentPerAgent(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -116,7 +100,7 @@ block content %}
                     id="max-concurrent-per-model-input"
                     min="0"
                     max="20"
-                    onchange="saveMaxConcurrentPerModel(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -138,9 +122,25 @@ block content %}
                     id="agent-queue-workers-input"
                     min="1"
                     max="32"
-                    onchange="saveAgentQueueWorkers(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
+            </div>
+            <div
+                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div>
+                    <div class="font-medium text-gray-800 dark:text-gray-100">
+                        Public History
+                    </div>
+                    <div class="text-sm text-gray-500 mt-0.5">
+                        Allow unauthenticated users to view the history and
+                        detail pages (read-only).
+                    </div>
+                </div>
+                {{ toggle(id='public-history-toggle',
+                onchange='togglePublicHistory(this.checked)',
+                extra_class='flex-shrink-0 ml-4') }}
             </div>
             <!-- Max Tool Iterations -->
             <div
@@ -161,7 +161,7 @@ block content %}
                     id="max-tool-iterations-input"
                     min="1"
                     max="1000"
-                    onchange="saveMaxToolIterations(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-20 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -240,6 +240,17 @@ block content %}
                         🌙 Dark
                     </button>
                 </div>
+            </div>
+            <!-- Save Changes -->
+            <div class="md:col-span-2 flex justify-end pt-2">
+                <button
+                    id="save-general-btn"
+                    onclick="saveAllSettings()"
+                    disabled
+                    class="btn-primary px-6 py-2 text-sm opacity-50 cursor-not-allowed"
+                >
+                    Save Changes
+                </button>
             </div>
         </div>
     </div>
@@ -1177,9 +1188,11 @@ block content %}
     }
 </style>
 
+<script src="{{ url_for('static', filename='js/toast.js') }}?v=1"></script>
 <script>
     // State
     let tools = [];
+    let _settingsDirty = false;
 
     async function loadDefaultModel() {
         const select = document.getElementById("default-model-select");
@@ -1300,35 +1313,25 @@ block content %}
     });
 
     async function loadGeneralSettings() {
-        const res = await apiGet("/api/settings/public-history");
-        if (res)
-            document.getElementById("public-history-toggle").checked =
-                res.enabled;
-        const res2 = await apiGet("/api/settings/agent-timeout-retries");
-        if (res2 != null)
-            document.getElementById("agent-timeout-retries-input").value =
-                res2.value;
-        const res4 = await apiGet("/api/settings/llm-max-retries");
-        if (res4 != null)
-            document.getElementById("llm-max-retries-input").value = res4.value;
-        const res5 = await apiGet("/api/settings/max-concurrent-llm-per-agent");
-        if (res5 != null)
-            document.getElementById("max-concurrent-per-agent-input").value =
-                res5.value;
-        const res6 = await apiGet("/api/settings/max-concurrent-llm-per-model");
-        if (res6 != null)
-            document.getElementById("max-concurrent-per-model-input").value =
-                res6.value;
-        const res7 = await apiGet("/api/settings/agent-queue-workers");
-        if (res7 != null)
-            document.getElementById("agent-queue-workers-input").value =
-                res7.value;
-        const res8 = await apiGet("/api/settings/max-tool-iterations");
-        if (res8 != null)
-            document.getElementById("max-tool-iterations-input").value =
-                res8.value;
-        const res3 = await apiGet("/api/settings/theme");
-        if (res3) updateThemeButtons(res3.theme);
+        let s;
+        try {
+            s = await apiGet("/api/settings/general");
+        } catch (e) {
+            console.error("loadGeneralSettings: fetch failed", e);
+            return;
+        }
+        if (!s || s.error) {
+            console.error("loadGeneralSettings: unexpected response", s);
+            return;
+        }
+        document.getElementById("public-history-toggle").checked = s.public_history;
+        document.getElementById("agent-timeout-retries-input").value = s.agent_timeout_retries;
+        document.getElementById("llm-max-retries-input").value = s.llm_max_retries;
+        document.getElementById("max-concurrent-per-agent-input").value = s.max_concurrent_llm_per_agent;
+        document.getElementById("max-concurrent-per-model-input").value = s.max_concurrent_llm_per_model;
+        document.getElementById("agent-queue-workers-input").value = s.agent_queue_workers;
+        document.getElementById("max-tool-iterations-input").value = s.max_tool_iterations;
+        updateThemeButtons(s.theme);
     }
 
     async function togglePublicHistory(enabled) {
@@ -1351,7 +1354,7 @@ block content %}
 
     let systemSchemeListener = null;
 
-    async function setTheme(theme) {
+    function setTheme(theme) {
         // Remove existing system listener
         if (systemSchemeListener) {
             systemSchemeListener.removeEventListener(
@@ -1361,14 +1364,13 @@ block content %}
             systemSchemeListener = null;
         }
 
-        // Apply immediately
+        // Apply immediately (visual only — persisted on Save Changes)
         const html = document.documentElement;
         if (theme === "dark") {
             html.classList.add("dark");
         } else if (theme === "light") {
             html.classList.remove("dark");
         } else {
-            // system - apply and listen for changes
             applySystemTheme();
             if (window.matchMedia) {
                 systemSchemeListener = window.matchMedia(
@@ -1382,7 +1384,7 @@ block content %}
         }
         localStorage.setItem("evonic-theme", theme);
         updateThemeButtons(theme);
-        await apiPut("/api/settings/theme", { theme });
+        markDirty();
     }
 
     function applySystemTheme() {
@@ -1397,40 +1399,61 @@ block content %}
         }
     }
 
-    async function saveAgentTimeoutRetries(value) {
-        await apiPut("/api/settings/agent-timeout-retries", {
-            value: parseInt(value, 10),
-        });
+    function markDirty() {
+        if (_settingsDirty) return;
+        _settingsDirty = true;
+        const btn = document.getElementById("save-general-btn");
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove("opacity-50", "cursor-not-allowed");
+        }
     }
 
-    async function saveLlmMaxRetries(value) {
-        await apiPut("/api/settings/llm-max-retries", {
-            value: parseInt(value, 10),
-        });
+    function markClean() {
+        _settingsDirty = false;
+        const btn = document.getElementById("save-general-btn");
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add("opacity-50", "cursor-not-allowed");
+        }
     }
 
-    async function saveMaxConcurrentPerAgent(value) {
-        await apiPut("/api/settings/max-concurrent-llm-per-agent", {
-            value: parseInt(value, 10),
-        });
-    }
+    async function saveAllSettings() {
+        const btn = document.getElementById("save-general-btn");
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Saving…";
 
-    async function saveMaxConcurrentPerModel(value) {
-        await apiPut("/api/settings/max-concurrent-llm-per-model", {
-            value: parseInt(value, 10),
-        });
-    }
+        const theme = localStorage.getItem("evonic-theme") || "system";
+        const payload = {
+            settings: {
+                agent_timeout_retries: parseInt(document.getElementById("agent-timeout-retries-input").value, 10),
+                llm_max_retries: parseInt(document.getElementById("llm-max-retries-input").value, 10),
+                max_concurrent_llm_per_agent: parseInt(document.getElementById("max-concurrent-per-agent-input").value, 10),
+                max_concurrent_llm_per_model: parseInt(document.getElementById("max-concurrent-per-model-input").value, 10),
+                agent_queue_workers: parseInt(document.getElementById("agent-queue-workers-input").value, 10),
+                max_tool_iterations: parseInt(document.getElementById("max-tool-iterations-input").value, 10),
+                theme,
+            }
+        };
 
-    async function saveAgentQueueWorkers(value) {
-        await apiPut("/api/settings/agent-queue-workers", {
-            value: parseInt(value, 10),
-        });
-    }
-
-    async function saveMaxToolIterations(value) {
-        await apiPut("/api/settings/max-tool-iterations", {
-            value: parseInt(value, 10),
-        });
+        try {
+            const res = await apiPost("/api/settings/batch", payload);
+            if (res && res.success) {
+                markClean();
+                btn.textContent = origText;
+                if (window.toast) toast.show("Settings saved", "success");
+            } else {
+                btn.disabled = false;
+                btn.textContent = origText;
+                const msg = (res && res.errors) ? res.errors.join(", ") : "Save failed";
+                if (window.toast) toast.show(msg, "error");
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = origText;
+            if (window.toast) toast.show("Save failed: " + e.message, "error");
+        }
     }
 
     // Restore tab from URL hash on page load

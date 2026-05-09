@@ -1,7 +1,9 @@
 import json
 import os
 import sqlite3
-from typing import Any, Dict, List, Optional
+import threading
+from contextlib import contextmanager
+from typing import Any, Dict, List, Optional, Generator
 
 AGENTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'agents')
 
@@ -24,11 +26,20 @@ class AgentChatDB:
         self.db_path = os.path.join(agent_dir, 'chat.db')
         self._init_tables()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager that returns a SQLite connection for this agent's database.
+        The connection is opened on entry and closed on exit to prevent file descriptor leaks.
+        Includes automatic transaction management (commit/rollback).
+        """
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.execute("PRAGMA busy_timeout = 10000")
         conn.execute("PRAGMA journal_mode=WAL")
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_tables(self):
         with self._connect() as conn:
@@ -205,13 +216,21 @@ class AgentChatDB:
                 return slug
             except sqlite3.IntegrityError:
                 # Race condition: another request inserted the same slug concurrently
-                cursor.execute("SELECT id FROM chat_sessions WHERE id = ?", (slug,))
+                if channel_id:
+                    cursor.execute("""
+                        SELECT id FROM chat_sessions
+                        WHERE agent_id = ? AND channel_id = ? AND external_user_id = ?
+                    """, (agent_id, channel_id, external_user_id))
+                else:
+                    cursor.execute("""
+                        SELECT id FROM chat_sessions
+                        WHERE agent_id = ? AND channel_id IS NULL AND external_user_id = ?
+                    """, (agent_id, external_user_id))
                 row = cursor.fetchone()
-                if row:
-                    old_id = row['id']
-                    if old_id != slug:
-                        _migrate_session_id(cursor, old_id, slug)
-                        conn.commit()
+                old_id = row['id']
+                if old_id != slug:
+                    _migrate_session_id(cursor, old_id, slug)
+                    conn.commit()
                 return slug
 
     def get_session_messages(self, session_id: str, limit: int = 50) -> List[Dict[str, Any]]:
