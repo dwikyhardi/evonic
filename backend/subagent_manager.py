@@ -109,12 +109,24 @@ class SubAgentManager:
     def destroy(self, sub_agent_id: str) -> bool:
         """Destroy a sub-agent by ID.
 
+        Archives the sub-agent's sessions in the parent's chat DB and removes
+        the in-memory SubAgent object.
+
         Returns True if the sub-agent existed and was destroyed, False otherwise.
         """
         with self._lock:
             sub = self._subagents.pop(sub_agent_id, None)
 
         if sub:
+            # Archive sessions in parent's DB so they disappear from the sessions page
+            try:
+                from models.chat import agent_chat_manager
+                chat_db = agent_chat_manager.get(sub.parent_id)
+                archived = chat_db.archive_sessions_by_agent_id(sub_agent_id)
+                if archived:
+                    _logger.info("Archived %d session(s) for sub-agent %s", archived, sub_agent_id)
+            except Exception as e:
+                _logger.warning("Failed to archive sessions for sub-agent %s: %s", sub_agent_id, e)
             _logger.info("Sub-agent destroyed: %s (parent=%s)", sub_agent_id, sub.parent_id)
             return True
 

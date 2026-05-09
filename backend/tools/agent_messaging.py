@@ -450,9 +450,19 @@ def _on_final_answer(data: dict) -> None:
         agent_b_id, session_id, sender_id,
     )
 
+    # Resolve DB agent ID — sub-agents use their parent's per-agent chat DB
+    _db_agent_id = agent_b_id
+    try:
+        from backend.subagent_manager import subagent_manager
+        _sub = subagent_manager.get(agent_b_id)
+        if _sub:
+            _db_agent_id = _sub.get('parent_id', agent_b_id)
+    except Exception:
+        pass
+
     # Find the original message metadata from A
     try:
-        messages = db.get_session_messages(session_id, limit=20, agent_id=agent_b_id)
+        messages = db.get_session_messages(session_id, limit=20, agent_id=_db_agent_id)
     except Exception as e:
         _logger.warning(
             "Auto-forward: could not fetch session messages for '%s' (agent_b=%s): %s",
@@ -487,7 +497,7 @@ def _on_final_answer(data: dict) -> None:
             len(messages), sender_id, session_id,
         )
         try:
-            first_meta = db.get_first_agent_request_metadata(session_id, agent_id=agent_b_id)
+            first_meta = db.get_first_agent_request_metadata(session_id, agent_id=_db_agent_id)
         except Exception as e:
             _logger.warning("Auto-forward: first-message fallback failed for '%s': %s", session_id, e)
             first_meta = None
@@ -561,12 +571,9 @@ def _on_final_answer(data: dict) -> None:
         )
 
 
-# Register the listener at module import time
-try:
-    from backend.event_stream import event_stream
-    event_stream.on('final_answer', _on_final_answer)
-except Exception:
-    pass  # event stream may not be ready during some imports
+# NOTE: _on_final_answer listener is registered in
+# backend/agent_runtime/__init__.py at startup, not here,
+# so it fires regardless of whether agent_messaging tools are loaded.
 
 
 # ==================== Registry-style access ====================

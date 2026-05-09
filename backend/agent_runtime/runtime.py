@@ -767,9 +767,15 @@ class AgentRuntime:
         # Determine if this is a sub-agent (uses parent's per-agent chat DB)
         is_subagent = agent.get('is_subagent', False)
 
-        # Get or create session (sub-agents use parent's per-agent chat DB)
-        session_id = _db_retry(db.get_or_create_session, db_agent_id, external_user_id,
-                               channel_id, label="get/create session")
+        # Get or create session (sub-agents store their own ID but use parent's DB)
+        session_id = _db_retry(db.get_or_create_session, agent_id, external_user_id,
+                               channel_id, db_agent_id=db_agent_id if is_subagent else None,
+                               label="get/create session")
+
+        # Sub-agents always start fresh — clear any stale messages from a
+        # previous spawn that reused the same session slug.
+        if is_subagent and metadata and metadata.get('subagent_spawn'):
+            db.clear_session(session_id, agent_id=db_agent_id)
 
         # Slash command interception — execute before saving message or sending to LLM
         parsed = parse_command(message)
