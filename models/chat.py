@@ -205,13 +205,21 @@ class AgentChatDB:
                 return slug
             except sqlite3.IntegrityError:
                 # Race condition: another request inserted the same slug concurrently
-                cursor.execute("SELECT id FROM chat_sessions WHERE id = ?", (slug,))
+                if channel_id:
+                    cursor.execute("""
+                        SELECT id FROM chat_sessions
+                        WHERE agent_id = ? AND channel_id = ? AND external_user_id = ?
+                    """, (agent_id, channel_id, external_user_id))
+                else:
+                    cursor.execute("""
+                        SELECT id FROM chat_sessions
+                        WHERE agent_id = ? AND channel_id IS NULL AND external_user_id = ?
+                    """, (agent_id, external_user_id))
                 row = cursor.fetchone()
-                if row:
-                    old_id = row['id']
-                    if old_id != slug:
-                        _migrate_session_id(cursor, old_id, slug)
-                        conn.commit()
+                old_id = row['id']
+                if old_id != slug:
+                    _migrate_session_id(cursor, old_id, slug)
+                    conn.commit()
                 return slug
 
     def get_session_messages(self, session_id: str, limit: int = 50) -> List[Dict[str, Any]]:
