@@ -1416,20 +1416,42 @@ class AgentRuntime:
 
         # Call LLM with tool loop
         _inner_turn_start = time.time()
-        response_raw, tool_trace, timeline = _loop.run_tool_loop(
-            agent=agent,
-            agent_context=agent_context,
-            messages=messages,
-            tools=tools,
-            session_id=ctx.session_id,
-            llm_lock=self._llm_serializer._llm_lock,
-            stop_event=self._get_stop_event(ctx.session_id),
-            session_skill_mds=self._session_skill_mds,
-            session_skill_tools=self._session_skill_tools,
-            llm_log_path=_llm_log_path(db_agent_id),
-            inject_queue=self._get_inject_queue(ctx.session_id),
-            session_db_agent_id=db_agent_id,
-        )
+
+        # Keep sub-agent alive during the LLM loop — the cleanup timer
+        # runs every 60s and would expire idle sub-agents after 10 min,
+        # but a long-running tool loop never calls subagent_manager.get()
+        # so last_active_at is never refreshed.
+        _sa_heartbeat = None
+        if is_subagent:
+            from backend.subagent_manager import subagent_manager as _sam
+            _sam._touch(agent_id)  # immediate touch before loop starts
+
+            _sa_stop = threading.Event()
+            def _heartbeat():
+                while not _sa_stop.wait(30):
+                    _sam._touch(agent_id)
+            _sa_heartbeat = threading.Thread(target=_heartbeat, daemon=True)
+            _sa_heartbeat.start()
+
+        try:
+            response_raw, tool_trace, timeline = _loop.run_tool_loop(
+                agent=agent,
+                agent_context=agent_context,
+                messages=messages,
+                tools=tools,
+                session_id=ctx.session_id,
+                llm_lock=self._llm_serializer._llm_lock,
+                stop_event=self._get_stop_event(ctx.session_id),
+                session_skill_mds=self._session_skill_mds,
+                session_skill_tools=self._session_skill_tools,
+                llm_log_path=_llm_log_path(db_agent_id),
+                inject_queue=self._get_inject_queue(ctx.session_id),
+                session_db_agent_id=db_agent_id,
+            )
+        finally:
+            if _sa_heartbeat:
+                _sa_stop.set()
+                _sa_heartbeat.join(timeout=2)
 
         # Handle error vs normal response from run_tool_loop
         if isinstance(response_raw, dict):
