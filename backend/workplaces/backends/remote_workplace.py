@@ -19,7 +19,7 @@ Config keys expected in workplace.config:
 import base64
 import shlex
 
-from backend.tools.lib.exec_backend import ExecutionBackend
+from backend.tools.lib.exec_backend import ExecutionBackend, file_stat_code, parse_file_stat_output
 
 
 class RemoteWorkplaceBackend(ExecutionBackend):
@@ -91,31 +91,8 @@ class RemoteWorkplaceBackend(ExecutionBackend):
 
     def file_stat(self, path: str) -> dict:
         path = self._resolve_path(path)
-        code = f"""
-import os
-p = {repr(path)}
-if not os.path.exists(p):
-    print('exists=0 size=0 is_binary=0')
-else:
-    size = os.path.getsize(p)
-    try:
-        chunk = open(p, 'rb').read(8192)
-        is_binary = b'\\x00' in chunk
-    except Exception:
-        is_binary = True
-    print(f'exists=1 size={{size}} is_binary={{1 if is_binary else 0}}')
-"""
-        r = self._ssh.run_python(code, 10, {})
-        out = r.get('stdout', '').strip()
-        try:
-            parts = dict(kv.split('=') for kv in out.split())
-            return {
-                'exists': parts.get('exists') == '1',
-                'size': int(parts.get('size', 0)),
-                'is_binary': parts.get('is_binary') == '1',
-            }
-        except Exception:
-            return {'exists': False, 'size': 0, 'is_binary': False}
+        r = self._ssh.run_python(file_stat_code(path), 10, {})
+        return parse_file_stat_output(r.get('stdout', ''))
 
     def read_file(self, path: str) -> dict:
         path = self._resolve_path(path)
