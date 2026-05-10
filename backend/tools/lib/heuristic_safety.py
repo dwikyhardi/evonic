@@ -225,15 +225,29 @@ SQLITE_ACCESS_PATTERNS: list[dict[str, Any]] = [
 # These patterns detect destructive SQL operations.  When combined with
 # sqlite_access patterns above, the cumulative score triggers approval
 # or outright rejection.  Regex is case-insensitive (via _compile).
+#
+# IMPORTANT: Each pattern requires a SQL-like identifier after the keyword to
+# avoid false positives on natural language (e.g. "drop database connection",
+# "delete from the list", "truncate the file").  The _SQL_ID helper matches
+# unquoted identifiers, double-quoted names, backtick-quoted names, and
+# bracket-quoted names.  Common English words are excluded via negative
+# lookahead to further reduce false positives.
+_SQL_ID = r'(?:[A-Za-z_][\w.]*|["`][^"`]+["`]|\[[^\]]+\])'
+_SQL_ENG = (r'(?!the\b|a\b|an\b|to\b|for\b|with\b|from\b|in\b|on\b|at\b|'
+            r'by\b|of\b|is\b|was\b|are\b|be\b|it\b|this\b|that\b|and\b|or\b|'
+            r'not\b|no\b|connection\b|support\b|list\b|file\b|code\b|output\b|'
+            r'concept\b|todo\b|module\b|old\b|unused\b|feature\b|version\b|'
+            r'array\b|design\b|slow\b)')
+
 SQL_DESTRUCTIVE_PATTERNS: list[dict[str, Any]] = [
-    # Data deletion
-    {"pattern": r"\bDROP\s+TABLE\b", "weight": 12, "category": "sql_destructive", "description": "DROP TABLE - permanently deletes a table"},
-    {"pattern": r"\bDROP\s+DATABASE\b", "weight": 15, "category": "sql_destructive", "description": "DROP DATABASE - permanently deletes entire database"},
-    {"pattern": r"\bDROP\s+INDEX\b", "weight": 10, "category": "sql_destructive", "description": "DROP INDEX - deletes a database index"},
-    {"pattern": r"\bDROP\s+VIEW\b", "weight": 10, "category": "sql_destructive", "description": "DROP VIEW - deletes a database view"},
-    {"pattern": r"\bTRUNCATE\s+(?:TABLE\s+)?", "weight": 12, "category": "sql_destructive", "description": "TRUNCATE - removes all rows from a table"},
-    {"pattern": r"\bDELETE\s+FROM\b", "weight": 10, "category": "sql_destructive", "description": "DELETE FROM - deletes rows from a table"},
-    {"pattern": r"\bALTER\s+TABLE\b.*\bDROP\b", "weight": 12, "category": "sql_destructive", "description": "ALTER TABLE ... DROP - destructive schema change"},
+    # Data deletion — require SQL identifier after keyword
+    {"pattern": r"\bDROP\s+TABLE\s+" + _SQL_ENG + _SQL_ID, "weight": 12, "category": "sql_destructive", "description": "DROP TABLE - permanently deletes a table"},
+    {"pattern": r"\bDROP\s+DATABASE\s+" + _SQL_ENG + _SQL_ID, "weight": 15, "category": "sql_destructive", "description": "DROP DATABASE - permanently deletes entire database"},
+    {"pattern": r"\bDROP\s+INDEX\s+" + _SQL_ENG + _SQL_ID, "weight": 10, "category": "sql_destructive", "description": "DROP INDEX - deletes a database index"},
+    {"pattern": r"\bDROP\s+VIEW\s+" + _SQL_ENG + _SQL_ID, "weight": 10, "category": "sql_destructive", "description": "DROP VIEW - deletes a database view"},
+    {"pattern": r"\bTRUNCATE\s+(?:TABLE\s+)?" + _SQL_ENG + _SQL_ID, "weight": 12, "category": "sql_destructive", "description": "TRUNCATE - removes all rows from a table"},
+    {"pattern": r"\bDELETE\s+FROM\s+" + _SQL_ENG + _SQL_ID, "weight": 10, "category": "sql_destructive", "description": "DELETE FROM - deletes rows from a table"},
+    {"pattern": r"\bALTER\s+TABLE\s+" + _SQL_ENG + _SQL_ID + r".*\bDROP\b", "weight": 12, "category": "sql_destructive", "description": "ALTER TABLE ... DROP - destructive schema change"},
 ]
 
 # Pre-compiled regex patterns (module-level, avoids recompiling on each call)

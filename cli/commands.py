@@ -2469,7 +2469,6 @@ def reconfigure_wizard(supervisor=False):
             print("  Error: Passwords do not match. Try again.")
             continue
         new_hash = generate_password_hash(pw1)
-        from backend.setup import _update_env_var
 
         _update_env_var(env_path, "ADMIN_PASSWORD_HASH", new_hash)
         print("  Password set successfully.")
@@ -2478,29 +2477,13 @@ def reconfigure_wizard(supervisor=False):
 
 
 def _update_env_var(env_path, key, value):
-    """Update or add an environment variable in a .env file."""
-    if not os.path.exists(env_path):
-        with open(env_path, "w") as f:
-            f.write(f"{key}={value}\n")
-        return
+    """Update or add an environment variable in a .env file.
 
-    with open(env_path, "r") as f:
-        lines = f.readlines()
-
-    found = False
-    for i, line in enumerate(lines):
-        if line.startswith(f"{key}=") or line.startswith(f"{key} "):
-            lines[i] = f"{key}={value}\n"
-            found = True
-            break
-
-    if not found:
-        if lines and not lines[-1].endswith("\n"):
-            lines.append("\n")
-        lines.append(f"{key}={value}\n")
-
-    with open(env_path, "w") as f:
-        f.writelines(lines)
+    Delegates to backend.setup._update_env_var which uses atomic
+    write (write-to-temp-then-rename) to prevent partial .env writes.
+    """
+    from backend.setup import _update_env_var as _impl
+    _impl(env_path, key, value)
 
 
 # ─── Update / Self-Update ──────────────────────────────────────────────────────

@@ -8,7 +8,9 @@ import json
 import os
 import re
 import shutil
+import secrets
 import subprocess
+import tempfile
 
 import requests
 
@@ -385,6 +387,13 @@ def run_setup(
     resolved_base_url = (base_url or provider_cfg["base_url"]).rstrip("/")
 
     try:
+        # 0. Generate SECRET_KEY if not already set — critical for session security
+        if not os.getenv("SECRET_KEY"):
+            _key = secrets.token_urlsafe(48)
+            env_path = os.path.join(config.BASE_DIR, ".env")
+            _update_env_var(env_path, "SECRET_KEY", _key)
+            os.environ["SECRET_KEY"] = _key
+
         # 1. Create model in DB as default
         model_id = f"setup_{provider}"
         # Derive api_format: ollama + local → openai, ollama + remote → ollama native
@@ -604,7 +613,11 @@ def run_reconfigure(
 
 
 def _update_env_var(env_path, key, value):
-    """Update or add an environment variable in a .env file."""
+    """Update or add an environment variable in a .env file.
+
+    Uses atomic write (write-to-temp-then-rename) so the .env file is
+    never left empty or truncated if the process crashes mid-write.
+    """
     if not os.path.exists(env_path):
         with open(env_path, "w") as f:
             f.write(f"{key}={value}\n")
@@ -622,5 +635,16 @@ def _update_env_var(env_path, key, value):
             lines.append("\n")
         lines.append(f"{key}={value}\n")
 
-    with open(env_path, "w") as f:
-        f.writelines(lines)
+    # Atomic write: write to temp file in same directory, then rename.
+    # os.replace() is atomic on POSIX and Windows (same filesystem).
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(env_path),
+                                        prefix=".env.")
+    try:
+        with os.fdopen(tmp_fd, "w") as f:
+            f.writelines(lines)
+        os.replace(tmp_path, env_path)
+    except Exception:
+        # Clean up temp file on failure — don't leave litter behind.
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise

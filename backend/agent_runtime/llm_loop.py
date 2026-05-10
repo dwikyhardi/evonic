@@ -204,6 +204,7 @@ def run_tool_loop(agent: Dict[str, Any],
 
     timeout_retries = 0
     max_timeout_retries = int(db.get_setting('agent_timeout_retries', str(MAX_TIMEOUT_RETRIES)))
+    max_tool_iterations = int(db.get_setting('max_tool_iterations', str(MAX_TOOL_ITERATIONS)))
     _compaction_attempted = False
 
     # Build param view-type lookup: {fn_name: {param_name: view_type}}
@@ -230,7 +231,7 @@ def run_tool_loop(agent: Dict[str, Any],
     # first call; subsequent calls (after tool results) must NOT re-enable thinking,
     # otherwise the API rejects with "reasoning_content must be passed back".
     _had_tool_call_iteration = False
-    while _iteration < MAX_TOOL_ITERATIONS:
+    while _iteration < max_tool_iterations:
         _iteration += 1
         # Drain injected user messages from mid-loop injection queue.
         # Multiple queued messages are merged into one to avoid consecutive user turns.
@@ -253,7 +254,7 @@ def run_tool_loop(agent: Dict[str, Any],
                     _iteration = 0
                     _had_tool_call_iteration = False  # fresh reasoning context after injection
                 else:
-                    _logger.warning("Injection cap reached (%d), iteration counter will no longer reset — loop will terminate at MAX_TOOL_ITERATIONS.", MAX_INJECTIONS_PER_LOOP)
+                    _logger.warning("Injection cap reached (%d), iteration counter will no longer reset — loop will terminate at max_tool_iterations (%d).", MAX_INJECTIONS_PER_LOOP, max_tool_iterations)
                 _logger.debug("Injected %d user message(s) into loop for session %s (injection #%d)",
                               len(injected_parts), session_id, _injection_count)
                 event_stream.emit('message_injection_applied', {
@@ -1160,8 +1161,12 @@ def run_tool_loop(agent: Dict[str, Any],
         for inj_msg in run_message_interceptors(agent_id, content, messages):
             messages.append(inj_msg)
 
-    _logger.error("Maximum tool iterations reached (%d)", MAX_TOOL_ITERATIONS)
-    error_msg = f"LLM Error: Maximum tool iterations reached ({MAX_TOOL_ITERATIONS}). The model could not produce a final answer."
+    _logger.error("Maximum tool iterations reached (%d)", max_tool_iterations)
+    error_msg = (
+        f"LLM Error: Maximum tool iterations reached ({max_tool_iterations}). "
+        f"The model could not produce a final answer within this limit. "
+        f"You can increase this limit in System Settings → General → Max Tool Iterations."
+    )
     _max_dur = round(time.time() - _loop_start_time, 1)
     db.add_chat_message(session_id, 'assistant', error_msg, agent_id=db_agent_id,
                         metadata={"error": True, "timeline": timeline, "thinking_duration": _max_dur})

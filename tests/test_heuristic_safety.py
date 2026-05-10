@@ -458,6 +458,157 @@ def test_python_patterns_combined():
     print("✅ test_python_patterns_combined passed")
 
 
+# ============================================================================
+# SQL False-Positive Tests (natural language should NOT trigger sql_destructive)
+# ============================================================================
+
+def test_sql_false_positive_natural_language():
+    """Test that natural language containing SQL keywords is NOT flagged as sql_destructive."""
+    natural_language_cases = [
+        # "drop" in natural language
+        "drop database connection",
+        "drop a connection to the server",
+        "please drop support for old versions",
+        "drop the old feature",
+        "drop the old module",
+        "drop the unused code",
+        "drop design concept",
+        "drop array design",
+        "drop slow performance",
+        # "delete" in natural language
+        "delete from the todo list",
+        "delete from the list of items",
+        "delete from the old version",
+        "delete from the array",
+        "delete from the design",
+        # "truncate" in natural language
+        "truncate the file to zero bytes",
+        "truncate the output",
+        "truncate the code",
+        "truncate the old feature",
+        # "drop table" but not SQL
+        "drop table concept from the design",
+        # "alter" in natural language
+        "alter the design of the module",
+    ]
+
+    for code in natural_language_cases:
+        result = check_safety(code, tool_type='bash')
+        has_sql_destructive = 'sql_destructive' in result.get('blocked_patterns', [])
+        assert not has_sql_destructive, f"Expected NO sql_destructive for natural language '{code}', but got it (score={result['score']}, level={result['level']})"
+
+    result_python = check_safety("print('drop database connection')", tool_type='python')
+    has_sql_destructive = 'sql_destructive' in result_python.get('blocked_patterns', [])
+    assert not has_sql_destructive, f"Expected NO sql_destructive for Python print statement, got it (score={result_python['score']})"
+
+    print("✅ test_sql_false_positive_natural_language passed")
+
+
+def test_sql_destructive_real_operations_detected():
+    """Test that real SQL destructive operations ARE still detected."""
+    real_sql_cases = [
+        # DROP TABLE
+        ("DROP TABLE users", 'requires_approval'),
+        ("DROP TABLE `users`", 'requires_approval'),
+        ('DROP TABLE "users"', 'requires_approval'),
+        ("DROP TABLE [users]", 'requires_approval'),
+        # DROP DATABASE
+        ("DROP DATABASE mydb", 'requires_approval'),
+        # DROP INDEX
+        ("DROP INDEX idx_name", 'requires_approval'),
+        # DROP VIEW
+        ("DROP VIEW v_name", 'requires_approval'),
+        # TRUNCATE
+        ("TRUNCATE TABLE users", 'requires_approval'),
+        ("TRUNCATE users", 'requires_approval'),
+        # DELETE FROM
+        ("DELETE FROM users", 'requires_approval'),
+        ("DELETE FROM `users`", 'requires_approval'),
+        # ALTER TABLE ... DROP
+        ("ALTER TABLE users DROP COLUMN email", 'requires_approval'),
+    ]
+
+    for code, expected_min_level in real_sql_cases:
+        result = check_safety(code, tool_type='bash')
+        has_sql_destructive = 'sql_destructive' in result.get('blocked_patterns', [])
+        assert has_sql_destructive, f"Expected sql_destructive for SQL command '{code}', but not detected (score={result['score']}, level={result['level']})"
+        assert result['level'] in ('requires_approval', 'dangerous'), f"Expected at least '{expected_min_level}' for '{code}', got '{result['level']}' (score={result['score']})"
+
+    print("✅ test_sql_destructive_real_operations_detected passed")
+
+
+def test_sql_destructive_python_sql():
+    """Test that SQL in Python code is also detected correctly."""
+    python_sql_cases = [
+        "cursor.execute('DROP TABLE users')",
+        "cursor.execute('DELETE FROM users WHERE id=1')",
+        "cursor.execute('TRUNCATE TABLE logs')",
+        "sql = 'DROP DATABASE production'",
+        "query = 'DELETE FROM orders'",
+    ]
+
+    for code in python_sql_cases:
+        result = check_safety(code, tool_type='python')
+        has_sql_destructive = 'sql_destructive' in result.get('blocked_patterns', [])
+        assert has_sql_destructive, f"Expected sql_destructive for Python SQL '{code}', but not detected (score={result['score']}, level={result['level']})"
+
+    print("✅ test_sql_destructive_python_sql passed")
+
+
+def test_sql_false_positive_case_insensitive():
+    """Test that false-positive protection works regardless of case."""
+    case_variants = [
+        "DROP DATABASE CONNECTION",
+        "drop database connection",
+        "Drop Database Connection",
+        "DROP database connection",
+        "delete from the list",
+        "DELETE FROM the list",
+        "Delete From the list",
+        "truncate the file",
+        "TRUNCATE the file",
+        "Truncate The File",
+    ]
+
+    for code in case_variants:
+        result = check_safety(code, tool_type='bash')
+        has_sql_destructive = 'sql_destructive' in result.get('blocked_patterns', [])
+        assert not has_sql_destructive, f"Expected NO sql_destructive for '{code}', but got it (score={result['score']})"
+
+    print("✅ test_sql_false_positive_case_insensitive passed")
+
+
+def test_sql_with_complex_identifiers():
+    """Test that SQL with various identifier formats are detected."""
+    complex_sql_cases = [
+        "DROP TABLE `my-schema`.`users`",
+        "DROP TABLE my_schema.users",
+        'DROP TABLE "my-table"',
+        "DELETE FROM `orders` WHERE status = 'pending'",
+        "TRUNCATE TABLE `logs`",
+    ]
+
+    for code in complex_sql_cases:
+        result = check_safety(code, tool_type='bash')
+        has_sql_destructive = 'sql_destructive' in result.get('blocked_patterns', [])
+        assert has_sql_destructive, f"Expected sql_destructive for '{code}', but not detected (score={result['score']})"
+
+    print("✅ test_sql_with_complex_identifiers passed")
+
+
+def test_sql_approval_info():
+    """Test that approval_info has correct risk_level and category for SQL destructive ops."""
+    result = check_safety("DROP TABLE users", tool_type='bash')
+    assert result['requires_approval'] == True, f"Expected requires_approval=True, got {result}"
+    assert result['approval_info'] is not None
+    assert result['approval_info']['risk_level'] == 'high', f"Expected risk_level 'high', got '{result['approval_info']['risk_level']}'"
+    assert 'sql_destructive' in result['approval_info']['categories'], f"Expected sql_destructive in categories, got {result['approval_info']['categories']}"
+
+    print("✅ test_sql_approval_info passed")
+
+
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("Running heuristic_safety test suite")
@@ -500,6 +651,12 @@ if __name__ == '__main__':
         test_approval_info_sandbox_escape,
         test_bash_patterns_only,
         test_python_patterns_combined,
+        test_sql_false_positive_natural_language,
+        test_sql_destructive_real_operations_detected,
+        test_sql_destructive_python_sql,
+        test_sql_false_positive_case_insensitive,
+        test_sql_with_complex_identifiers,
+        test_sql_approval_info,
     ]
     
     passed = 0

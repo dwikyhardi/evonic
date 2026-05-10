@@ -11,29 +11,13 @@ block content %}
         </button>
         <button class="tab-btn" onclick="showTab('tools')">Tools</button>
         <button class="tab-btn" onclick="showTab('models')">Models</button>
-        <button class="tab-btn" onclick="showTab('logs')">Logs</button>
         <button class="tab-btn" onclick="showTab('hmads')">HMADS</button>
+        <button class="tab-btn" onclick="showTab('logs')">Logs</button>
     </div>
 
     <!-- General Tab -->
     <div id="general-tab" class="tab-content active">
-        <div class="space-y-4 max-w-xl">
-            <div
-                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
-            >
-                <div>
-                    <div class="font-medium text-gray-800 dark:text-gray-100">
-                        Public History
-                    </div>
-                    <div class="text-sm text-gray-500 mt-0.5">
-                        Allow unauthenticated users to view the history and
-                        detail pages (read-only).
-                    </div>
-                </div>
-                {{ toggle(id='public-history-toggle',
-                onchange='togglePublicHistory(this.checked)',
-                extra_class='flex-shrink-0 ml-4') }}
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div
                 class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
             >
@@ -52,7 +36,7 @@ block content %}
                     id="agent-timeout-retries-input"
                     min="0"
                     max="10"
-                    onchange="saveAgentTimeoutRetries(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -74,7 +58,7 @@ block content %}
                     id="llm-max-retries-input"
                     min="0"
                     max="20"
-                    onchange="saveLlmMaxRetries(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -95,7 +79,7 @@ block content %}
                     id="max-concurrent-per-agent-input"
                     min="0"
                     max="20"
-                    onchange="saveMaxConcurrentPerAgent(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
             </div>
@@ -116,9 +100,107 @@ block content %}
                     id="max-concurrent-per-model-input"
                     min="0"
                     max="20"
-                    onchange="saveMaxConcurrentPerModel(this.value)"
+                    oninput="markDirty()"
                     class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
+            </div>
+            <div
+                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div>
+                    <div class="font-medium text-gray-800 dark:text-gray-100">
+                        Agent Queue Workers
+                    </div>
+                    <div class="text-sm text-gray-500 mt-0.5">
+                        Number of worker threads processing agent messages.
+                        Increase takes effect immediately; decrease requires
+                        restart.
+                    </div>
+                </div>
+                <input
+                    type="number"
+                    id="agent-queue-workers-input"
+                    min="1"
+                    max="32"
+                    oninput="markDirty()"
+                    class="ml-4 w-16 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+            </div>
+            <div
+                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div>
+                    <div class="font-medium text-gray-800 dark:text-gray-100">
+                        Public History
+                    </div>
+                    <div class="text-sm text-gray-500 mt-0.5">
+                        Allow unauthenticated users to view the history and
+                        detail pages (read-only).
+                    </div>
+                </div>
+                {{ toggle(id='public-history-toggle',
+                onchange='togglePublicHistory(this.checked)',
+                extra_class='flex-shrink-0 ml-4') }}
+            </div>
+            <!-- Max Tool Iterations -->
+            <div
+                class="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div>
+                    <div class="font-medium text-gray-800 dark:text-gray-100">
+                        Max Tool Iterations
+                    </div>
+                    <div class="text-sm text-gray-500 mt-0.5">
+                        Maximum number of tool-call iterations allowed per agent
+                        turn and per evaluation. Prevents infinite loops in
+                        multi-step reasoning. Range: 1–1000.
+                    </div>
+                </div>
+                <input
+                    type="number"
+                    id="max-tool-iterations-input"
+                    min="1"
+                    max="1000"
+                    oninput="markDirty()"
+                    class="ml-4 w-20 border border-gray-300 rounded-md px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+            </div>
+            <!-- Task Classifier -->
+            <div
+                class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600"
+            >
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <div class="font-medium text-gray-800 dark:text-gray-100">
+                            Task Classifier
+                        </div>
+                        <div class="text-sm text-gray-500 mt-0.5">
+                            Automatically classify tasks as trivial or complex.
+                            Trivial tasks skip planning and execute directly.
+                        </div>
+                    </div>
+                    {{ toggle(id='task-classifier-toggle',
+                    onchange='saveTaskClassifier()',
+                    extra_class='flex-shrink-0 ml-4') }}
+                </div>
+                <div class="flex flex-col sm:flex-row items-center gap-3">
+                    <select
+                        id="task-classifier-model-select"
+                        class="w-full sm:flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                        <option value="">Use default model</option>
+                    </select>
+                    <button
+                        onclick="saveTaskClassifier()"
+                        class="btn-primary px-4 py-2 text-sm w-full sm:w-auto"
+                    >
+                        Save
+                    </button>
+                </div>
+                <div
+                    id="task-classifier-status"
+                    class="mt-2 text-sm hidden"
+                ></div>
             </div>
             <!-- Default LLM Model -->
             <div
@@ -195,6 +277,17 @@ block content %}
                         🌙 Dark
                     </button>
                 </div>
+            </div>
+            <!-- Save Changes -->
+            <div class="md:col-span-2 flex justify-end pt-2">
+                <button
+                    id="save-general-btn"
+                    onclick="saveAllSettings()"
+                    disabled
+                    class="btn-primary px-6 py-2 text-sm opacity-50 cursor-not-allowed"
+                >
+                    Save Changes
+                </button>
             </div>
         </div>
     </div>
@@ -291,9 +384,9 @@ block content %}
                 </svg>
             </div>
 
-            <!-- All Models List -->
-            <div id="models-list" class="space-y-2">
-                <p class="text-gray-500 text-center py-4">Loading models...</p>
+            <!-- All Models Grid -->
+            <div id="models-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <p class="text-gray-500 text-center py-4 col-span-full">Loading models...</p>
             </div>
         </div>
     </div>
@@ -1080,10 +1173,7 @@ block content %}
         display: none !important;
     }
 
-    /* Model-related styles */
-    .model-card.is-default {
-        border-color: #6366f1;
-    }
+    /* Model card default styling now handled inline via template */
     .spinner {
         width: 24px;
         height: 24px;
@@ -1122,19 +1212,17 @@ block content %}
     html.dark .loading {
         color: #94a3b8;
     }
-    html.dark .model-card.is-default {
-        border-color: #6366f1;
-        background: #1e1b4b;
-    }
     html.dark .spinner {
         border-color: #334155;
         border-top-color: #6366f1;
     }
 </style>
 
+<script src="{{ url_for('static', filename='js/toast.js') }}?v=1"></script>
 <script>
     // State
     let tools = [];
+    let _settingsDirty = false;
 
     async function loadDefaultModel() {
         const select = document.getElementById("default-model-select");
@@ -1255,6 +1343,27 @@ block content %}
     });
 
     async function loadGeneralSettings() {
+<<<<<<< HEAD
+        let s;
+        try {
+            s = await apiGet("/api/settings/general");
+        } catch (e) {
+            console.error("loadGeneralSettings: fetch failed", e);
+            return;
+        }
+        if (!s || s.error) {
+            console.error("loadGeneralSettings: unexpected response", s);
+            return;
+        }
+        document.getElementById("public-history-toggle").checked = s.public_history;
+        document.getElementById("agent-timeout-retries-input").value = s.agent_timeout_retries;
+        document.getElementById("llm-max-retries-input").value = s.llm_max_retries;
+        document.getElementById("max-concurrent-per-agent-input").value = s.max_concurrent_llm_per_agent;
+        document.getElementById("max-concurrent-per-model-input").value = s.max_concurrent_llm_per_model;
+        document.getElementById("agent-queue-workers-input").value = s.agent_queue_workers;
+        document.getElementById("max-tool-iterations-input").value = s.max_tool_iterations;
+        updateThemeButtons(s.theme);
+=======
         const res = await apiGet("/api/settings/public-history");
         if (res)
             document.getElementById("public-history-toggle").checked =
@@ -1274,8 +1383,68 @@ block content %}
         if (res6 != null)
             document.getElementById("max-concurrent-per-model-input").value =
                 res6.value;
+        const res7 = await apiGet("/api/settings/agent-queue-workers");
+        if (res7 != null)
+            document.getElementById("agent-queue-workers-input").value =
+                res7.value;
+        const res8 = await apiGet("/api/settings/max-tool-iterations");
+        if (res8 != null)
+            document.getElementById("max-tool-iterations-input").value =
+                res8.value;
         const res3 = await apiGet("/api/settings/theme");
         if (res3) updateThemeButtons(res3.theme);
+        await loadTaskClassifier();
+    }
+
+    async function loadTaskClassifier() {
+        try {
+            const [settingsRes, modelsRes] = await Promise.all([
+                fetch("/api/settings/task-classifier").then(r => r.json()),
+                fetch("/api/models").then(r => r.json()),
+            ]);
+            const toggle = document.getElementById("task-classifier-toggle");
+            if (toggle) toggle.checked = settingsRes.enabled;
+            const select = document.getElementById("task-classifier-model-select");
+            if (select) {
+                const models = modelsRes.models || [];
+                select.innerHTML =
+                    '<option value="">Use default model</option>' +
+                    models.map(m =>
+                        `<option value="${m.id}" ${settingsRes.model_id === m.id ? "selected" : ""}>${m.name} (${m.model_name})</option>`
+                    ).join("");
+            }
+        } catch (e) {
+            console.warn("Could not load task classifier settings:", e);
+        }
+    }
+
+    async function saveTaskClassifier() {
+        const enabled = document.getElementById("task-classifier-toggle")?.checked ?? true;
+        const modelId = document.getElementById("task-classifier-model-select")?.value || "";
+        const statusDiv = document.getElementById("task-classifier-status");
+        try {
+            const response = await fetch("/api/settings/task-classifier", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled, model_id: modelId }),
+            });
+            const result = await response.json();
+            if (result.success) {
+                statusDiv.className = "mt-2 text-sm text-green-600";
+                statusDiv.textContent = "Task classifier settings saved!";
+                statusDiv.classList.remove("hidden");
+                setTimeout(() => statusDiv.classList.add("hidden"), 3000);
+            } else {
+                statusDiv.className = "mt-2 text-sm text-red-600";
+                statusDiv.textContent = "Error: " + (result.error || "Failed to save");
+                statusDiv.classList.remove("hidden");
+            }
+        } catch (e) {
+            statusDiv.className = "mt-2 text-sm text-red-600";
+            statusDiv.textContent = "Error: " + e.message;
+            statusDiv.classList.remove("hidden");
+        }
+>>>>>>> 6c17e3deede6869afb862973c4d77c619bfed87c
     }
 
     async function togglePublicHistory(enabled) {
@@ -1315,7 +1484,6 @@ block content %}
         } else if (theme === "light") {
             html.classList.remove("dark");
         } else {
-            // system - apply and listen for changes
             applySystemTheme();
             if (window.matchMedia) {
                 systemSchemeListener = window.matchMedia(
@@ -1329,7 +1497,13 @@ block content %}
         }
         localStorage.setItem("evonic-theme", theme);
         updateThemeButtons(theme);
-        await apiPut("/api/settings/theme", { theme });
+        // Persist theme immediately on the server
+        try {
+            await apiPut("/api/settings/theme", { theme });
+            markClean();
+        } catch (e) {
+            markDirty();
+        }
     }
 
     function applySystemTheme() {
@@ -1344,28 +1518,61 @@ block content %}
         }
     }
 
-    async function saveAgentTimeoutRetries(value) {
-        await apiPut("/api/settings/agent-timeout-retries", {
-            value: parseInt(value, 10),
-        });
+    function markDirty() {
+        if (_settingsDirty) return;
+        _settingsDirty = true;
+        const btn = document.getElementById("save-general-btn");
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove("opacity-50", "cursor-not-allowed");
+        }
     }
 
-    async function saveLlmMaxRetries(value) {
-        await apiPut("/api/settings/llm-max-retries", {
-            value: parseInt(value, 10),
-        });
+    function markClean() {
+        _settingsDirty = false;
+        const btn = document.getElementById("save-general-btn");
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add("opacity-50", "cursor-not-allowed");
+        }
     }
 
-    async function saveMaxConcurrentPerAgent(value) {
-        await apiPut("/api/settings/max-concurrent-llm-per-agent", {
-            value: parseInt(value, 10),
-        });
-    }
+    async function saveAllSettings() {
+        const btn = document.getElementById("save-general-btn");
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Saving…";
 
-    async function saveMaxConcurrentPerModel(value) {
-        await apiPut("/api/settings/max-concurrent-llm-per-model", {
-            value: parseInt(value, 10),
-        });
+        const theme = localStorage.getItem("evonic-theme") || "system";
+        const payload = {
+            settings: {
+                agent_timeout_retries: parseInt(document.getElementById("agent-timeout-retries-input").value, 10),
+                llm_max_retries: parseInt(document.getElementById("llm-max-retries-input").value, 10),
+                max_concurrent_llm_per_agent: parseInt(document.getElementById("max-concurrent-per-agent-input").value, 10),
+                max_concurrent_llm_per_model: parseInt(document.getElementById("max-concurrent-per-model-input").value, 10),
+                agent_queue_workers: parseInt(document.getElementById("agent-queue-workers-input").value, 10),
+                max_tool_iterations: parseInt(document.getElementById("max-tool-iterations-input").value, 10),
+                theme,
+            }
+        };
+
+        try {
+            const res = await apiPost("/api/settings/batch", payload);
+            if (res && res.success) {
+                markClean();
+                btn.textContent = origText;
+                if (window.toast) toast.show("Settings saved", "success");
+            } else {
+                btn.disabled = false;
+                btn.textContent = origText;
+                const msg = (res && res.errors) ? res.errors.join(", ") : "Save failed";
+                if (window.toast) toast.show(msg, "error");
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = origText;
+            if (window.toast) toast.show("Save failed: " + e.message, "error");
+        }
     }
 
     // Restore tab from URL hash on page load
@@ -1963,48 +2170,53 @@ block content %}
 
         if (filtered.length === 0) {
             modelsList.innerHTML =
-                '<p class="text-gray-500 text-center py-4">No models match your search.</p>';
+                '<p class="text-gray-500 text-center py-4 col-span-full">No models match your search.</p>';
             return;
         }
 
         modelsList.innerHTML = filtered
             .map(
-                (model) => `
-        <div class="model-card ${model.is_default ? "is-default" : ""} bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-            <div class="flex items-start justify-between gap-3">
-                <div class="model-info flex-1 min-w-0">
-                    <div class="model-name font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 flex-wrap">
-                        ${model.name}
-                        ${model.is_default ? '<span class="bg-indigo-600 dark:bg-indigo-800 text-white px-2 py-0.5 rounded-full text-xs font-medium">Default</span>' : ""}
-                    </div>
-                    <div class="model-meta text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium mr-2 ${model.type === "remote" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300" : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"}">${model.type}</span>
-                        <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium mr-2 ${model.enabled ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"}">${model.enabled ? "Enabled" : "Disabled"}</span>
-                        ${model.thinking ? '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium mr-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Thinking</span>' : ""}
-                        <br>${model.provider} | ${model.model_name} | ${model.base_url || "N/A"}
-                    </div>
+                (model) => {
+                    const typeColors = model.type === "remote"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                        : "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300";
+                    const enabledColors = model.enabled
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+                        : "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300";
+                    const defaultBorder = model.is_default ? "border-indigo-400 dark:border-indigo-500 ring-1 ring-indigo-200 dark:ring-indigo-800" : "border-gray-200 dark:border-gray-700";
+                    return `
+        <div class="model-card bg-white dark:bg-gray-800 rounded-lg border ${defaultBorder} p-3 hover:shadow-sm transition-shadow">
+            <!-- Top row: name + default badge -->
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div class="flex-1 min-w-0">
+                    <h4 class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">${model.name}</h4>
                 </div>
-                <div class="model-actions flex items-center gap-1 shrink-0">
-                    ${
-                        !model.is_default
-                            ? `<button class="icon-btn p-1.5 rounded-md border border-amber-500 dark:border-amber-400 text-amber-500 dark:text-amber-400 bg-white dark:bg-gray-800 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950" onclick="setDefaultModel('${model.id}')" title="Set Default">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
-                    </button>`
-                            : ""
-                    }
-                    <button class="icon-btn p-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 cursor-pointer text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" onclick="testConnection('${model.id}')" title="Test Connection">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                    </button>
-                    <button class="icon-btn p-1.5 rounded-md border border-indigo-500 text-indigo-500 bg-white dark:bg-gray-800 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950" onclick="editModel('${model.id}')" title="Edit">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                    </button>
-                    <button class="icon-btn p-1.5 rounded-md border border-red-500 text-red-500 bg-white dark:bg-gray-800 cursor-pointer hover:bg-red-50 dark:hover:bg-red-950" onclick="deleteModel('${model.id}')" title="Delete">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    </button>
-                </div>
+                ${model.is_default ? '<span class="shrink-0 bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none">Default</span>' : ""}
+            </div>
+
+            <!-- Badges row -->
+            <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                <span class="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${typeColors}">${model.type}</span>
+                <span class="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium ${enabledColors}">${model.enabled ? "On" : "Off"}</span>
+                ${model.thinking ? '<span class="inline-block px-1.5 py-0.5 rounded text-[11px] font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300">Thinking</span>' : ""}
+            </div>
+
+            <!-- Provider / model info -->
+            <div class="text-[11px] text-gray-500 dark:text-gray-400 mb-2.5 truncate">
+                ${model.provider} · ${model.model_name}
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex items-center gap-1 flex-wrap">
+                ${!model.is_default ? `<button class="p-1 rounded border border-amber-400 dark:border-amber-500 text-amber-500 dark:text-amber-400 bg-transparent cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/50 transition-colors" onclick="setDefaultModel('${model.id}')" title="Set Default"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg></button>` : ""}
+                <button class="p-1 rounded border border-gray-300 dark:border-gray-600 bg-transparent cursor-pointer text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onclick="testConnection('${model.id}')" title="Test"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></button>
+                <button class="p-1 rounded border border-indigo-400 dark:border-indigo-500 text-indigo-500 dark:text-indigo-400 bg-transparent cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-colors" onclick="editModel('${model.id}')" title="Edit"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                <button class="p-1 rounded border border-emerald-400 dark:border-emerald-500 text-emerald-500 dark:text-emerald-400 bg-transparent cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition-colors" onclick="cloneModel('${model.id}')" title="Clone"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke-width="2" stroke-linecap="round"/></svg></button>
+                <button class="p-1 rounded border border-red-400 dark:border-red-500 text-red-400 dark:text-red-400 bg-transparent cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors" onclick="deleteModel('${model.id}')" title="Delete"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
             </div>
         </div>
-    `,
+    `;
+                },
             )
             .join("");
     }
@@ -2171,6 +2383,25 @@ block content %}
             }
         } catch (error) {
             console.error("Failed to delete model:", error);
+        }
+    }
+
+    async function cloneModel(modelId) {
+        try {
+            const response = await fetch("/api/models/" + modelId + "/clone", {
+                method: "POST",
+            });
+            const result = await response.json();
+            if (result.success) {
+                await loadModels();
+                // Open edit modal for the new clone so user can reconfigure
+                editModel(result.model_id);
+            } else {
+                alert("Error: " + (result.error || "Failed to clone model"));
+            }
+        } catch (error) {
+            console.error("Failed to clone model:", error);
+            alert("Failed to clone model: " + error.message);
         }
     }
 

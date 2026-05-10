@@ -55,6 +55,9 @@ def session_slug(external_user_id: str, agent_id: str) -> str:
 
     Example: session_slug('alice', 'siwa') → 'a1b2c3d4' (8 hex chars)
     """
+    # Guard against None — convert to empty string so sorting doesn't crash
+    external_user_id = external_user_id or ''
+    agent_id = agent_id or ''
     items = sorted([external_user_id, agent_id])
     h = hashlib.sha1(json.dumps(items).encode()).hexdigest()
     return h[:8]
@@ -79,7 +82,19 @@ class ChatLog:
             filename = filename[len(agent_id) + 1:]
         self._path = os.path.join(sessions_dir, f'{filename}.jsonl')
         self._lock = threading.Lock()
-        self._fh = open(self._path, 'a', encoding='utf-8')
+        self._fh = None
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def open(self):
+        with self._lock:
+            if self._fh is None or self._fh.closed:
+                self._fh = open(self._path, 'a', encoding='utf-8')
 
     # ------------------------------------------------------------------
     # Write
@@ -92,21 +107,23 @@ class ChatLog:
             entry['ts'] = _now_ms()
         line = json.dumps(entry, ensure_ascii=False) + '\n'
         with self._lock:
-            if self._fh.closed:
-                import logging as _logging
-                _logging.getLogger(__name__).warning(
-                    "ChatLog._fh closed unexpectedly for %s — reopening.", self._path
-                )
-                self._fh = open(self._path, 'a', encoding='utf-8')
-            self._fh.write(line)
-            self._fh.flush()
+            if self._fh is None or self._fh.closed:
+                # If not using context manager, open on-demand
+                with open(self._path, 'a', encoding='utf-8') as f:
+                    f.write(line)
+                    f.flush()
+            else:
+                self._fh.write(line)
+                self._fh.flush()
 
     def close(self) -> None:
         with self._lock:
-            try:
-                self._fh.close()
-            except Exception:
-                pass
+            if self._fh is not None:
+                try:
+                    self._fh.close()
+                except Exception:
+                    pass
+                self._fh = None
 
     # ------------------------------------------------------------------
     # Read helpers
@@ -359,9 +376,13 @@ class ChatLog:
     def clear(self) -> None:
         """Truncate the session log file, removing all entries."""
         with self._lock:
-            self._fh.close()
+            if self._fh is not None:
+                try:
+                    self._fh.close()
+                except Exception:
+                    pass
+                self._fh = None
             open(self._path, 'w', encoding='utf-8').close()
-            self._fh = open(self._path, 'a', encoding='utf-8')
 
 
 # ------------------------------------------------------------------
@@ -395,9 +416,13 @@ def _fix_interleaved_user_messages(msgs: List[Dict[str, Any]]) -> List[Dict[str,
                     tool_responses.append(next_msg)
                     found_ids.add(next_tc_id)
                     j += 1
-                elif next_role in ('user', 'system') and not tool_responses:
-                    # Defer: encountered before any tool response — was recorded
-                    # out-of-order due to mid-execution injection.
+                elif next_role in ('user', 'system'):
+                    # Defer: user/system message was recorded out-of-order due to
+                    # mid-execution injection. This can happen before ANY tool response
+                    # OR between tool responses (e.g., tc1 done, user sends message,
+                    # tc2 still running). Always defer to after all tool responses so
+                    # the API sees tool messages immediately following the tool_calls
+                    # assistant message.
                     deferred.append(next_msg)
                     j += 1
                 else:
@@ -436,6 +461,11 @@ def _reconstruct_llm_messages(entries: List[dict]) -> List[Dict[str, Any]]:
             i += 1
 
         elif etype == 'user':
+            # Skip slash command user messages — they are handled directly by
+            # the command executor and must never enter LLM context.
+            if (entry.get('metadata') or {}).get('slash_command'):
+                i += 1
+                continue
             _pending_reasoning = ''  # reasoning before a user message is irrelevant
             _pending_tool_ids = []
             msg: Dict[str, Any] = {'role': 'user', 'content': content}
@@ -459,6 +489,11 @@ def _reconstruct_llm_messages(entries: List[dict]) -> List[Dict[str, Any]]:
             i += 1
 
         elif etype == 'system':
+            # Skip slash command responses — they were saved with metadata.slash_command
+            # and must never enter LLM context.
+            if (entry.get('metadata') or {}).get('slash_command'):
+                i += 1
+                continue
             # System injections were sent as user messages to the LLM
             _pending_tool_ids = []
             messages.append({'role': 'user', 'content': content})

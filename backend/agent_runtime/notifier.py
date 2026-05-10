@@ -55,12 +55,22 @@ def notify_agent(agent_id: str, tag: str, message: str,
     """
     full_message = f"[{tag}] {message}"
 
+    # Sub-agents don't have their own per-agent chat DB — use parent's ID for DB ops
+    _db_agent_id = agent_id
+    try:
+        from backend.subagent_manager import subagent_manager
+        _sub = subagent_manager.get(agent_id)
+        if _sub:
+            _db_agent_id = _sub.get('parent_id', agent_id)
+    except Exception:
+        pass
+
     # Resolve routing only when session_id is not provided
     if session_id:
         pass  # Use the provided session_id directly below
     else:
         if not external_user_id:
-            resolved_uid, resolved_cid = _resolve_agent_target(agent_id, channel_type)
+            resolved_uid, resolved_cid = _resolve_agent_target(_db_agent_id, channel_type)
             if not resolved_uid:
                 # Only apply fallback if no explicit routing was provided
                 if external_user_id is None:
@@ -97,7 +107,9 @@ def notify_agent(agent_id: str, tag: str, message: str,
             channel_id = session_info.get('channel_id')
             target_session_id = session_id
         else:
-            target_session_id = db.get_or_create_session(agent_id, external_user_id, channel_id)
+            target_session_id = db.get_or_create_session(
+                agent_id, external_user_id, channel_id,
+                db_agent_id=_db_agent_id)
     except Exception as e:
         _logger.error(
             "notify_agent: failed to get/create session for agent '%s' "
@@ -136,7 +148,7 @@ def notify_agent(agent_id: str, tag: str, message: str,
             meta = dict(metadata) if metadata else {}
             db.add_chat_message(
                 target_session_id, role='user', content=full_message,
-                agent_id=agent_id, metadata=meta if meta else None,
+                agent_id=_db_agent_id, metadata=meta if meta else None,
             )
             from backend.event_stream import event_stream
             event_stream.emit('message_received', {

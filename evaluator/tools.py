@@ -293,7 +293,8 @@ class ToolFramework:
             return {"error": "Query contains potentially dangerous operations"}
         
         try:
-            with sqlite3.connect(config.TEST_DB_PATH) as conn:
+            conn = sqlite3.connect(config.TEST_DB_PATH)
+            try:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute(query)
@@ -305,6 +306,8 @@ class ToolFramework:
                 else:
                     conn.commit()
                     return {"result": "Query executed successfully", "affected_rows": cursor.rowcount}
+            finally:
+                conn.close()
                     
         except Exception as e:
             return {"error": f"Database error: {str(e)}"}

@@ -8,6 +8,8 @@ Supports both:
 
 import time
 import json
+import os
+import shutil
 from typing import Dict, Any, List, Optional
 import queue
 from threading import Thread, Lock
@@ -205,20 +207,33 @@ class EvaluationEngine:
         finally:
             with self.lock:
                 self.is_running = False
+                # Capture under lock to prevent race with reset_state/start_evaluation
+                was_interrupted = self.was_interrupted
+                run_id_to_delete = self.current_run_id if was_interrupted else None
             
-            # Finalize test logger
-            if self.has_error:
-                final_status = "error"
-            elif self.was_interrupted:
-                final_status = "interrupted"
+            if was_interrupted:
+                # Interrupted/canceled — do NOT finalize the logger or save anything.
+                # Immediately delete all artifacts: DB records AND logger files on disk.
+                if run_id_to_delete:
+                    # Delete logger files (logs/eval/<run_id>/)
+                    run_dir = test_logger.get_run_dir()
+                    if run_dir and os.path.isdir(run_dir):
+                        try:
+                            shutil.rmtree(run_dir)
+                            self._log(f'[SYSTEM] Interrupted run {run_id_to_delete} logger files deleted')
+                        except Exception as e:
+                            self._log(f'[WARN] Failed to clean logger files for run {run_id_to_delete}: {e}')
+                    
+                    # Delete from database (cascades to test_results, level_scores, individual_test_results, etc.)
+                    db.delete_run(run_id_to_delete)
+                    self._log(f'[SYSTEM] Interrupted run {run_id_to_delete} deleted from history')
             else:
-                final_status = "completed"
-            test_logger.finalize_run(status=final_status)
-
-            # Delete interrupted runs so they don't appear in history
-            if self.was_interrupted and self.current_run_id:
-                db.delete_run(self.current_run_id)
-                self._log(f'[SYSTEM] Interrupted run {self.current_run_id} deleted from history')
+                # Normal completion or error — finalize the logger
+                if self.has_error:
+                    final_status = "error"
+                else:
+                    final_status = "completed"
+                test_logger.finalize_run(status=final_status)
     
     def _run_legacy_evaluation(self, run_id: int, model_name: str, selected_domains: list = None, run_llm_client=None):
         """Run evaluation using legacy hardcoded tests
@@ -341,7 +356,8 @@ class EvaluationEngine:
                         first_expected = test.get('expected', {})
                 
                 # Calculate average score for this level
-                if test_results:
+                # Only save if still running (not interrupted mid-level)
+                if self.is_running and test_results:
                     level_score = ScoreAggregator.calculate_level_score(test_results)
                     
                     # Calculate total duration for this level
@@ -1103,6 +1119,9 @@ class EvaluationEngine:
         from evaluator.tools import tool_framework
         _client = run_llm_client or llm_client
 
+        # Read max tool iterations from DB (respects web UI override)
+        max_tool_iterations = int(db.get_setting('max_tool_iterations', str(MAX_TOOL_ITERATIONS)))
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -1167,11 +1186,11 @@ class EvaluationEngine:
             )
             messages.append({"role": "user", "content": plan_msg})
 
-        for iteration in range(MAX_TOOL_ITERATIONS):
+        for iteration in range(max_tool_iterations):
             # Estimate prompt tokens from messages (rough: 1 token ≈ 4 chars)
             prompt_chars = sum(len(m.get("content", "") or "") for m in messages)
             est_tokens = prompt_chars // 4
-            self._log(f'[TOOL-LOOP] Iteration {iteration + 1}/{MAX_TOOL_ITERATIONS} (~{est_tokens}tok)')
+            self._log(f'[TOOL-LOOP] Iteration {iteration + 1}/{max_tool_iterations} (~{est_tokens}tok)')
             
             # Initialize turn log
             turn_log = {

@@ -657,7 +657,7 @@ footer {
 @media (max-width: 1023px) {
     #tab-chat {
         /* Fill full viewport height below the tab header */
-        height: calc(100svh - 140px);
+        height: calc(100svh - var(--header-h, 56px) - 84px);
         min-height: 0;
         display: flex;
         flex-direction: column;

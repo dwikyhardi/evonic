@@ -307,3 +307,5 @@ run/
 .codeiumignore
 AGENTS.md
 CLAUDE.md
+CHANGELOG.md
+**/evonic

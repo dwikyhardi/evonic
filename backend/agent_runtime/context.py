@@ -23,6 +23,18 @@ _AGENTS_DIR = os.path.join(_BASE_DIR, 'agents')
 _system_prompt_cache: Dict[str, Dict[str, Any]] = {}
 
 
+def _effective_id(agent: Dict[str, Any]) -> str:
+    """Return the agent ID to use for DB/disk resource lookups.
+
+    Sub-agents don't exist in the agents table or agents/ directory.
+    They inherit the parent's SYSTEM.md, KB files, tool assignments,
+    and skill assignments.
+    """
+    if agent.get('is_subagent'):
+        return agent.get('parent_id', agent['id'])
+    return agent['id']
+
+
 def _system_prompt_path(agent_id: str) -> str:
     return os.path.join(_AGENTS_DIR, agent_id, 'SYSTEM.md')
 
@@ -42,13 +54,14 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
     """
     parts = []
     aid = agent['id']
+    eid = _effective_id(agent)  # parent's ID for sub-agents
 
     # Optionally inject agent ID at the top
     if agent.get('inject_agent_id'):
         parts.append(f"Your agent ID is: {aid}")
 
     # Read system prompt from file; fall back to DB value for backward compat
-    sp_path = _system_prompt_path(aid)
+    sp_path = _system_prompt_path(eid)
     if os.path.isfile(sp_path):
         try:
             with open(sp_path, 'r', encoding='utf-8') as f:
@@ -73,7 +86,7 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
             parts.append(f"\n## Language\n{_lang_text}")
 
     # Inject system_prompt from assigned tool definitions
-    assigned_ids = set(db.get_agent_tools(aid))
+    assigned_ids = set(db.get_agent_tools(eid))
     if assigned_ids:
         seen_fn_names = set()
         for tool_def in tool_registry.get_all_tool_defs():
@@ -88,7 +101,7 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
                     parts.append(tool_prompt)
 
     # List available KB files so the agent knows what it can read
-    kb_dir = os.path.join(_AGENTS_DIR, aid, 'kb')
+    kb_dir = os.path.join(_AGENTS_DIR, eid, 'kb')
     if os.path.isdir(kb_dir):
         files = [f for f in sorted(os.listdir(kb_dir))
                  if os.path.isfile(os.path.join(kb_dir, f))]
@@ -107,7 +120,7 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
 
     # List available skills with SYSTEM.md so the agent knows what it can load
     skills_mgr = SkillsManager()
-    _allowed_skills = None if agent.get('is_super') else set(db.get_agent_skills(aid))
+    _allowed_skills = None if agent.get('is_super') else set(db.get_agent_skills(eid))
     skills_with_system_md = []
     for skill in skills_mgr.list_skills():
         if not skills_mgr.is_skill_enabled(skill.get('id', '')):
@@ -148,14 +161,15 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
 def _cache_key_valid(agent: Dict[str, Any], cache_entry: Dict[str, Any]) -> bool:
     """Check if the cached static prompt is still valid by comparing mtimes."""
     aid = agent['id']
+    eid = _effective_id(agent)
 
     # Check SYSTEM.md mtime
-    sp_path = _system_prompt_path(aid)
+    sp_path = _system_prompt_path(eid)
     if _get_mtime(sp_path) != cache_entry['sp_mtime']:
         return False
 
     # Check KB dir mtime
-    kb_dir = os.path.join(_AGENTS_DIR, aid, 'kb')
+    kb_dir = os.path.join(_AGENTS_DIR, eid, 'kb')
     if _get_mtime(kb_dir) != cache_entry['kb_mtime']:
         return False
 
@@ -171,7 +185,7 @@ def _cache_key_valid(agent: Dict[str, Any], cache_entry: Dict[str, Any]) -> bool
             return False
 
     # Check tools hash (assigned tool IDs)
-    assigned_ids = frozenset(db.get_agent_tools(aid))
+    assigned_ids = frozenset(db.get_agent_tools(eid))
     if str(sorted(assigned_ids)) != cache_entry['tools_hash']:
         return False
 
@@ -190,6 +204,7 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
     Dynamic portions (onboarding, datetime) are always re-evaluated.
     """
     aid = agent['id']
+    eid = _effective_id(agent)
 
     # Check cache
     cache_entry = _system_prompt_cache.get(aid)
@@ -200,8 +215,8 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
         static_prompt = _build_static_prompt(agent)
 
         # Build mtime snapshot for cache validation
-        sp_path = _system_prompt_path(aid)
-        kb_dir = os.path.join(_AGENTS_DIR, aid, 'kb')
+        sp_path = _system_prompt_path(eid)
+        kb_dir = os.path.join(_AGENTS_DIR, eid, 'kb')
         skills_mtimes = {}
         skills_mgr = SkillsManager()
         for skill in skills_mgr.list_skills():
@@ -210,7 +225,7 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
             system_md_path = os.path.join(skill_dir, 'SYSTEM.md')
             skills_mtimes[sid] = _get_mtime(system_md_path)
 
-        assigned_ids = frozenset(db.get_agent_tools(aid))
+        assigned_ids = frozenset(db.get_agent_tools(eid))
 
         _system_prompt_cache[aid] = {
             'static_prompt': static_prompt,
@@ -313,7 +328,9 @@ def build_tools(agent: Dict[str, Any]) -> List[Dict[str, Any]]:
         tools.extend(get_agent_messaging_tool_defs())
 
     # Add assigned tools from the registry (including skill tools)
-    assigned_ids = set(db.get_agent_tools(agent['id']))
+    # Sub-agents inherit parent's tool assignments
+    eid = _effective_id(agent)
+    assigned_ids = set(db.get_agent_tools(eid))
     if assigned_ids:
         seen_fn_names = set()
         for tool_def in tool_registry.get_all_tool_defs():

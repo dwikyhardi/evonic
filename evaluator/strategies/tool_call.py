@@ -82,6 +82,13 @@ class ToolCallEvaluator(BaseEvaluator):
         gemma4_calls = extract_gemma4_tool_calls(response)
         if gemma4_calls:
             return gemma4_tool_calls_to_openai_format(gemma4_calls)
+
+        # Try Qwen XML format: <tool_call><function=name><parameter=key>val</parameter></function></tool_call>
+        from evaluator.qwen_parser import extract_qwen_tool_calls, qwen_tool_calls_to_openai_format
+        
+        qwen_calls = extract_qwen_tool_calls(response)
+        if qwen_calls:
+            return qwen_tool_calls_to_openai_format(qwen_calls)
         
         return []
     

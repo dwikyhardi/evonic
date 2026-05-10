@@ -821,6 +821,31 @@ class LLMClient:
             cleaned = strip_thinking_tags(content)[0] if content else ""
             if not cleaned and embedded_final:
                 cleaned = embedded_final
+            # Check for Qwen-style XML tool calls that may appear in
+            # reasoning_content instead of content (common with Qwen-based models).
+            # Two forms: (a) trailing after </think> in embedded_final,
+            # (b) directly in reasoning_text when content is empty.
+            xml_source = None
+            if embedded_final and "<tool_call>" in embedded_final:
+                xml_source = embedded_final
+            elif not cleaned and reasoning_text and "<tool_call>" in reasoning_text:
+                xml_source = reasoning_text
+            if xml_source:
+                from evaluator.qwen_parser import (
+                    extract_qwen_tool_calls,
+                    qwen_tool_calls_to_openai_format,
+                    strip_qwen_tool_calls,
+                )
+                qwen_calls = extract_qwen_tool_calls(xml_source)
+                if qwen_calls:
+                    openai_calls = qwen_tool_calls_to_openai_format(qwen_calls)
+                    visible_content = strip_qwen_tool_calls(xml_source)
+                    return {
+                        "content": visible_content,
+                        "thinking": reasoning_text or None,
+                        "raw": content,
+                        "tool_calls": openai_calls,
+                    }
             return {"content": cleaned, "thinking": reasoning_text, "raw": content}
 
         if content:

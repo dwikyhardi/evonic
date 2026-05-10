@@ -34,6 +34,7 @@ from routes.health import health_bp
 from routes.workplaces import workplaces_bp
 from routes.logs import logs_bp
 from routes.safety_rules import safety_rules_bp
+from routes.update import update_bp
 import config
 from backend.version import get_version
 
@@ -44,7 +45,7 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 app = Flask(__name__)
 sock = Sock(app)
-app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.secret_key = config.SECRET_KEY
 
 # Global upload size limit (defense-in-depth for all endpoints)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
@@ -68,6 +69,7 @@ app.register_blueprint(health_bp)
 app.register_blueprint(workplaces_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(safety_rules_bp)
+app.register_blueprint(update_bp)
 
 
 # ---- Backward-compatible redirect: /settings/* → /system/* ----
@@ -152,21 +154,54 @@ if not _reloader_active or _is_reloader_child:
     from backend.scheduler import scheduler as global_scheduler
     global_scheduler.start()
 
-    # If this boot was triggered by /restart, send a system notification to the agent
-    _restart_flag = db.get_setting('restart_greeting_needed')
-    if _restart_flag:
+    # If this boot was triggered by /restart, send "Evonic ready!" (no LLM)
+    _restart_ready_flag = db.get_setting('restart_ready_needed')
+    if _restart_ready_flag:
         import threading as _threading
         import json as _json
 
-        def _send_restart_notification():
+        def _send_restart_ready():
             import time as _time
             _time.sleep(5.0)  # Wait for channels + agent_runtime to fully initialize
             try:
-                _data = _json.loads(_restart_flag)
+                _data = _json.loads(_restart_ready_flag)
+                _channel_id = _data.get('channel_id')
+                _user_id = _data.get('external_user_id')
+                _log.info("Sending 'Evonic ready!' (channel=%s, user=%s)",
+                           _channel_id, _user_id)
+
+                from backend.channels.registry import channel_manager
+                _channel = channel_manager.get_channel_instance(_channel_id)
+                if _channel:
+                    _channel.send_message(_user_id, "Evonic ready!")
+                    _log.info("'Evonic ready!' sent")
+                else:
+                    _log.warning("Channel %s not found, cannot send restart ready message",
+                                 _channel_id)
+
+                db.set_setting('restart_ready_needed', '')
+                _log.info("Restart ready flag cleared")
+
+            except Exception as _e:
+                _log.error("Failed to send restart ready message: %s", _e, exc_info=True)
+
+        _threading.Thread(target=_send_restart_ready, daemon=True).start()
+
+    # If this boot was triggered by restart tool, send LLM greeting with context
+    _restart_greeting_flag = db.get_setting('restart_greeting_needed')
+    if _restart_greeting_flag:
+        import threading as _threading
+        import json as _json
+
+        def _send_restart_greeting():
+            import time as _time
+            _time.sleep(5.0)  # Wait for channels + agent_runtime to fully initialize
+            try:
+                _data = _json.loads(_restart_greeting_flag)
                 _channel_id = _data.get('channel_id')
                 _user_id = _data.get('external_user_id')
                 _context = _data.get('context', '')
-                _log.info("Sending system notification (channel=%s, user=%s, context_len=%d)",
+                _log.info("Sending restart greeting (channel=%s, user=%s, context_len=%d)",
                            _channel_id, _user_id, len(_context))
 
                 _super_agent = db.get_super_agent()
@@ -174,7 +209,6 @@ if not _reloader_active or _is_reloader_child:
                     _log.warning("No super agent found, skipping greeting")
                     return
 
-                # Build self-contained system notification (like kanban task reminders)
                 _trigger_msg = '[SYSTEM] Restart greeting needed\n'
                 if _context and _context.strip():
                     _trigger_msg += f'\n<restart_context>\n{_context}\n</restart_context>\n'
@@ -187,14 +221,13 @@ if not _reloader_active or _is_reloader_child:
                     channel_id=_channel_id,
                 )
 
-                # Clear flag after successful send
                 db.set_setting('restart_greeting_needed', '')
-                _log.info("System notification sent, flag cleared")
+                _log.info("Restart greeting sent, flag cleared")
 
             except Exception as _e:
-                _log.error("Failed to send restart notification: %s", _e, exc_info=True)
+                _log.error("Failed to send restart greeting: %s", _e, exc_info=True)
 
-        _threading.Thread(target=_send_restart_notification, daemon=True).start()
+        _threading.Thread(target=_send_restart_greeting, daemon=True).start()
 
     # ----------------------------------------------------------------
     # Startup check: scan all active sessions for unreplied user messages
@@ -238,8 +271,8 @@ if not _reloader_active or _is_reloader_child:
                 _total_sessions += 1
                 _session_id = _sess['id']
                 try:
-                    _clog = ChatLog(_agent_id, _session_id)
-                    _last = _clog.get_last_entry(types=_unreplied_types)
+                    with ChatLog(_agent_id, _session_id) as _clog:
+                        _last = _clog.get_last_entry(types=_unreplied_types)
                 except Exception:
                     continue
 

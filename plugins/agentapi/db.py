@@ -11,8 +11,10 @@ import json
 import os
 import secrets
 import sqlite3
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Generator
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _shared_data = os.path.join(BASE_DIR, 'shared', 'data')
@@ -55,13 +57,22 @@ class TokenDB:
         self.db_path = db_path
         self._init_tables()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager that returns a SQLite connection for the Token database.
+        The connection is opened on entry and closed on exit to prevent leaks.
+        Includes automatic transaction management (commit/rollback).
+        """
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=10000")
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_tables(self):
         with self._connect() as conn:

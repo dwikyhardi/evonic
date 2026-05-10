@@ -178,6 +178,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="task-assignee">
                     <option value="">-- None --</option>
                 </select>
+                <div id="task-assignee-warning" class="hidden mt-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">This agent does not have the 'kanban' skill yet. To add this skill, go to Agent &gt; Settings &gt; Skills.</div>
             </div>
             <div class="mb-5">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depends on (optional)</label>
@@ -269,7 +270,10 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                     <textarea id="comment-input" rows="3" placeholder="Add a comment..."
                         class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm resize-y bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500"></textarea>
                     <div class="flex justify-end mt-2">
-                        <button onclick="submitComment()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition">Post Comment</button>
+                        <button id="comment-submit-btn" onclick="submitComment()" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-500 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                            <svg class="hidden animate-spin w-4 h-4" id="comment-spinner" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span id="comment-btn-text">Post Comment</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -302,6 +306,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                         <select class="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500" id="detail-task-assignee">
                             <option value="">-- None --</option>
                         </select>
+                        <div id="detail-task-assignee-warning" class="hidden mt-1.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">This agent does not have the 'kanban' skill yet. To add this skill, go to Agent &gt; Settings &gt; Skills.</div>
                     </div>
                     <div class="mb-5">
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depends on (optional)</label>
@@ -358,7 +363,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
 <!-- Trigger Agent Selection Modal (Task #36) -->
 <div class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" id="kb-trigger-modal">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
         <div class="flex items-center justify-between mb-4">
              <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Agent</h2>
             <button onclick="closeTriggerModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">&times;</button>
@@ -366,7 +371,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Choose an agent to trigger for this task:</p>
         <div id="trigger-loading" class="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Loading agents...</div>
         <div id="trigger-no-agents" class="hidden text-sm text-gray-500 dark:text-gray-400 text-center py-4">No agents available.</div>
-        <div id="trigger-agent-list" class="hidden flex flex-col gap-2 max-h-60 overflow-y-auto"></div>
+        <div id="trigger-agent-list" class="hidden grid grid-cols-3 gap-3 max-h-80 overflow-y-auto"></div>
         <div id="trigger-actions" class="hidden flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
             <button onclick="closeTriggerModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancel</button>
             <button onclick="confirmTrigger()" id="trigger-confirm-btn" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">Trigger</button>
@@ -1203,17 +1208,46 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         if (!currentDetailId) return;
         const content = $('#comment-input').val().trim();
         if (!content) return;
+        const $btn = $('#comment-submit-btn');
+        const $spinner = $('#comment-spinner');
+        const $btnText = $('#comment-btn-text');
+        // Loading state
+        $btn.prop('disabled', true);
+        $spinner.removeClass('hidden');
+        $btnText.text('Posting...');
         $.ajax({
             url: `${API}/tasks/${currentDetailId}/comments`,
             method: 'POST',
             contentType: 'application/json',
             data: JSON.stringify({ content }),
-            success: function() {
+            success: function(data) {
                 $('#comment-input').val('');
-                loadComments(currentDetailId);
+                // Optimistic append — build card from response data
+                const c = data.comment;
+                if (c) {
+                    const card = `
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                            <div class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1">${esc(c.author || 'Anonymous')}</div>
+                            <div class="text-sm text-gray-700 dark:text-gray-300 break-words kb-markdown">${DOMPurify.sanitize(marked.parse(c.content))}</div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500 mt-1.5">${fmtShort(c.created_at)}</div>
+                        </div>`;
+                    // Remove "No comments yet" placeholder if present
+                    const $list = $('#comment-list');
+                    $list.children('.text-sm.text-center.py-4').remove();
+                    $list.append(card);
+                    // Update comment count badge
+                    const $count = $('#comment-count');
+                    const current = parseInt($count.text().replace(/[()]/g, '')) || 0;
+                    $count.text(`(${current + 1})`).removeClass('hidden');
+                }
                 loadActivity(currentDetailId);
             },
-            error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to post comment'); }
+            error: function(xhr) { alert(xhr.responseJSON?.error || 'Failed to post comment'); },
+            complete: function() {
+                $btn.prop('disabled', false);
+                $spinner.addClass('hidden');
+                $btnText.text('Post Comment');
+            }
         });
     }
 
@@ -1457,7 +1491,9 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
         _triggerAgents = _agentCache;
         const html = _triggerAgents.map(function(agent) {
-            return `<button onclick="selectTriggerAgent('${esc(agent.id)}')" class="w-full text-left px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 hover:bg-orange-50 hover:border-orange-200 dark:hover:bg-gray-600 dark:hover:border-orange-400 transition ${_triggerAgent === agent.id ? 'bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400' : ''}">${esc(agent.name)}</button>`;
+            const avatarUrl = `/api/agents/${esc(agent.id)}/avatar`;
+            const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="20" fill="#e0e7ff"/><path d="M20 8a5 5 0 100 10 5 5 0 000-10zm-8 18.5a8 8 0 0116 0" fill="#4f46e5"/></svg>`;
+            return `<button onclick="selectTriggerAgent('${esc(agent.id)}')" class="flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-600 dark:bg-gray-700 hover:bg-orange-50 hover:border-orange-200 dark:hover:bg-gray-600 dark:hover:border-orange-400 transition ${_triggerAgent === agent.id ? 'bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400' : ''}"><img src="${avatarUrl}" alt="${esc(agent.name)}" class="w-12 h-12 rounded-full object-cover bg-indigo-50 dark:bg-indigo-900/20" onerror="this.onerror=null;this.src='data:image/svg+xml,${encodeURIComponent(fallbackSvg)}'"><span class="text-xs text-gray-700 dark:text-gray-200 font-medium break-words text-center leading-tight">${esc(agent.name)}</span></button>`;
         }).join('');
 
         $('#trigger-agent-list').html(html);
@@ -1475,6 +1511,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 $btn.removeClass('bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400');
             }
         });
+        // Auto-select: immediately trigger and close modal
+        confirmTrigger();
     }
 
     function closeTriggerModal() {
@@ -1546,11 +1584,13 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         const assignments = [];
         for (let i = 0; i < _assignProposals.length; i++) {
             const agentId = $(`.assign-agent-select[data-index="${i}"]`).val();
-            if (!agentId) {
-                alert('Please select an agent for task #' + _assignProposals[i].task_id);
-                return;
-            }
+            if (!agentId) continue; // skip unselected — partial assignment OK
             assignments.push({ task_id: _assignProposals[i].task_id, agent_id: agentId });
+        }
+
+        if (assignments.length === 0) {
+            alert('No agents selected for any task.');
+            return;
         }
 
         const $btn = $('#assign-confirm-btn');
@@ -1623,8 +1663,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     function populateAgentSelect(selector, selectedValue) {
         const now = Date.now();
         if (!_agentCache || (now - _agentCacheTime) > 60000) {
-            $.get('/api/kanban/eligible-agents', function(data) {
-                _agentCache = (data.agents || []).map(a => ({id: a.id, name: a.name || a.id}));
+            $.get('/api/kanban/all-agents', function(data) {
+                _agentCache = (data.agents || []).map(a => ({id: a.id, name: a.name || a.id, has_kanban: a.has_kanban}));
                 _agentCacheTime = now;
                 _doPopulateAgentSelect(selector, selectedValue);
             }).fail(function() {
@@ -1641,6 +1681,20 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         if (!agentId || !_agentCache) return agentId || '';
         const agent = _agentCache.find(a => a.id === agentId);
         return agent ? agent.name : agentId;
+    }
+
+    function showAgentSkillWarning(selectId, warningId) {
+        const agentId = $(selectId).val().trim();
+        if (!agentId) {
+            $(warningId).addClass('hidden');
+            return;
+        }
+        const agent = _agentCache ? _agentCache.find(a => a.id === agentId) : null;
+        if (agent && !agent.has_kanban) {
+            $(warningId).removeClass('hidden');
+        } else {
+            $(warningId).addClass('hidden');
+        }
     }
 
     function renderAssigneeWithAvatar(assignee) {
@@ -1669,6 +1723,9 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             }
             $sel.append(opt);
         });
+        // Trigger warning visibility after population
+        const warningId = selector === '#task-assignee' ? '#task-assignee-warning' : '#detail-task-assignee-warning';
+        showAgentSkillWarning(selector, warningId);
     }
 
         // ── Close on backdrop click ───────────────────────────────────────────────
@@ -1775,6 +1832,16 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     // Bind to Detail Modal edit textarea
     $('#detail-task-desc').on('input', function() {
         autoGrowTextarea(this);
+    });
+
+    // ── Agent skill warning on assignee select ──────────────────────────────
+
+    $('#task-assignee').on('change', function() {
+        showAgentSkillWarning('#task-assignee', '#task-assignee-warning');
+    });
+
+    $('#detail-task-assignee').on('change', function() {
+        showAgentSkillWarning('#detail-task-assignee', '#detail-task-assignee-warning');
     });
 
     fetchNotifierStatus();

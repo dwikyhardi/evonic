@@ -69,7 +69,7 @@ KANBAN_ALLOWED_TOOLS = {
     'use_skill', 'unload_skill',
     'kanban_search_tasks', 'kanban_update_status', 'kanban_update_task',
     'kanban_add_comment',
-    'kanban_get_task',
+    'kanban_get_task', 'kanban_get_comments',
     'set_mode', 'save_plan',
     'state',
 }

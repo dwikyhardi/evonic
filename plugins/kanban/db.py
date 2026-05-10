@@ -9,7 +9,10 @@ On first run, existing tasks.json is imported and renamed to tasks.json.migrated
 import sqlite3
 import os
 import json
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Generator
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Prefer shared/data/ when present (post-migration environments)
@@ -36,13 +39,22 @@ class KanbanDB:
         self._migrate_task_dependencies()
         self._migrate_from_json()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager that returns a SQLite connection for the Kanban database.
+        The connection is opened on entry and closed on exit to prevent leaks.
+        Includes automatic transaction management (commit/rollback).
+        """
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=10000")
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_tables(self):
         with self._connect() as conn:
@@ -454,6 +466,28 @@ class KanbanDB:
                 (task_id, before),
             ).fetchone()
         return dict(row) if row else None
+
+    def get_comments_paginated(self, task_id: str, limit: int = 10, offset: int = 0) -> dict:
+        """Get comments for a task with pagination, ordered DESC (newest first).
+
+        Returns:
+            dict with 'comments' (list of comment dicts) and 'total' (int).
+        """
+        with self._connect() as conn:
+            count_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM comments WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            total = count_row[0] if count_row else 0
+
+            rows = conn.execute(
+                "SELECT * FROM comments WHERE task_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
+                (task_id, limit, offset),
+            ).fetchall()
+        return {
+            'comments': [dict(r) for r in rows],
+            'total': total,
+        }
 
     # ─── Activity Log ──────────────────────────────────────────────────────────
 

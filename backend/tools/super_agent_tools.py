@@ -572,6 +572,53 @@ def _exec_restart(args: dict, agent_context: dict = None) -> dict:
     else:
         agent_id = channel_id = external_user_id = session_id = None
 
+    # ── Inter-agent restart guard ──────────────────────────────────────
+    # When a regular agent messages the super agent asking for a restart,
+    # the super agent should NOT auto-execute it — require user approval first.
+    # The approval flow in llm_loop.py handles the rest: when user approves,
+    # it sets agent_context['_skip_safety'] = True and re-calls us.
+    _is_inter_agent = bool(
+        external_user_id
+        and external_user_id.startswith('__agent__')
+    )
+    _skip_safety = agent_context.get('_skip_safety', False) if agent_context else False
+
+    if _is_inter_agent and not _skip_safety:
+        # Resolve the requesting agent's name for the approval prompt
+        _requester_name = external_user_id
+        _requester_id = external_user_id[len('__agent__'):] if _is_inter_agent else ''
+        try:
+            _req_agent = db.get_agent(_requester_id)
+            if _req_agent:
+                _requester_name = _req_agent.get('name', _requester_id)
+        except Exception:
+            pass
+
+        _logger.info(
+            'restart: inter-agent request from %s (%s) — requiring user approval',
+            _requester_name, _requester_id
+        )
+        return {
+            'level': 'requires_approval',
+            'score': 10,
+            'reasons': [
+                f'Server restart requested by another agent ({_requester_name}) '
+                f'via inter-agent messaging. This requires human approval.'
+            ],
+            'blocked_patterns': ['inter_agent_restart'],
+            'requires_approval': True,
+            'approval_info': {
+                'risk_level': 'high',
+                'description': (
+                    f'Agent "{_requester_name}" ({_requester_id}) has requested '
+                    f'a server restart via agent-to-agent messaging. '
+                    f'This will shut down the entire Evonic platform.'
+                ),
+                'initiated_by': _requester_name,
+                'initiated_by_id': _requester_id,
+            },
+        }
+
     # Persist caller info so the new process can notify them after boot
     recent_context = ''
     try:

@@ -13,6 +13,8 @@ import logging
 import os
 import sqlite3
 import requests as http_lib
+from contextlib import contextmanager
+from typing import Generator
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -216,13 +218,25 @@ class PluginSDK:
 
     # ==================== Database ====================
 
+    @contextmanager
+    def get_db_connection(self) -> Generator[sqlite3.Connection, None, None]:
+        """Context manager for this plugin's database connection.
+        Ensures the connection is properly closed after use.
+
+        Yields:
+            sqlite3.Connection with WAL mode and row_factory=sqlite3.Row.
+        """
+        conn = self.get_db()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
     def get_db(self) -> sqlite3.Connection:
-        """Get a SQLite connection for this plugin's database.
+        """Get a raw SQLite connection for this plugin's database.
 
-        The database file is stored at data/db/plugins/[plugin-id].db.
-        If the file or directory doesn't exist, it is created automatically.
-
-        The database is preserved even if the plugin is uninstalled (data safety).
+        IMPORTANT: You MUST manually call .close() on this connection
+        to avoid file descriptor leaks. Prefer using get_db_connection().
 
         Returns:
             sqlite3.Connection with WAL mode and row_factory=sqlite3.Row.

@@ -150,6 +150,37 @@ def api_delete_model(model_id):
     return jsonify({"success": True})
 
 
+@models_bp.route("/api/models/<model_id>/clone", methods=["POST"])
+def api_clone_model(model_id):
+    """Clone an existing model with new ID, keeping all config except default flag."""
+    source = db.get_model_by_id(model_id)
+    if not source:
+        return jsonify({"success": False, "error": "Model not found"}), 404
+
+    new_id = str(uuid.uuid4())
+    clone_data = {
+        "id": new_id,
+        "name": f"Copy of {source['name']}",
+        "type": source.get("type"),
+        "provider": source.get("provider"),
+        "base_url": source.get("base_url"),
+        "api_key": source.get("api_key"),
+        "model_name": source.get("model_name"),
+        "max_tokens": source.get("max_tokens", 32768),
+        "timeout": source.get("timeout", 60),
+        "thinking": source.get("thinking", 0),
+        "thinking_budget": source.get("thinking_budget", 0),
+        "temperature": source.get("temperature"),
+        "enabled": source.get("enabled", 1),
+        "is_default": 0,
+        "model_max_concurrent": source.get("model_max_concurrent", 1),
+        "api_format": source.get("api_format", "openai"),
+        "vision_supported": source.get("vision_supported", 0),
+    }
+    db.create_model(clone_data)
+    return jsonify({"success": True, "model_id": new_id})
+
+
 @models_bp.route("/api/models/<model_id>/set-default", methods=["POST"])
 def api_set_default_model(model_id):
     """Set a model as global default."""

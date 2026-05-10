@@ -297,73 +297,11 @@ def _register_builtins():
         if not super_agent or super_agent.get('id') != agent_id:
             return "Permission denied: /restart is only available to the super agent."
 
-        # Persist caller info so the new process can notify them after boot
-        import json as _json
-
-        # Capture conversation context for contextual greeting after restart
-        # Uses DB summary (compact) + last messages (raw) instead of sessrecap.log
-        recent_context = ''
-        try:
-            # Get summary from chat_summaries table (compact LLM-generated summary)
-            summary_data = db.get_summary(session_id, agent_id=agent_id)
-            summary_text = summary_data.get('summary', '') if summary_data else ''
-
-            # Get last ~5 message pairs (limit=12 to be safe for user+assistant alternation)
-            last_messages = db.get_session_messages(session_id, limit=12, agent_id=agent_id)
-
-            # Build context string
-            parts = []
-            if summary_text:
-                parts.append('=== CONVERSATION SUMMARY ===')
-                parts.append(summary_text)
-
-            if last_messages:
-                parts.append('=== LAST MESSAGES ===')
-                # Pre-pass: find indices of restart tool calls + their triggering user messages
-                _restart_idx = set()
-                for _i, _m in enumerate(last_messages):
-                    _tcs = _m.get('tool_calls') or []
-                    if _m.get('role') == 'assistant' and any(
-                        isinstance(_tc, dict) and _tc.get('function', {}).get('name') == 'restart'
-                        for _tc in (_tcs if isinstance(_tcs, list) else [])
-                    ):
-                        _restart_idx.add(_i)
-                        if _i > 0:
-                            _restart_idx.add(_i - 1)
-                for _i, msg in enumerate(last_messages):
-                    if _i in _restart_idx:
-                        continue
-                    role = msg.get('role', 'unknown')
-                    # Skip tool result messages and assistant messages that are purely tool calls
-                    if role == 'tool':
-                        continue
-                    if role == 'assistant' and msg.get('tool_calls') and not (msg.get('content') or '').strip():
-                        continue
-                    content = msg.get('content', '') or ''
-                    # Skip user slash commands to prevent the LLM from re-issuing them
-                    if role == 'user' and content.startswith('/'):
-                        continue
-                    # Skip assistant responses to slash commands (metadata.slash_command)
-                    if role == 'assistant' and msg.get('metadata', {}).get('slash_command'):
-                        continue
-                    if content:
-                        parts.append(f'[{role}]: {content}')
-
-            recent_context = '\n\n'.join(parts)
-            # Truncate to ~3000 chars max
-            if len(recent_context) > 3000:
-                recent_context = recent_context[:3000] + '\n...(truncated)'
-
-            _logger.info("Captured %d chars context from DB (summary + last_messages)", len(recent_context))
-        except Exception as _e:
-            _logger.error("Failed to read context from DB: %s", _e, exc_info=True)
-            recent_context = ''
-
-        db.set_setting('restart_greeting_needed', _json.dumps({
+        # Persist caller info so the new process can send "Evonic ready!" after boot
+        import json
+        db.set_setting('restart_ready_needed', json.dumps({
             'channel_id': channel_id,
             'external_user_id': external_user_id,
-            'session_id': session_id,
-            'context': recent_context,
         }))
 
         def _do_restart():
@@ -479,6 +417,122 @@ def _register_builtins():
         "unfocus",
         unfocus_handler,
         "Force-clear focus mode — use when agent is stuck in focus after a failed task",
+    )
+
+    # /status — Show agent status information
+    def status_handler(
+        session_id: str,
+        agent_id: str,
+        external_user_id: str,
+        channel_id: Optional[str],
+        args: str,
+    ) -> str:
+        from models.db import db
+        from backend.agent_state import AgentState
+        from models.chat import agent_chat_manager
+
+        agent = db.get_agent(agent_id)
+        if not agent:
+            return "Error: Agent not found."
+
+        lines = []
+        lines.append(f"**Status \u2014 {agent.get('name', agent_id)}**")
+        lines.append(f"Session: {session_id}")
+
+        # Model — resolve the same way the runtime does:
+        # 1. Agent's default_model_id → llm_models table (agent-specific model config)
+        # 2. Fallback: agent.model raw string (General Settings override)
+        # 3. Otherwise: unknown
+        model = db.get_agent_default_model(agent_id)
+        if model:
+            model_name = model.get("name", "unknown")
+            model_id = model.get("model_name", "")
+            if model_id:
+                lines.append(f"Model: {model_name} ({model_id})")
+            else:
+                lines.append(f"Model: {model_name}")
+        elif agent.get("model"):
+            lines.append(f"Model: {agent['model']} (string override)")
+        else:
+            lines.append("Model: unknown")
+
+        # Agent state: mode, focus, plan file
+        state_content = agent_chat_manager.get(agent_id).get_agent_state()
+        if state_content:
+            ms = AgentState.deserialize(state_content)
+            lines.append(f"Mode: {ms.mode}")
+            if ms.focus:
+                reason = f" \u2014 {ms.focus_reason}" if ms.focus_reason else ""
+                lines.append(f"Focus: yes{reason}")
+            else:
+                lines.append("Focus: no")
+            if ms.plan_file:
+                plan_path = os.path.join(os.path.dirname(__file__), "..", ms.plan_file)
+                if os.path.exists(plan_path):
+                    lines.append(f"Plan file: {ms.plan_file}")
+        else:
+            lines.append("Mode: plan")
+            lines.append("Focus: no")
+
+        # Workplace
+        workplace_id = agent.get("workplace_id")
+        if workplace_id:
+            workplace = db.get_workplace(workplace_id)
+            if workplace:
+                wp_name = workplace.get("name", "unknown")
+                wp_type = workplace.get("type", "unknown")
+                wp_status = workplace.get("status", "disconnected")
+                lines.append(f"Workplace: {wp_name} ({wp_type}, {wp_status})")
+            else:
+                lines.append("Workplace: not found")
+        else:
+            lines.append("Workplace: none")
+
+        # Workspace
+        workspace = agent.get("workspace")
+        if workspace:
+            lines.append(f"Workspace: {workspace}")
+        else:
+            lines.append("Workspace: not configured")
+
+        # Toggles
+        lines.append("Toggles:")
+        sandbox = "enabled" if agent.get("sandbox_enabled") else "disabled"
+        safety = "enabled" if agent.get("safety_checker_enabled") else "disabled"
+        vision = "enabled" if agent.get("vision_enabled") else "disabled"
+        agent_msg = "enabled" if agent.get("agent_messaging_enabled") else "disabled"
+        lines.append(f"  Sandbox: {sandbox}")
+        lines.append(f"  Safety Checker: {safety}")
+        lines.append(f"  Vision: {vision}")
+        lines.append(f"  Agent Messaging: {agent_msg}")
+
+        # Tools and skills count
+        tools = db.get_agent_tools(agent_id)
+        skills = db.get_agent_skills(agent_id)
+        lines.append(f"Tools: {len(tools)}")
+        lines.append(f"Skills: {len(skills)}")
+
+        # Channels
+        channels = db.get_channels(agent_id)
+        if channels:
+            lines.append("Channels:")
+            from backend.channels.registry import channel_manager
+            for ch in channels:
+                ch_name = ch.get("name", "unknown")
+                ch_type = ch.get("type", "unknown")
+                ch_id = ch.get("id", "")
+                is_connected = channel_manager.is_running(ch_id)
+                status = "connected" if is_connected else "disconnected"
+                lines.append(f"  {ch_name} ({ch_type}) \u2014 {status}")
+
+        # Double newline between every field so markdown renders each as
+        # a separate paragraph (single \n would collapse into one line).
+        return "\n\n".join(lines)
+
+    command_registry.register(
+        "status",
+        status_handler,
+        "Show agent status information",
     )
 
 

@@ -3,13 +3,19 @@ import sys
 import logging
 
 # Load .env file — prefer envcrypt (supports encrypted values), fall back to dotenv
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib', 'envcrypt', 'libs', 'python'))
-try:
-    import envcrypt
-    envcrypt.load(".env")
-except Exception:
-    from dotenv import load_dotenv
-    load_dotenv()
+_envcrypt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib', 'envcrypt', 'libs', 'python')
+sys.path.append(_envcrypt_path)
+
+# Only try envcrypt if the config file (~/.envcrypt.yaml) exists
+# Note: load_dotenv() for plain .env is handled by the entrypoint (app.py)
+# before importing config, so it's not needed here.
+_envcrypt_config = os.path.join(os.path.expanduser('~'), '.envcrypt.yaml')
+if os.path.exists(_envcrypt_config):
+    try:
+        import envcrypt
+        envcrypt.load(".env")
+    except Exception:
+        pass  # .env already loaded by the entrypoint
 
 _logger = logging.getLogger(__name__)
 
@@ -34,6 +40,10 @@ def _get_env_int(name: str, default: int, min_val: int = None, max_val: int = No
 # PASS 2: LLM extracts ONLY the final answer in strict format
 TWO_PASS_ENABLED = os.getenv("TWO_PASS_ENABLED", "1") == "1"
 TWO_PASS_TEMPERATURE = float(os.getenv("TWO_PASS_TEMPERATURE", "0.0"))
+
+# Task Complexity Classifier
+# Default enabled state (can be overridden via system settings UI)
+TASK_CLASSIFIER_ENABLED = os.getenv("TASK_CLASSIFIER_ENABLED", "1") == "1"
 
 # Domain Evaluator Configuration
 # Override default evaluator for specific domains
@@ -67,8 +77,64 @@ if not os.path.isdir(_shared_db_dir):
 DB_PATH = os.path.join(_shared_db_dir, "evonic.db")
 TEST_DB_PATH = os.path.join(BASE_DIR, "seed", "test_db.sqlite")
 
-# Flask
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+# Flask — SECRET_KEY: auto-generate once and persist to .env if missing
+_SECRET_KEY_ENV = os.getenv("SECRET_KEY")
+if not _SECRET_KEY_ENV:
+    # Double-check: maybe .env has SECRET_KEY but the env var wasn't loaded yet
+    # (e.g. daemonized subprocess, systemd, or restart via exec)
+    import re as _re
+    _env_path = os.path.join(BASE_DIR, ".env")
+    _found_in_file = False
+    if os.path.exists(_env_path):
+        try:
+            with open(_env_path, "r") as _f:
+                for _line in _f:
+                    _stripped = _line.strip()
+                    if not _stripped or _stripped.startswith("#"):
+                        continue
+                    _m = _re.match(r"^SECRET_KEY=(.+)", _stripped)
+                    if _m:
+                        _SECRET_KEY_ENV = _m.group(1).strip()
+                        _found_in_file = True
+                        _logger.info("Loaded SECRET_KEY from .env file")
+                        break
+        except Exception:
+            pass
+
+if not _SECRET_KEY_ENV:
+    import secrets
+    import tempfile
+
+    _SECRET_KEY_ENV = secrets.token_urlsafe(48)
+
+    # Atomic write: update existing .env or create a new one
+    if _found_in_file and os.path.exists(_env_path):
+        # SECRET_KEY was found in .env but couldn't be parsed — do NOT append duplicate
+        _logger.warning(".env has SECRET_KEY but value could not be read; generating new one anyway")
+    if os.path.exists(_env_path):
+        with open(_env_path, "r") as _f:
+            _lines = _f.readlines()
+        # Append SECRET_KEY (it's not present since the env var was empty)
+        if _lines and not _lines[-1].endswith("\n"):
+            _lines.append("\n")
+        _lines.append(f"SECRET_KEY={_SECRET_KEY_ENV}\n")
+        _tmp_fd, _tmp_path = tempfile.mkstemp(dir=os.path.dirname(_env_path), prefix=".env.")
+        try:
+            with os.fdopen(_tmp_fd, "w") as _f:
+                _f.writelines(_lines)
+            os.replace(_tmp_path, _env_path)
+        except Exception:
+            if os.path.exists(_tmp_path):
+                os.unlink(_tmp_path)
+            raise
+    else:
+        with open(_env_path, "w") as _f:
+            _f.write(f"SECRET_KEY={_SECRET_KEY_ENV}\n")
+
+    os.environ["SECRET_KEY"] = _SECRET_KEY_ENV
+    _logger.info("Generated new SECRET_KEY and saved to .env")
+
+SECRET_KEY = _SECRET_KEY_ENV
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = _get_env_int("PORT", 8080, min_val=1, max_val=65535)
 DEBUG = os.getenv("DEBUG", "1") == "1"
@@ -114,7 +180,7 @@ EVAL_MAX_TOOL_ITERATIONS = _get_env_int("EVAL_MAX_TOOL_ITERATIONS", 30, min_val=
 AGENT_MAX_TOOL_RESULT_CHARS = _get_env_int("AGENT_MAX_TOOL_RESULT_CHARS", 8000, min_val=1, max_val=1_048_576)
 AGENT_MAX_SUMMARIZE_BATCH = _get_env_int("AGENT_MAX_SUMMARIZE_BATCH", 20, min_val=1, max_val=500)
 AGENT_TIMEOUT_RETRIES = _get_env_int("AGENT_TIMEOUT_RETRIES", 2, min_val=0, max_val=20)
-AGENT_QUEUE_WORKERS = _get_env_int("AGENT_QUEUE_WORKERS", 2, min_val=1, max_val=32)
+AGENT_QUEUE_WORKERS = _get_env_int("AGENT_QUEUE_WORKERS", 5, min_val=1, max_val=32)
 
 # Release version (written by supervisor during staging; "dev" in flat-repo mode)
 EVONIC_VERSION = "dev"

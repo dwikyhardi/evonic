@@ -16,6 +16,15 @@
         </button>
     </div>
 
+    <!-- Search + Actions -->
+    <div class="flex flex-col sm:flex-row gap-3 mb-6">
+        <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" id="workplace-search" placeholder="Search workplaces..." oninput="filterWorkplaces()"
+                   class="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+        </div>
+    </div>
+
     <!-- Grid -->
     <div id="workplaces-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
     <div id="workplaces-empty" class="hidden text-center py-16 text-gray-400">
@@ -164,15 +173,37 @@ function renderCard(h) {
     </div>`;
 }
 
+let workplaces = [];
+
 function loadWorkplaces() {
-    $.get('/api/workplaces', function(workplaces) {
-        const grid = $('#workplaces-grid');
-        const empty = $('#workplaces-empty');
-        grid.empty();
-        if (!workplaces.length) { grid.addClass('hidden'); empty.removeClass('hidden'); return; }
-        grid.removeClass('hidden'); empty.addClass('hidden');
-        workplaces.forEach(h => grid.append(renderCard(h)));
+    $.get('/api/workplaces', function(data) {
+        workplaces = data || [];
+        renderWorkplaces();
     });
+}
+
+function renderWorkplaces() {
+    const grid = $('#workplaces-grid');
+    const empty = $('#workplaces-empty');
+    const search = document.getElementById('workplace-search').value.toLowerCase().trim();
+    const filtered = search
+        ? workplaces.filter(w => (w.name || w.id).toLowerCase().includes(search) || (w.type || '').toLowerCase().includes(search))
+        : workplaces;
+    grid.empty();
+    if (!filtered.length) {
+        grid.addClass('hidden');
+        empty.removeClass('hidden');
+        empty.find('p:first-of-type').text(search ? 'No workplaces found' : 'No workplaces yet');
+        empty.find('p:last-of-type').text(search ? 'Try a different search term.' : 'Create a workplace to assign execution environments to your agents.');
+        return;
+    }
+    grid.removeClass('hidden');
+    empty.addClass('hidden');
+    filtered.forEach(h => grid.append(renderCard(h)));
+}
+
+function filterWorkplaces() {
+    renderWorkplaces();
 }
 
 function showCreateModal() { $('#create-modal').removeClass('hidden'); onTypeChange(); }

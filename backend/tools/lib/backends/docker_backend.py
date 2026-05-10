@@ -10,13 +10,17 @@ Extracted from the original runpy.py and bash.py container pool logic.
 """
 
 import atexit
+import logging
 import os
 import re
+import signal
 import subprocess
 import threading
 import time
 
 from backend.tools.lib.exec_backend import ExecutionBackend, truncate
+
+logger = logging.getLogger(__name__)
 
 try:
     from config import (
@@ -60,6 +64,7 @@ _PATH_PREFIX = (
 _containers: dict = {}   # session_id -> {container_id, last_used, created_at, first_call, workspace}
 _pool_lock = threading.Lock()
 _reaper_started = False
+_monitor_started = False
 
 
 def _ensure_reaper_running() -> None:
@@ -70,6 +75,62 @@ def _ensure_reaper_running() -> None:
         _reaper_started = True
     t = threading.Thread(target=_reaper_loop, daemon=True, name='docker-backend-reaper')
     t.start()
+
+
+def _ensure_monitor_running() -> None:
+    global _monitor_started
+    with _pool_lock:
+        if _monitor_started:
+            return
+        _monitor_started = True
+    t = threading.Thread(target=_monitor_loop, daemon=True, name='docker-backend-monitor')
+    t.start()
+
+
+def _monitor_loop() -> None:
+    while True:
+        time.sleep(60)
+        try:
+            fd_count = len(os.listdir(f'/proc/{os.getpid()}/fd'))
+        except Exception:
+            fd_count = -1
+
+        with _pool_lock:
+            count = len(_containers)
+            at_limit = count >= SANDBOX_MAX_CONTAINERS
+            stale_count = sum(1 for info in _containers.values()
+                            if time.time() - info['last_used'] > SANDBOX_IDLE_TIMEOUT)
+
+        if fd_count > 400:
+            logger.critical(f'FD count={fd_count} — approaching limit, shutting down to prevent cascade')
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        level = 'WARNING' if at_limit or stale_count > 0 else 'INFO'
+        log_method = logger.warning if at_limit or stale_count > 0 else logger.info
+        log_method(f'Pool status: {count}/{SANDBOX_MAX_CONTAINERS} containers, {stale_count} stale, fd={fd_count}')
+        if at_limit:
+            logger.warning('pool at capacity — LRU eviction will occur on next allocation')
+
+
+def get_pool_status() -> dict:
+    """Return current pool state for monitoring/debugging."""
+    with _pool_lock:
+        containers = []
+        for sid, info in _containers.items():
+            containers.append({
+                'session_id': sid[:12],
+                'container_id': info['container_id'][:12],
+                'created_at': info['created_at'],
+                'last_used': info['last_used'],
+                'workspace': info.get('workspace'),
+                'first_call': info.get('first_call', False)
+            })
+        return {
+            'pool_size': len(_containers),
+            'max_containers': SANDBOX_MAX_CONTAINERS,
+            'idle_timeout': SANDBOX_IDLE_TIMEOUT,
+            'containers': containers
+        }
 
 
 def _reaper_loop() -> None:
@@ -86,7 +147,7 @@ def _reaper_loop() -> None:
                 info = _containers.get(sid)
                 if not info or info['last_used'] >= deadline:
                     continue
-            print(f'[docker_backend] Idle timeout — destroying container for session {sid[:12]}')
+            logger.info(f'Idle timeout — destroying container for session {sid[:12]}')
             _destroy_container(sid)
 
 
@@ -119,7 +180,7 @@ def _evict_lru() -> None:
         if not _containers:
             return
         lru_sid = min(_containers, key=lambda s: _containers[s]['last_used'])
-    print(f'[docker_backend] Max containers reached — evicting LRU session {lru_sid[:12]}')
+    logger.warning(f'Max containers reached — evicting LRU session {lru_sid[:12]}')
     _destroy_container(lru_sid)
 
 
@@ -131,7 +192,7 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
         if session_id in _containers:
             info = _containers[session_id]
             if info.get('workspace') != effective_workspace:
-                print(f'[docker_backend] Workspace changed for session {session_id[:12]} — recreating container')
+                logger.info(f'Workspace changed for session {session_id[:12]} — recreating container')
                 needs_destroy = True
             else:
                 info['last_used'] = time.time()
@@ -150,7 +211,7 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
 
     cmd = [
         'run', '-d',
-	'--rm',
+	    '--rm',
         '--name', name,
         f'--memory={SANDBOX_MEMORY_LIMIT}',
         f'--cpus={SANDBOX_CPU_LIMIT}',
@@ -171,8 +232,10 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
     if result.returncode != 0:
         stderr = result.stderr.strip()
         if 'already in use' in stderr or 'Conflict' in stderr:
-            print(f'[docker_backend] Stale container found for {name} — removing and retrying')
-            _docker('rm', '-f', name)
+            logger.info(f'Stale container found for {name} — removing and retrying')
+            rm_result = _docker('rm', '-f', name)
+            if rm_result.returncode != 0:
+                logger.warning(f'Failed to remove stale container {name}: {rm_result.stderr.strip()}')
             result = _docker(*cmd)
 
     if result.returncode != 0:
@@ -188,6 +251,7 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
             'workspace': effective_workspace,
         }
     _ensure_reaper_running()
+    _ensure_monitor_running()
     return container_id, None
 
 
@@ -202,6 +266,9 @@ def _destroy_container(session_id: str) -> dict:
     result = _docker('rm', '-f', container_id)
     if result.returncode == 0:
         return {'result': 'container_destroyed', 'container_id': container_id[:12]}
+    logger.warning(f'docker rm failed for {container_id[:12]}: {result.stderr.strip()} - re-adding to pool')
+    with _pool_lock:
+        _containers[session_id] = info
     return {'error': f'docker rm failed: {result.stderr.strip()}'}
 
 
@@ -316,7 +383,7 @@ class DockerBackend(ExecutionBackend):
         result = self._run_code(container_id, code, timeout, env)
 
         if _is_container_gone(result):
-            print(f'[docker_backend] Container {container_id[:12]} gone — recreating for session {self._session_id[:12]}')
+            logger.info(f'Container {container_id[:12]} gone — recreating for session {self._session_id[:12]}')
             with _pool_lock:
                 _containers.pop(self._session_id, None)
             container_id, err = _get_or_create_container(self._session_id, workspace=self._workspace)

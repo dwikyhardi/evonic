@@ -27,14 +27,23 @@ class ChatDelegationMixin:
             pass
 
     def get_or_create_session(self, agent_id: str, external_user_id: str,
-                               channel_id: str = None) -> str:
+                               channel_id: str = None,
+                               db_agent_id: str = None) -> str:
+        """Get or create a session.
+
+        Args:
+            agent_id: Stored in the session's agent_id column.
+            db_agent_id: If provided, selects which per-agent chat DB to use
+                (e.g. parent's DB for sub-agents). Defaults to agent_id.
+        """
+        _db_id = db_agent_id or agent_id
         channel_type = None
         if channel_id:
             ch = self.get_channel(channel_id)
             channel_type = ch.get('type') if ch else None
-        session_id = self._chat_db(agent_id).get_or_create_session(
+        session_id = self._chat_db(_db_id).get_or_create_session(
             agent_id, external_user_id, channel_id, channel_type=channel_type)
-        self._refresh_session_count(agent_id)
+        self._refresh_session_count(_db_id)
         return session_id
 
     def get_session_messages(self, session_id: str, limit: int = 50,
@@ -46,11 +55,20 @@ class ChatDelegationMixin:
 
     def add_chat_message(self, session_id: str, role: str, content: str = None,
                           tool_calls: Any = None, tool_call_id: str = None,
-                          agent_id: str = None, metadata: dict = None) -> int:
+                          agent_id: str = None, metadata: dict = None,
+                          db_agent_id: str = None) -> int:
+        """Add a chat message.
+
+        Args:
+            agent_id: Used for _find_agent_for_session fallback and last_active_at.
+            db_agent_id: If provided, selects which per-agent chat DB to use
+                (e.g. parent's DB for sub-agents). Defaults to agent_id.
+        """
         agent_id = agent_id or self._find_agent_for_session(session_id)
         if not agent_id:
             return -1
-        result = self._chat_db(agent_id).add_chat_message(session_id, role, content, tool_calls, tool_call_id, metadata=metadata)
+        _db_id = db_agent_id or agent_id
+        result = self._chat_db(_db_id).add_chat_message(session_id, role, content, tool_calls, tool_call_id, metadata=metadata)
         # Update last_active_at only for user/assistant messages — NOT for tool
         # calls or tool results, which can fire dozens of times per turn and
         # cause constant write pressure on the main DB (WAL checkpoint contention
@@ -186,9 +204,11 @@ class ChatDelegationMixin:
         session = self._chat_db(agent_id).get_session(session_id)
         if not session:
             return None
-        # Enrich with agent and channel info from main DB
-        agent = self.get_agent(agent_id)
-        session['agent_name'] = agent['name'] if agent else 'Unknown'
+        # Enrich with agent and channel info from main DB.
+        # Sub-agents have no DB entry, so fall back to the session's own agent_id.
+        agent = self.get_agent(session.get('agent_id') or agent_id)
+        session['agent_name'] = (agent['name'] if agent
+                                 else (session.get('agent_id') or 'Unknown'))
         if session.get('channel_id'):
             ch = self.get_channel(session['channel_id'])
             session['channel_type'] = ch.get('type') if ch else None
@@ -275,11 +295,12 @@ class ChatDelegationMixin:
 
                 union_body = " UNION ALL ".join(arms)
                 data_sql = f"""
-                    SELECT combined.*, ag.name AS agent_name,
+                    SELECT combined.*,
+                           COALESCE(ag.name, combined.agent_id) AS agent_name,
                            ch.type AS channel_type, ch.name AS channel_name,
                            peer.name AS peer_agent_name
                     FROM ({union_body}) combined
-                    JOIN agents ag ON ag.id = combined.agent_id
+                    LEFT JOIN agents ag ON ag.id = combined.agent_id
                     LEFT JOIN channels ch ON ch.id = combined.channel_id
                     LEFT JOIN agents peer ON (
                         combined.external_user_id LIKE '__agent__%'

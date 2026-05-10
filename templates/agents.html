@@ -62,6 +62,11 @@
     <!-- ========== WORKPLACES TAB ========== -->
     <div id="tab-workplaces" class="hidden">
         <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <div class="relative">
+                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" id="workplace-search" placeholder="Search workplaces..." oninput="filterWorkplaces()"
+                       class="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+            </div>
             <button onclick="showCreateWorkplaceModal()"
                     class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -327,10 +332,7 @@ function renderAgents() {
             ? ''
             : mkToggle({ checked: enabled, onChange: `toggleAgent('${a.id}', this.checked)`, extraClass: 'ml-3 flex-shrink-0' });
         const statusBadge = enabled
-            ? `<span class="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded-full">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Active
-               </span>`
+            ? ''
             : `<span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l-2 2m7-7a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     Disabled
@@ -522,16 +524,39 @@ function renderWorkplaceCard(h) {
     </div>`;
 }
 
+let workplaceList = [];
+
 function loadWorkplaces() {
-    $.get('/api/workplaces', function(workplaces) {
-        const grid = $('#workplaces-grid');
-        const empty = $('#workplaces-empty');
-        grid.empty();
-        if (!workplaces.length) { grid.addClass('hidden'); empty.removeClass('hidden'); return; }
-        grid.removeClass('hidden'); empty.addClass('hidden');
-        workplaces.forEach(h => grid.append(renderWorkplaceCard(h)));
+    $.get('/api/workplaces', function(data) {
+        workplaceList = data || [];
+        renderWorkplaces();
         workplacesLoaded = true;
     });
+}
+
+function renderWorkplaces() {
+    const grid = $('#workplaces-grid');
+    const empty = $('#workplaces-empty');
+    const searchEl = document.getElementById('workplace-search');
+    const search = searchEl ? searchEl.value.toLowerCase().trim() : '';
+    const filtered = search
+        ? workplaceList.filter(w => (w.name || w.id).toLowerCase().includes(search) || (w.type || '').toLowerCase().includes(search))
+        : workplaceList;
+    grid.empty();
+    if (!filtered.length) {
+        grid.addClass('hidden');
+        empty.removeClass('hidden');
+        empty.find('p:first-of-type').text(search ? 'No workplaces found' : 'No workplaces yet');
+        empty.find('p:last-of-type').text(search ? 'Try a different search term.' : 'Create a workplace to assign execution environments to your agents.');
+        return;
+    }
+    grid.removeClass('hidden');
+    empty.addClass('hidden');
+    filtered.forEach(h => grid.append(renderWorkplaceCard(h)));
+}
+
+function filterWorkplaces() {
+    renderWorkplaces();
 }
 
 function showCreateWorkplaceModal() { $('#create-workplace-modal').removeClass('hidden'); onTypeChange(); }

@@ -129,27 +129,6 @@
       "description": "Automatically clear the agent's chat history when activating a new task to prevent context bloat from previous tasks."
     },
     {
-      "name": "PERM_ALLOW_TASK_CREATION",
-      "label": "Allow Task Creation (non-super agents)",
-      "type": "boolean",
-      "default": true,
-      "description": "Allow non-super agents to create new kanban tasks."
-    },
-    {
-      "name": "PERM_ALLOW_TASK_EDITING",
-      "label": "Allow Task Editing (non-super agents)",
-      "type": "boolean",
-      "default": true,
-      "description": "Allow non-super agents to edit kanban tasks."
-    },
-    {
-      "name": "PERM_ALLOW_TASK_DELETION",
-      "label": "Allow Task Deletion (non-super agents)",
-      "type": "boolean",
-      "default": false,
-      "description": "Allow non-super agents to delete kanban tasks."
-    },
-    {
       "name": "TASK_DELAY_SECONDS",
       "label": "Task Delay Before Notification (seconds)",
       "type": "number",

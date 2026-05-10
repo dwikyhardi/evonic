@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from typing import Dict, Any
@@ -6,6 +7,8 @@ from flask import Blueprint, render_template, jsonify, request
 
 import config
 from models.db import db
+
+_logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -552,6 +555,44 @@ def api_max_concurrent_llm_per_model():
     return jsonify({'value': int(val)})
 
 
+@settings_bp.route('/api/settings/agent-queue-workers', methods=['GET', 'PUT'])
+def api_agent_queue_workers():
+    """Get or set the number of agent queue worker threads (1-32)."""
+    from models.db import db
+    if request.method == 'PUT':
+        data = request.get_json()
+        raw_value = int(data.get('value', config.AGENT_QUEUE_WORKERS))
+        if raw_value > 32:
+            _logger.warning("Agent queue workers requested %d capped to max 32", raw_value)
+        value = max(1, min(32, raw_value))
+        db.set_setting('agent_queue_workers', str(value))
+        result = {'success': True, 'value': value}
+        try:
+            from backend.agent_runtime import agent_runtime
+            info = agent_runtime.resize_workers(value)
+            if info.get('note'):
+                result['note'] = info['note']
+        except Exception:
+            pass
+        return jsonify(result)
+    val = db.get_setting('agent_queue_workers', str(config.AGENT_QUEUE_WORKERS))
+    return jsonify({'value': int(val)})
+
+
+@settings_bp.route('/api/settings/max-tool-iterations', methods=['GET', 'PUT'])
+def api_max_tool_iterations():
+    """Get or set the maximum tool-call iterations per agent turn and per evaluation (1-1000)."""
+    from models.db import db
+    if request.method == 'PUT':
+        data = request.get_json()
+        raw_value = int(data.get('value', config.AGENT_MAX_TOOL_ITERATIONS))
+        value = max(1, min(1000, raw_value))
+        db.set_setting('max_tool_iterations', str(value))
+        return jsonify({'success': True, 'value': value})
+    val = db.get_setting('max_tool_iterations', str(config.AGENT_MAX_TOOL_ITERATIONS))
+    return jsonify({'value': int(val)})
+
+
 @settings_bp.route('/api/settings/events-dispatch', methods=['GET', 'PUT'])
 def api_events_dispatch():
     """Get or set the global events dispatch toggle."""
@@ -578,6 +619,35 @@ def api_theme():
         return jsonify({'success': True, 'theme': theme})
     val = db.get_setting('theme', 'system')
     return jsonify({'theme': val})
+
+
+@settings_bp.route('/api/settings/task-classifier', methods=['GET', 'PUT'])
+def api_task_classifier():
+    """Get or set task classifier settings (enabled toggle + model selection)."""
+    from models.db import db
+    default_enabled = '1' if config.TASK_CLASSIFIER_ENABLED else '0'
+    if request.method == 'PUT':
+        data = request.get_json() or {}
+        enabled = '1' if data.get('enabled', True) else '0'
+        model_id = data.get('model_id', '') or ''
+        if model_id:
+            model = db.get_model_by_id(model_id)
+            if not model:
+                return jsonify({'success': False, 'error': 'Model not found'}), 404
+        db.set_setting('task_classifier_enabled', enabled)
+        db.set_setting('task_classifier_model_id', model_id)
+        return jsonify({
+            'success': True,
+            'enabled': enabled == '1',
+            'model_id': model_id or None,
+        })
+    enabled = db.get_setting('task_classifier_enabled', default_enabled)
+    model_id = db.get_setting('task_classifier_model_id', '')
+    return jsonify({
+        'enabled': enabled == '1',
+        'model_id': model_id or None,
+    })
+
 
 # ---- Default Model operations ----
 
@@ -610,4 +680,142 @@ def api_set_default_model():
         return jsonify({'success': True, 'model': _sanitize_model(db.get_default_model())})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ---- General settings bulk read ----
+
+@settings_bp.route('/api/settings/general', methods=['GET'])
+def api_get_general_settings():
+    """Return all general-tab settings in a single response."""
+    return jsonify({
+        'public_history': db.get_setting('public_history', '0') == '1',
+        'agent_timeout_retries': int(db.get_setting('agent_timeout_retries', str(config.AGENT_TIMEOUT_RETRIES))),
+        'llm_max_retries': int(db.get_setting('llm_max_retries', '5')),
+        'max_concurrent_llm_per_agent': int(db.get_setting('max_concurrent_llm_per_agent', '1')),
+        'max_concurrent_llm_per_model': int(db.get_setting('max_concurrent_llm_per_model', '0')),
+        'agent_queue_workers': int(db.get_setting('agent_queue_workers', str(config.AGENT_QUEUE_WORKERS))),
+        'max_tool_iterations': int(db.get_setting('max_tool_iterations', str(config.AGENT_MAX_TOOL_ITERATIONS))),
+        'theme': db.get_setting('theme', 'system'),
+    })
+
+
+# ---- Batch settings operations ----
+
+@settings_bp.route('/api/settings/batch', methods=['POST'])
+def api_batch_save():
+    """Save multiple settings at once."""
+    from models.db import db
+
+    data = request.get_json()
+    if not data or 'settings' not in data:
+        return jsonify({'success': False, 'error': 'Missing "settings" object'}), 400
+
+    settings = data['settings']
+    results = {}
+    errors = []
+
+    # Agent Timeout Retries
+    if 'agent_timeout_retries' in settings:
+        try:
+            value = max(0, int(settings['agent_timeout_retries']))
+            db.set_setting('agent_timeout_retries', str(value))
+            results['agent_timeout_retries'] = value
+        except (ValueError, TypeError) as e:
+            errors.append(f'agent_timeout_retries: {e}')
+
+    # LLM Max Retries
+    if 'llm_max_retries' in settings:
+        try:
+            value = max(0, int(settings['llm_max_retries']))
+            db.set_setting('llm_max_retries', str(value))
+            results['llm_max_retries'] = value
+        except (ValueError, TypeError) as e:
+            errors.append(f'llm_max_retries: {e}')
+
+    # Max Concurrent per Agent
+    if 'max_concurrent_llm_per_agent' in settings:
+        try:
+            value = max(0, int(settings['max_concurrent_llm_per_agent']))
+            db.set_setting('max_concurrent_llm_per_agent', str(value))
+            try:
+                from backend.agent_runtime.runtime import AgentRuntime
+                if AgentRuntime._concurrency_mgr:
+                    AgentRuntime._concurrency_mgr.refresh_agent_limit()
+            except Exception:
+                pass
+            results['max_concurrent_llm_per_agent'] = value
+        except (ValueError, TypeError) as e:
+            errors.append(f'max_concurrent_llm_per_agent: {e}')
+
+    # Max Concurrent per Model
+    if 'max_concurrent_llm_per_model' in settings:
+        try:
+            value = max(0, int(settings['max_concurrent_llm_per_model']))
+            db.set_setting('max_concurrent_llm_per_model', str(value))
+            try:
+                from backend.agent_runtime.runtime import AgentRuntime
+                if AgentRuntime._concurrency_mgr:
+                    AgentRuntime._concurrency_mgr.refresh_all_model_limits()
+            except Exception:
+                pass
+            results['max_concurrent_llm_per_model'] = value
+        except (ValueError, TypeError) as e:
+            errors.append(f'max_concurrent_llm_per_model: {e}')
+
+    # Agent Queue Workers
+    if 'agent_queue_workers' in settings:
+        try:
+            raw_value = int(settings['agent_queue_workers'])
+            value = max(1, min(32, raw_value))
+            db.set_setting('agent_queue_workers', str(value))
+            try:
+                from backend.agent_runtime import agent_runtime
+                agent_runtime.resize_workers(value)
+            except Exception:
+                pass
+            results['agent_queue_workers'] = value
+        except (ValueError, TypeError) as e:
+            errors.append(f'agent_queue_workers: {e}')
+
+    # Max Tool Iterations
+    if 'max_tool_iterations' in settings:
+        try:
+            raw_value = int(settings['max_tool_iterations'])
+            value = max(1, min(1000, raw_value))
+            db.set_setting('max_tool_iterations', str(value))
+            results['max_tool_iterations'] = value
+        except (ValueError, TypeError) as e:
+            errors.append(f'max_tool_iterations: {e}')
+
+    # Theme
+    if 'theme' in settings:
+        theme = settings['theme']
+        if theme not in ('light', 'dark', 'system'):
+            theme = 'system'
+        db.set_setting('theme', theme)
+        results['theme'] = theme
+
+    # Default Model
+    if 'default_model_id' in settings:
+        model_id = settings['default_model_id']
+        if model_id:
+            model = db.get_model_by_id(model_id)
+            if model:
+                with db._connect() as conn:
+                    conn.execute("UPDATE llm_models SET is_default = 0")
+                    conn.execute("UPDATE llm_models SET is_default = 1 WHERE id = ?", (model_id,))
+                    conn.commit()
+                results['default_model_id'] = model_id
+            else:
+                errors.append('default_model_id: Model not found')
+
+    if errors:
+        return jsonify({
+            'success': True,
+            'partial': True,
+            'results': results,
+            'errors': errors
+        })
+
+    return jsonify({'success': True, 'results': results})
 

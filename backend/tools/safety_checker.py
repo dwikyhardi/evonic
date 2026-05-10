@@ -258,6 +258,97 @@ _SENSITIVE_EXACT: list[tuple[str, str]] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Environment File (.env) Check
+# ---------------------------------------------------------------------------
+
+# Patterns that match .env files (including variants like .env.local, .env.production)
+_ENV_FILE_PATTERNS = [
+    re.compile(r"(?:^|/)\.env(?:\.\w+)?$"),        # .env, .env.local, .env.production
+    re.compile(r"(?:^|/)\.env$"),                    # bare .env
+]
+
+# Basename patterns for .env files
+_ENV_BASENAME_PATTERN = re.compile(r"^\.env(?:\.\w+)?$")
+
+
+def check_env_path(file_path: str, agent: dict = None) -> dict:
+    """
+    Check if a file path targets an environment file (.env).
+
+    Matches .env, .env.local, .env.production, .env.development, etc.
+    These files typically contain secrets, API keys, and passwords.
+
+    Args:
+        file_path: The file path to check (relative or absolute).
+        agent: Optional agent context dict.
+
+    Returns:
+        {"blocked": bool, "error": str | None, "reason": str | None,
+         "requires_approval": bool}
+    """
+    if not file_path or not isinstance(file_path, str):
+        return {"blocked": False, "error": None, "reason": None, "requires_approval": False}
+
+    normalized = os.path.normpath(file_path.strip())
+
+    # Layer 1: Basename matching
+    basename = os.path.basename(normalized)
+    if _ENV_BASENAME_PATTERN.match(basename):
+        return {
+            "blocked": True,
+            "error": (
+                f"Safety check: Access to environment file denied. "
+                f"'{basename}' may contain secrets, API keys, or passwords. "
+                f"Environment file access requires approval."
+            ),
+            "reason": f"Environment file detected: {basename}",
+            "requires_approval": True,
+        }
+
+    # Layer 2: Path component analysis
+    parts = normalized.replace("\\", "/").split("/")
+    for part in parts:
+        if _ENV_BASENAME_PATTERN.match(part):
+            return {
+                "blocked": True,
+                "error": (
+                    f"Safety check: Access to environment file denied. "
+                    f"Path references '{part}', an environment file that may contain secrets. "
+                    f"Environment file access requires approval."
+                ),
+                "reason": f"Environment file in path: {part}",
+                "requires_approval": True,
+            }
+
+    # Layer 3: Canonical path resolution
+    try:
+        if os.path.isabs(normalized) or normalized.startswith("~"):
+            expanded = os.path.expanduser(normalized)
+            if os.path.exists(expanded) or os.path.lexists(expanded):
+                real = os.path.realpath(expanded)
+                real_basename = os.path.basename(real)
+                if _ENV_BASENAME_PATTERN.match(real_basename):
+                    return {
+                        "blocked": True,
+                        "error": (
+                            f"Safety check: Access to environment file denied. "
+                            f"Canonical path resolves to '{real_basename}', an environment file. "
+                            f"Environment file access requires approval."
+                        ),
+                        "reason": f"Canonical path resolves to environment file: {real_basename}",
+                        "requires_approval": True,
+                    }
+    except (OSError, ValueError, RuntimeError):
+        pass
+
+    return {"blocked": False, "error": None, "reason": None, "requires_approval": False}
+
+
+# ---------------------------------------------------------------------------
+# Sensitive System Path Check
+# ---------------------------------------------------------------------------
+
 def check_sensitive_path(file_path: str, agent: dict = None) -> dict:
     """
     Check if a file path targets a sensitive system directory.

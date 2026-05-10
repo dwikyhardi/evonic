@@ -85,7 +85,7 @@ def history_detail(run_id):
         return "Run not found", 404
 
     # Individual test counts (from individual_test_results)
-    with sqlite3.connect(db.db_path) as _conn:
+    with db._connect() as _conn:
         _c = _conn.cursor()
         _c.execute("SELECT COUNT(*), SUM(status='passed') FROM individual_test_results WHERE run_id=?", (run_id,))
         _row = _c.fetchone()

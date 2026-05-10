@@ -124,7 +124,7 @@ def rt():
          patch('backend.plugin_manager.check_tool_guards', return_value=None), \
          patch('backend.plugin_manager.run_message_interceptors', return_value=[]):
 
-        _db.get_setting.return_value = '0'   # max_timeout_retries = 0
+        _db.get_setting.side_effect = lambda key, default=None: default or '0'
         _db.add_chat_message.return_value = None
         _db.get_agent_default_model.return_value = None  # no custom model → use llm_client mock
         _tr.get_builtin_tools.return_value = []

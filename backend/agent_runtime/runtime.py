@@ -516,13 +516,18 @@ class AgentRuntime:
         self._buffer_timers: Dict[str, threading.Timer] = {}
         self._buffer_lock = threading.Lock()
         self._workers: list[threading.Thread] = []
-        # Ensure enough workers for sub-agent parallelism (max 10 sub-agents + parent + headroom)
-        _num_workers = max(AGENT_QUEUE_WORKERS, 12)
-        for i in range(_num_workers):
+        # Read worker count from DB (user-configurable), fall back to config default
+        try:
+            from models.db import db as _db
+            _db_workers = _db.get_setting('agent_queue_workers')
+            initial_workers = max(1, min(32, int(_db_workers))) if _db_workers else AGENT_QUEUE_WORKERS
+        except Exception:
+            initial_workers = AGENT_QUEUE_WORKERS
+        for i in range(initial_workers):
             t = threading.Thread(target=self._worker, name=f'agent-worker-{i}', daemon=True)
             t.start()
             self._workers.append(t)
-        _logger.info("Started %d queue worker(s)", _num_workers)
+        _logger.info("Started %d queue worker(s)", initial_workers)
         AgentRuntime._llm_serializer._concurrency_mgr = ConcurrencyManager()
         self._session_skill_mds: Dict[str, Dict[str, str]] = {}    # session_id -> {skill_id: system_md}
         self._session_skill_tools: Dict[str, Dict[str, list]] = {}  # session_id -> {skill_id: [tool_defs]}
@@ -550,6 +555,27 @@ class AgentRuntime:
                 except Exception:
                     pass
             self._buffer_timers.clear()
+
+    def resize_workers(self, desired: int) -> dict:
+        """Dynamically adjust worker thread count.
+
+        Spawns new workers immediately if desired > current.
+        Shrinking requires restart (threads block on queue.get).
+        Returns {"previous": int, "current": int, "note": str|None}.
+        """
+        desired = max(1, min(32, desired))
+        current = len(self._workers)
+        note = None
+        if desired > current:
+            for i in range(current, desired):
+                t = threading.Thread(target=self._worker, name=f'agent-worker-{i}', daemon=True)
+                t.start()
+                self._workers.append(t)
+            _logger.info("Resized agent workers from %d to %d", current, desired)
+        elif desired < current:
+            note = "Decrease takes effect after restart"
+            _logger.info("Agent workers decrease requested (%d -> %d); takes effect after restart", current, desired)
+        return {"previous": current, "current": len(self._workers), "note": note}
 
     def _worker(self) -> None:
         while True:
@@ -700,7 +726,9 @@ class AgentRuntime:
         except Exception:
             pass
         # Schedule next cleanup
-        threading.Timer(30.0, self._stale_timer_cleanup).start()
+        t = threading.Timer(30.0, self._stale_timer_cleanup)
+        t.daemon = True
+        t.start()
 
     def request_stop(self, session_id: str) -> None:
         """Signal the agent loop for this session to stop after the current LLM call.
@@ -723,17 +751,38 @@ class AgentRuntime:
             image_url: Optional base64 data URL or http URL for vision-enabled agents.
             metadata: Optional extra metadata merged into the saved message record.
         """
+        # Normalize external_user_id — system-internal messages (e.g. restart
+        # greeting) may arrive with None when no external user is associated.
+        if external_user_id is None:
+            external_user_id = '__system__'
+
         agent = db.get_agent(agent_id)
+        db_agent_id = agent_id  # Default: agent's own per-agent chat DB
+        if not agent:
+            # Check for in-memory sub-agent (spawned by a parent agent)
+            from backend.subagent_manager import subagent_manager
+            agent = subagent_manager.get(agent_id)
+            if agent:
+                db_agent_id = agent.get('parent_id', agent_id)
         if not agent:
             return {"response": "Agent not found.", "tool_trace": []}
 
-        # Block disabled agents (super agent is always allowed)
+        # Block disabled agents (super agent is always allowed; sub-agents inherit parent's enabled state)
         if not agent.get('is_super') and not agent.get('enabled', True):
             return {"response": "This agent is currently disabled.", "tool_trace": []}
 
-        # Get or create session
+        # Determine if this is a sub-agent (uses parent's per-agent chat DB)
+        is_subagent = agent.get('is_subagent', False)
+
+        # Get or create session (sub-agents store their own ID but use parent's DB)
         session_id = _db_retry(db.get_or_create_session, agent_id, external_user_id,
-                               channel_id, label="get/create session")
+                               channel_id, db_agent_id=db_agent_id if is_subagent else None,
+                               label="get/create session")
+
+        # Sub-agents always start fresh — clear any stale messages from a
+        # previous spawn that reused the same session slug.
+        if is_subagent and metadata and metadata.get('subagent_spawn'):
+            db.clear_session(session_id, agent_id=db_agent_id)
 
         # Slash command interception — execute before saving message or sending to LLM
         parsed = parse_command(message)
@@ -746,13 +795,15 @@ class AgentRuntime:
             if response is not None:
                 # Command was recognized — save command echo and response, then return
                 _db_retry(db.add_chat_message, session_id, 'user', message,
-                          agent_id=agent_id, label="save command message")
+                          agent_id=db_agent_id, metadata={"slash_command": True},
+                          label="save command message")
                 _db_retry(db.add_chat_message, session_id, 'assistant', response,
-                          agent_id=agent_id, metadata={"slash_command": True},
+                          agent_id=db_agent_id, metadata={"slash_command": True},
                           label="save command response")
-                _cl = chatlog_manager.get(agent_id, session_id)
+                _cl = chatlog_manager.get(db_agent_id, session_id)
                 _cl.append({'type': 'user', 'session_id': session_id, 'content': message,
-                             'sender_id': external_user_id})
+                             'sender_id': external_user_id,
+                             'metadata': {'slash_command': True}})
                 _cl.append({'type': 'system', 'session_id': session_id, 'content': response,
                              'metadata': {'slash_command': True}})
                 # Signal the client to clear the chat UI when the clear command was used
@@ -772,8 +823,8 @@ class AgentRuntime:
             meta['from_agent_id'] = sender_id
             meta['from_agent_name'] = sender_agent.get('name', sender_id) if sender_agent else sender_id
         _db_retry(db.add_chat_message, session_id, 'user', message or "[Image]",
-                  agent_id=agent_id, metadata=meta if meta else None, label="save user message")
-        _cl_user = chatlog_manager.get(agent_id, session_id)
+                  agent_id=db_agent_id, metadata=meta if meta else None, label="save user message")
+        _cl_user = chatlog_manager.get(db_agent_id, session_id)
         _cl_user_entry = {'type': 'user', 'session_id': session_id,
                            'content': message or '[Image]', 'sender_id': external_user_id}
         if meta:
@@ -817,9 +868,9 @@ class AgentRuntime:
             _ack_meta = {"busy_ack": True, "concurrency_limited": True,
                          "concurrency_active": _cap["active"], "concurrency_max": _cap["max"]}
             _db_retry(db.add_chat_message, session_id, 'assistant', _ack_text,
-                      agent_id=agent_id, metadata=_ack_meta,
+                      agent_id=db_agent_id, metadata=_ack_meta,
                       label="save busy ack")
-            chatlog_manager.get(agent_id, session_id).append({
+            chatlog_manager.get(db_agent_id, session_id).append({
                 'type': 'final',
                 'session_id': session_id,
                 'content': _ack_text,
@@ -881,7 +932,8 @@ class AgentRuntime:
         # Message buffering: debounce rapid messages, then queue
         buffer_seconds = agent.get('message_buffer_seconds', DEFAULT_BUFFER_SECONDS) or 0
         if buffer_seconds > 0:
-            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
+                                                    session_db_agent_id=db_agent_id if is_subagent else None),
                               send_via_channel=True)
             timer = threading.Timer(buffer_seconds, self._enqueue_buffered, args=(task,))
             timer.daemon = True
@@ -908,7 +960,8 @@ class AgentRuntime:
             return {"response": None, "async": True, "tool_trace": [], "timeline": []}
 
         # No buffering — queue immediately and wait for result
-        task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+        task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
+                                                session_db_agent_id=db_agent_id if is_subagent else None),
                           send_via_channel=False)
         self._message_queue.put(task)
         task.event.wait()
@@ -931,9 +984,11 @@ class AgentRuntime:
         """Build messages from DB, call LLM, trigger summarization, return response.
         Uses per-agent/per-model concurrency gate then per-session lock."""
         agent_id = agent['id']
+        # Sub-agents don't exist in the agents DB — use parent's ID for model lookup
+        db_agent_id = agent.get('_db_agent_id', agent_id)
         AgentRuntime._touch_session(ctx.session_id)
         try:
-            model = db.get_agent_default_model(agent_id)
+            model = db.get_agent_default_model(db_agent_id)
             model_id = model.get('id') if model else None
         except Exception as e:
             _logger.warning("Failed to get default model for agent %s, proceeding without model gating: %s", agent_id, e)
@@ -1145,6 +1200,16 @@ class AgentRuntime:
             meta = msg.get('metadata') or {}
             return bool(meta.get('busy_ack') or meta.get('busy_rejection') or meta.get('evonet_offline'))
 
+        def _is_slash_command_msg(msg: dict) -> bool:
+            """Skip slash command user messages and their assistant responses.
+
+            Slash commands are handled directly by the command executor and must
+            never enter LLM context. If they leak into context the LLM may try to
+            process them (e.g., re-issuing /restart via its restart tool).
+            """
+            meta = msg.get('metadata') or {}
+            return bool(meta.get('slash_command'))
+
         def _apply_vision(msg: dict) -> dict:
             """Apply vision formatting for user messages with image_url if agent supports it."""
             if msg.get('role') != 'user' or not agent.get('vision_enabled'):
@@ -1190,6 +1255,14 @@ class AgentRuntime:
             while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
                 tail_start += 1
             for msg in conv_msgs[tail_start:]:
+                # Skip slash command messages — they are handled directly by the
+                # command executor and must never enter LLM context. Both the user
+                # command echo and the assistant response carry metadata.slash_command.
+                role = msg.get('role', '')
+                if role == 'user' and (msg.get('content') or '').startswith('/'):
+                    continue
+                if (msg.get('metadata') or {}).get('slash_command'):
+                    continue
                 messages.append(_apply_vision(msg))
         else:
             # Fall back to SQLite (pre-migration sessions with no JSONL data)
@@ -1200,12 +1273,12 @@ class AgentRuntime:
                 while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') != 'user':
                     tail_start += 1
                 for msg in raw_tail[tail_start:]:
-                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg):
+                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
                         messages.append(_ctx.build_message_entry(msg, agent))
             else:
                 history = db.get_session_messages(ctx.session_id, limit=50, agent_id=db_agent_id)
                 for msg in history:
-                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg):
+                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
                         messages.append(_ctx.build_message_entry(msg, agent))
 
         # Ensure messages don't end with assistant role (causes prefill error with some APIs)
@@ -1213,7 +1286,7 @@ class AgentRuntime:
             messages.pop()
 
         # Inject long-term memories (position 1, right after system prompt)
-        memory_section = get_memories_for_context(agent_id, messages)
+        memory_section = get_memories_for_context(db_agent_id, messages)
         if memory_section:
             messages.insert(1, {"role": "system", "content": memory_section})
 
@@ -1262,7 +1335,7 @@ class AgentRuntime:
             tools = _ctx.build_tools(agent)
 
             # Build agent context for tool backends
-            assigned_tool_ids = db.get_agent_tools(agent_id)
+            assigned_tool_ids = db.get_agent_tools(db_agent_id)
 
             # Resolve workspace: workplace config takes priority over agent.workspace.
             # For cloud workplaces, never fall back to the agent's /workspace path —
@@ -1299,7 +1372,7 @@ class AgentRuntime:
                 'safety_checker_enabled': agent.get('safety_checker_enabled', 1),
                 'disable_parallel_tool_execution': agent.get('disable_parallel_tool_execution', 0),
                 'disable_turn_prefetch': agent.get('disable_turn_prefetch', 0),
-                'variables': db.get_agent_variables_dict(agent_id),
+                'variables': db.get_agent_variables_dict(db_agent_id),
             }
         # Propagate agent_message_depth and from_agent_id from incoming message metadata
         if ctx.external_user_id.startswith("__agent__"):
@@ -1326,10 +1399,26 @@ class AgentRuntime:
 
         # Agent state: restore or create, then check for user approval
         if agent.get('enable_agent_state'):
-            ms = self._restore_agent_state(agent_id)
+            ms = self._restore_agent_state(db_agent_id)
             is_new_session = ms is None
             if is_new_session:
-                ms = AgentState()
+                # Classify task complexity to decide initial mode
+                from backend.task_classifier import classify_task
+                _user_text = ""
+                for _msg in reversed(messages):
+                    if _msg.get('role') == 'user':
+                        _c = _msg.get('content', '')
+                        if isinstance(_c, list):
+                            _user_text = next(
+                                (p.get('text', '') for p in _c
+                                 if isinstance(p, dict) and p.get('type') == 'text'), '')
+                        else:
+                            _user_text = _c
+                        break
+                if classify_task(_user_text) == "trivial":
+                    ms = AgentState(mode="execute", auto_trivial=True)
+                else:
+                    ms = AgentState()
             # Hybrid approval: only check if state was restored (agent already presented a plan).
             # Skip for new sessions so the first user message never auto-approves a non-existent plan.
             if not is_new_session and ms.mode == 'plan':
@@ -1354,20 +1443,42 @@ class AgentRuntime:
 
         # Call LLM with tool loop
         _inner_turn_start = time.time()
-        response_raw, tool_trace, timeline = _loop.run_tool_loop(
-            agent=agent,
-            agent_context=agent_context,
-            messages=messages,
-            tools=tools,
-            session_id=ctx.session_id,
-            llm_lock=self._llm_serializer._llm_lock,
-            stop_event=self._get_stop_event(ctx.session_id),
-            session_skill_mds=self._session_skill_mds,
-            session_skill_tools=self._session_skill_tools,
-            llm_log_path=_llm_log_path(agent_id),
-            inject_queue=self._get_inject_queue(ctx.session_id),
-            session_db_agent_id=db_agent_id,
-        )
+
+        # Keep sub-agent alive during the LLM loop — the cleanup timer
+        # runs every 60s and would expire idle sub-agents after 10 min,
+        # but a long-running tool loop never calls subagent_manager.get()
+        # so last_active_at is never refreshed.
+        _sa_heartbeat = None
+        if agent.get('is_subagent'):
+            from backend.subagent_manager import subagent_manager as _sam
+            _sam._touch(agent_id)  # immediate touch before loop starts
+
+            _sa_stop = threading.Event()
+            def _heartbeat():
+                while not _sa_stop.wait(30):
+                    _sam._touch(agent_id)
+            _sa_heartbeat = threading.Thread(target=_heartbeat, daemon=True)
+            _sa_heartbeat.start()
+
+        try:
+            response_raw, tool_trace, timeline = _loop.run_tool_loop(
+                agent=agent,
+                agent_context=agent_context,
+                messages=messages,
+                tools=tools,
+                session_id=ctx.session_id,
+                llm_lock=self._llm_serializer._llm_lock,
+                stop_event=self._get_stop_event(ctx.session_id),
+                session_skill_mds=self._session_skill_mds,
+                session_skill_tools=self._session_skill_tools,
+                llm_log_path=_llm_log_path(db_agent_id),
+                inject_queue=self._get_inject_queue(ctx.session_id),
+                session_db_agent_id=db_agent_id,
+            )
+        finally:
+            if _sa_heartbeat:
+                _sa_stop.set()
+                _sa_heartbeat.join(timeout=2)
 
         # Handle error vs normal response from run_tool_loop
         if isinstance(response_raw, dict):

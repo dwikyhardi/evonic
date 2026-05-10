@@ -1,7 +1,11 @@
 """
 Kanban delete task tool — permanently remove a task from the Kanban board.
 
-Permission model (two-tier):
+Permission is controlled by setting 'kanban:delete_task_super_only':
+- When enabled (default): only super agent can delete tasks
+- When disabled: regular agents can delete (subject to human approval)
+
+Permission model (two-tier for regular agents when allowed):
 - Super agent: deletes immediately.
 - Regular agent: returns requires_approval → llm_loop triggers human-in-the-loop → re-executes with _skip_safety=True.
 """
@@ -22,6 +26,21 @@ def execute(agent: dict, args: dict) -> dict:
 
     # Permission check
     is_super = agent.get('is_super')
+
+    # Check delete_task_super_only setting via skill config
+    if not is_super:
+        try:
+            from backend.skills_manager import skills_manager
+            config = skills_manager.get_skill_config('kanban')
+            super_only = bool(config.get('delete_task_super_only', True))
+        except Exception:
+            super_only = True  # fail closed
+        if super_only:
+            return {
+                'status': 'error',
+                'message': 'You are not authorized to delete tasks. Only the super agent can delete tasks.'
+            }
+
     skip_safety = agent.get('_skip_safety')
 
     if not is_super and not skip_safety:
