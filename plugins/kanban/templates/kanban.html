@@ -363,7 +363,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
 <!-- Trigger Agent Selection Modal (Task #36) -->
 <div class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" id="kb-trigger-modal">
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6">
         <div class="flex items-center justify-between mb-4">
              <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Agent</h2>
             <button onclick="closeTriggerModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none">&times;</button>
@@ -371,7 +371,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Choose an agent to trigger for this task:</p>
         <div id="trigger-loading" class="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Loading agents...</div>
         <div id="trigger-no-agents" class="hidden text-sm text-gray-500 dark:text-gray-400 text-center py-4">No agents available.</div>
-        <div id="trigger-agent-list" class="hidden flex flex-col gap-2 max-h-60 overflow-y-auto"></div>
+        <div id="trigger-agent-list" class="hidden grid grid-cols-3 gap-3 max-h-80 overflow-y-auto"></div>
         <div id="trigger-actions" class="hidden flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
             <button onclick="closeTriggerModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancel</button>
             <button onclick="confirmTrigger()" id="trigger-confirm-btn" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">Trigger</button>
@@ -1491,7 +1491,9 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
 
         _triggerAgents = _agentCache;
         const html = _triggerAgents.map(function(agent) {
-            return `<button onclick="selectTriggerAgent('${esc(agent.id)}')" class="w-full text-left px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 hover:bg-orange-50 hover:border-orange-200 dark:hover:bg-gray-600 dark:hover:border-orange-400 transition ${_triggerAgent === agent.id ? 'bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400' : ''}">${esc(agent.name)}</button>`;
+            const avatarUrl = `/api/agents/${esc(agent.id)}/avatar`;
+            const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="20" fill="#e0e7ff"/><path d="M20 8a5 5 0 100 10 5 5 0 000-10zm-8 18.5a8 8 0 0116 0" fill="#4f46e5"/></svg>`;
+            return `<button onclick="selectTriggerAgent('${esc(agent.id)}')" class="flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-600 dark:bg-gray-700 hover:bg-orange-50 hover:border-orange-200 dark:hover:bg-gray-600 dark:hover:border-orange-400 transition ${_triggerAgent === agent.id ? 'bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400' : ''}"><img src="${avatarUrl}" alt="${esc(agent.name)}" class="w-12 h-12 rounded-full object-cover bg-indigo-50 dark:bg-indigo-900/20" onerror="this.onerror=null;this.src='data:image/svg+xml,${encodeURIComponent(fallbackSvg)}'"><span class="text-xs text-gray-700 dark:text-gray-200 font-medium break-words text-center leading-tight">${esc(agent.name)}</span></button>`;
         }).join('');
 
         $('#trigger-agent-list').html(html);
@@ -1509,6 +1511,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 $btn.removeClass('bg-orange-100 border-orange-400 dark:bg-orange-900 dark:border-orange-400');
             }
         });
+        // Auto-select: immediately trigger and close modal
+        confirmTrigger();
     }
 
     function closeTriggerModal() {
