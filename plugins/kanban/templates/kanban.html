@@ -1584,11 +1584,13 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         const assignments = [];
         for (let i = 0; i < _assignProposals.length; i++) {
             const agentId = $(`.assign-agent-select[data-index="${i}"]`).val();
-            if (!agentId) {
-                alert('Please select an agent for task #' + _assignProposals[i].task_id);
-                return;
-            }
+            if (!agentId) continue; // skip unselected — partial assignment OK
             assignments.push({ task_id: _assignProposals[i].task_id, agent_id: agentId });
+        }
+
+        if (assignments.length === 0) {
+            alert('No agents selected for any task.');
+            return;
         }
 
         const $btn = $('#assign-confirm-btn');
