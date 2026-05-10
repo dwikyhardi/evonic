@@ -351,8 +351,9 @@ def _write_daemon_pid(app_root: str, pid: int) -> None:
 def _remove_daemon_pid(app_root: str) -> None:
     pid_file = _pid_file(app_root)
     try:
-        if os.path.exists(pid_file):
-            os.remove(pid_file)
+        os.remove(pid_file)
+    except FileNotFoundError:
+        pass  # already gone — nothing to do
     except OSError as e:
         log.warning(f'Could not remove daemon PID file {pid_file}: {e}')
 
