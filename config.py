@@ -137,7 +137,7 @@ if not _SECRET_KEY_ENV:
 SECRET_KEY = _SECRET_KEY_ENV
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = _get_env_int("PORT", 8080, min_val=1, max_val=65535)
-DEBUG = os.getenv("DEBUG", "1") == "1"
+DEBUG = os.getenv("DEBUG", "0") == "1"
 
 # Authentication
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
