@@ -41,6 +41,10 @@ def _get_env_int(name: str, default: int, min_val: int = None, max_val: int = No
 TWO_PASS_ENABLED = os.getenv("TWO_PASS_ENABLED", "1") == "1"
 TWO_PASS_TEMPERATURE = float(os.getenv("TWO_PASS_TEMPERATURE", "0.0"))
 
+# Task Complexity Classifier
+# Default enabled state (can be overridden via system settings UI)
+TASK_CLASSIFIER_ENABLED = os.getenv("TASK_CLASSIFIER_ENABLED", "1") == "1"
+
 # Domain Evaluator Configuration
 # Override default evaluator for specific domains
 # Available types: two_pass, keyword, sql_executor, tool_call

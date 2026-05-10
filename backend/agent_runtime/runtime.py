@@ -1393,7 +1393,23 @@ class AgentRuntime:
             ms = self._restore_agent_state(db_agent_id)
             is_new_session = ms is None
             if is_new_session:
-                ms = AgentState()
+                # Classify task complexity to decide initial mode
+                from backend.task_classifier import classify_task
+                _user_text = ""
+                for _msg in reversed(messages):
+                    if _msg.get('role') == 'user':
+                        _c = _msg.get('content', '')
+                        if isinstance(_c, list):
+                            _user_text = next(
+                                (p.get('text', '') for p in _c
+                                 if isinstance(p, dict) and p.get('type') == 'text'), '')
+                        else:
+                            _user_text = _c
+                        break
+                if classify_task(_user_text) == "trivial":
+                    ms = AgentState(mode="execute", auto_trivial=True)
+                else:
+                    ms = AgentState()
             # Hybrid approval: only check if state was restored (agent already presented a plan).
             # Skip for new sessions so the first user message never auto-approves a non-existent plan.
             if not is_new_session and ms.mode == 'plan':

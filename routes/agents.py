@@ -206,7 +206,7 @@ def api_update_agent(agent_id):
     if data.get('sandbox_enabled') and target_workplace_id:
         workplace = db.get_workplace(target_workplace_id)
         if workplace and workplace.get('type') in ('remote', 'cloud'):
-            data['sandbox_enabled'] = 0
+            del data['sandbox_enabled']  # Do not overwrite existing value in database
     if 'system_prompt' in data:
         _write_system_prompt(agent_id, data['system_prompt'])
     db.update_agent(agent_id, data)

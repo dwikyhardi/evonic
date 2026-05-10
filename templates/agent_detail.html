@@ -3110,6 +3110,7 @@ loadAgentSafetyRules();
 
 // ==================== Workplace Selector ====================
 const CURRENT_HOME_ID = '{{ agent.workplace_id or "" }}';
+const INITIAL_SANDBOX_STATE = {{ (agent.sandbox_enabled is none or agent.sandbox_enabled) | lower }};
 const HOME_STATUS_DOT_CLS = {
     connected:    'bg-green-500',
     disconnected: 'bg-gray-400',
@@ -3164,6 +3165,7 @@ function updateSandboxVisibility() {
         sandboxWarning.classList.remove('hidden');
     } else {
         sandboxInput.disabled = false;
+        sandboxInput.checked = INITIAL_SANDBOX_STATE;
         sandboxLabel.classList.remove('opacity-50', 'cursor-not-allowed');
         sandboxWarning.classList.add('hidden');
     }

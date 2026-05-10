@@ -620,6 +620,35 @@ def api_theme():
     val = db.get_setting('theme', 'system')
     return jsonify({'theme': val})
 
+
+@settings_bp.route('/api/settings/task-classifier', methods=['GET', 'PUT'])
+def api_task_classifier():
+    """Get or set task classifier settings (enabled toggle + model selection)."""
+    from models.db import db
+    default_enabled = '1' if config.TASK_CLASSIFIER_ENABLED else '0'
+    if request.method == 'PUT':
+        data = request.get_json() or {}
+        enabled = '1' if data.get('enabled', True) else '0'
+        model_id = data.get('model_id', '') or ''
+        if model_id:
+            model = db.get_model_by_id(model_id)
+            if not model:
+                return jsonify({'success': False, 'error': 'Model not found'}), 404
+        db.set_setting('task_classifier_enabled', enabled)
+        db.set_setting('task_classifier_model_id', model_id)
+        return jsonify({
+            'success': True,
+            'enabled': enabled == '1',
+            'model_id': model_id or None,
+        })
+    enabled = db.get_setting('task_classifier_enabled', default_enabled)
+    model_id = db.get_setting('task_classifier_model_id', '')
+    return jsonify({
+        'enabled': enabled == '1',
+        'model_id': model_id or None,
+    })
+
+
 # ---- Default Model operations ----
 
 @settings_bp.route('/api/settings/default-model', methods=['GET'])

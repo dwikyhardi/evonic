@@ -49,7 +49,8 @@ STATUS_ICON = {
 class AgentState:
     def __init__(self, mode: str = "plan", tasks: list = None, next_task_id: int = 1,
                  plan_file: str = None, states: dict = None,
-                 focus: bool = False, focus_reason: str = None):
+                 focus: bool = False, focus_reason: str = None,
+                 auto_trivial: bool = False):
         self.mode = mode
         self.tasks: list[dict] = tasks or []
         self._next_task_id = next_task_id
@@ -57,6 +58,7 @@ class AgentState:
         # Namespace-keyed state slots registered by system/plugins via the `state` tool.
         # Each slot: {state: str, data: any, blocked_tools: list|None, allowed_tools: list|None}
         self.states: dict = states or {}
+        self.auto_trivial: bool = auto_trivial  # True when classifier auto-set execute mode
         # Focus mode: when True, agent will not accept messages from other sessions.
         # Plugins (e.g. kanban) set this when starting a long-running exclusive task
         # and clear it when the task finishes. For short-term turn-level exclusivity,
@@ -219,6 +221,12 @@ class AgentState:
             f"**Mode**: {mode_note}",
         ]
 
+        if self.auto_trivial and self.mode == "execute":
+            lines.append(
+                "**Auto-classified**: trivial — write tools are allowed. "
+                "If this task is actually complex, call set_mode('plan') to switch to planning mode."
+            )
+
         if self.focus:
             reason_note = f" — {self.focus_reason}" if self.focus_reason else ""
             lines.append(f"**Focus**: active{reason_note} (messages from other sessions are rejected)")
@@ -295,6 +303,7 @@ class AgentState:
             "states": self.states,
             "focus": self.focus,
             "focus_reason": self.focus_reason,
+            "auto_trivial": self.auto_trivial,
         })
 
     @classmethod
@@ -310,6 +319,7 @@ class AgentState:
                 states=obj.get("states", {}),
                 focus=obj.get("focus", False),
                 focus_reason=obj.get("focus_reason"),
+                auto_trivial=obj.get("auto_trivial", False),
             )
         except (json.JSONDecodeError, TypeError, AttributeError):
             return cls()

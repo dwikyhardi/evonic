@@ -442,6 +442,9 @@ export class ChatUI {
                     const newTurn = this.beginTurn($anchor);
                     this._lastLiveTurnId = newTurn.id;
                     this.markQueuedAsDelivered();
+                    // Re-route the SSE adapter to the new turn so subsequent events
+                    // are not silently dropped by the finalized old turn's ingest guard.
+                    adapter._handler = (evt) => newTurn.ingest(evt);
                     opts.onSplit(newTurn);
                 }
             };
