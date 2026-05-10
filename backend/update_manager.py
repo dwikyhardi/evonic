@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -18,6 +19,13 @@ from datetime import datetime
 log = logging.getLogger(__name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _version_tuple(tag: str):
+    m = re.match(r'v?(\d+)(?:\.(\d+))?(?:\.(\d+))?', tag or '')
+    if not m:
+        return (0, 0, 0)
+    return tuple(int(x or '0') for x in m.groups())
 
 # ---------------------------------------------------------------------------
 # State
@@ -189,7 +197,7 @@ def check_for_update(force=False) -> dict:
         _state['latest_version'] = latest
         _state['last_check'] = time.time()
 
-        if latest and latest != current:
+        if latest and _version_tuple(latest) > _version_tuple(current):
             _state['status'] = 'available'
             return {'available': True, 'current': current, 'latest': latest}
         else:
