@@ -10,6 +10,7 @@ Extracted from the original runpy.py and bash.py container pool logic.
 """
 
 import atexit
+import logging
 import os
 import re
 import signal
@@ -18,6 +19,8 @@ import threading
 import time
 
 from backend.tools.lib.exec_backend import ExecutionBackend, truncate
+
+logger = logging.getLogger(__name__)
 
 try:
     from config import (
@@ -99,13 +102,14 @@ def _monitor_loop() -> None:
                             if time.time() - info['last_used'] > SANDBOX_IDLE_TIMEOUT)
 
         if fd_count > 400:
-            print(f'[docker_backend] CRITICAL: FD count={fd_count} — approaching limit, shutting down to prevent cascade')
+            logger.critical(f'FD count={fd_count} — approaching limit, shutting down to prevent cascade')
             os.kill(os.getpid(), signal.SIGTERM)
 
         level = 'WARNING' if at_limit or stale_count > 0 else 'INFO'
-        print(f'[docker_backend] Pool status: {count}/{SANDBOX_MAX_CONTAINERS} containers, {stale_count} stale, fd={fd_count}')
+        log_method = logger.warning if at_limit or stale_count > 0 else logger.info
+        log_method(f'Pool status: {count}/{SANDBOX_MAX_CONTAINERS} containers, {stale_count} stale, fd={fd_count}')
         if at_limit:
-            print(f'[docker_backend] WARNING: pool at capacity — LRU eviction will occur on next allocation')
+            logger.warning('pool at capacity — LRU eviction will occur on next allocation')
 
 
 def get_pool_status() -> dict:
@@ -143,7 +147,7 @@ def _reaper_loop() -> None:
                 info = _containers.get(sid)
                 if not info or info['last_used'] >= deadline:
                     continue
-            print(f'[docker_backend] Idle timeout — destroying container for session {sid[:12]}')
+            logger.info(f'Idle timeout — destroying container for session {sid[:12]}')
             _destroy_container(sid)
 
 
@@ -176,7 +180,7 @@ def _evict_lru() -> None:
         if not _containers:
             return
         lru_sid = min(_containers, key=lambda s: _containers[s]['last_used'])
-    print(f'[docker_backend] Max containers reached — evicting LRU session {lru_sid[:12]}')
+    logger.warning(f'Max containers reached — evicting LRU session {lru_sid[:12]}')
     _destroy_container(lru_sid)
 
 
@@ -188,7 +192,7 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
         if session_id in _containers:
             info = _containers[session_id]
             if info.get('workspace') != effective_workspace:
-                print(f'[docker_backend] Workspace changed for session {session_id[:12]} — recreating container')
+                logger.info(f'Workspace changed for session {session_id[:12]} — recreating container')
                 needs_destroy = True
             else:
                 info['last_used'] = time.time()
@@ -228,10 +232,10 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
     if result.returncode != 0:
         stderr = result.stderr.strip()
         if 'already in use' in stderr or 'Conflict' in stderr:
-            print(f'[docker_backend] Stale container found for {name} — removing and retrying')
+            logger.info(f'Stale container found for {name} — removing and retrying')
             rm_result = _docker('rm', '-f', name)
             if rm_result.returncode != 0:
-                print(f'[docker_backend] WARNING: failed to remove stale container {name}: {rm_result.stderr.strip()}')
+                logger.warning(f'Failed to remove stale container {name}: {rm_result.stderr.strip()}')
             result = _docker(*cmd)
 
     if result.returncode != 0:
@@ -262,7 +266,7 @@ def _destroy_container(session_id: str) -> dict:
     result = _docker('rm', '-f', container_id)
     if result.returncode == 0:
         return {'result': 'container_destroyed', 'container_id': container_id[:12]}
-    print(f'[docker_backend] WARNING: docker rm failed for {container_id[:12]}: {result.stderr.strip()} - re-adding to pool')
+    logger.warning(f'docker rm failed for {container_id[:12]}: {result.stderr.strip()} - re-adding to pool')
     with _pool_lock:
         _containers[session_id] = info
     return {'error': f'docker rm failed: {result.stderr.strip()}'}
@@ -379,7 +383,7 @@ class DockerBackend(ExecutionBackend):
         result = self._run_code(container_id, code, timeout, env)
 
         if _is_container_gone(result):
-            print(f'[docker_backend] Container {container_id[:12]} gone — recreating for session {self._session_id[:12]}')
+            logger.info(f'Container {container_id[:12]} gone — recreating for session {self._session_id[:12]}')
             with _pool_lock:
                 _containers.pop(self._session_id, None)
             container_id, err = _get_or_create_container(self._session_id, workspace=self._workspace)
