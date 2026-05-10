@@ -34,6 +34,7 @@ from routes.health import health_bp
 from routes.workplaces import workplaces_bp
 from routes.logs import logs_bp
 from routes.safety_rules import safety_rules_bp
+from routes.update import update_bp
 import config
 from backend.version import get_version
 
@@ -68,6 +69,7 @@ app.register_blueprint(health_bp)
 app.register_blueprint(workplaces_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(safety_rules_bp)
+app.register_blueprint(update_bp)
 
 
 # ---- Backward-compatible redirect: /settings/* → /system/* ----

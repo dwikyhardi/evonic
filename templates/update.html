@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="p-6">
+    <div class="mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">System Update</h2>
+        <p id="update-version-info" class="text-sm text-gray-500 dark:text-gray-400 mt-1"></p>
+    </div>
+
+    <!-- Progress section (hidden until update starts) -->
+    <div id="update-progress-section" class="hidden mb-6">
+        <div class="flex items-center justify-between mb-2">
+            <span id="update-step-label" class="text-sm font-medium text-gray-700 dark:text-gray-300"></span>
+            <span id="update-progress-pct" class="text-sm text-gray-500 dark:text-gray-400"></span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+            <div id="update-progress-bar" class="h-2.5 rounded-full transition-all duration-300 bg-indigo-500" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Terminal log output -->
+    <div id="update-logs" class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-200 h-96 overflow-y-auto mb-6 whitespace-pre-wrap"></div>
+
+    <!-- Action buttons -->
+    <div id="update-actions" class="flex items-center gap-3">
+        <!-- Populated by JS based on state -->
+    </div>
+</div>
+
+<script>
+(function() {
+    var logsEl = document.getElementById('update-logs');
+    var progressSection = document.getElementById('update-progress-section');
+    var progressBar = document.getElementById('update-progress-bar');
+    var progressPct = document.getElementById('update-progress-pct');
+    var stepLabel = document.getElementById('update-step-label');
+    var versionInfo = document.getElementById('update-version-info');
+    var actionsEl = document.getElementById('update-actions');
+    var sse = null;
+    var lastLogCount = 0;
+
+    function renderLogs(logs) {
+        if (!logs || logs.length <= lastLogCount) return;
+        var newLogs = logs.slice(lastLogCount);
+        lastLogCount = logs.length;
+        newLogs.forEach(function(entry) {
+            var line = document.createElement('div');
+            var color = entry.level === 'error' ? 'text-red-400' :
+                        entry.level === 'warning' ? 'text-yellow-400' : 'text-gray-300';
+            line.className = color;
+            line.textContent = '[' + entry.ts + '] ' + entry.message;
+            logsEl.appendChild(line);
+        });
+        logsEl.scrollTop = logsEl.scrollHeight;
+    }
+
+    function renderProgress(data) {
+        if (data.status === 'updating' || data.status === 'success' || data.status === 'failed') {
+            progressSection.classList.remove('hidden');
+        }
+        progressBar.style.width = data.progress + '%';
+        progressPct.textContent = data.progress + '%';
+        stepLabel.textContent = data.step_label || '';
+
+        if (data.status === 'success') {
+            progressBar.className = 'h-2.5 rounded-full transition-all duration-300 bg-green-500';
+        } else if (data.status === 'failed') {
+            progressBar.className = 'h-2.5 rounded-full transition-all duration-300 bg-red-500';
+        } else {
+            progressBar.className = 'h-2.5 rounded-full transition-all duration-300 bg-indigo-500';
+        }
+    }
+
+    function renderVersionInfo(data) {
+        if (data.current_version && data.latest_version) {
+            versionInfo.textContent = data.current_version + ' \u2192 ' + data.latest_version;
+        } else if (data.current_version) {
+            versionInfo.textContent = 'Current: ' + data.current_version;
+        }
+    }
+
+    function renderActions(status) {
+        actionsEl.innerHTML = '';
+
+        if (status === 'idle' || status === 'available') {
+            var btn = document.createElement('button');
+            btn.className = 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium';
+            btn.textContent = 'Start Update';
+            btn.onclick = startUpdate;
+            actionsEl.appendChild(btn);
+        } else if (status === 'updating') {
+            var btn = document.createElement('button');
+            btn.className = 'px-4 py-2 bg-gray-400 text-white rounded-lg text-sm font-medium cursor-not-allowed';
+            btn.textContent = 'Updating...';
+            btn.disabled = true;
+            actionsEl.appendChild(btn);
+        } else if (status === 'success') {
+            var btn = document.createElement('button');
+            btn.className = 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium';
+            btn.textContent = 'Restart Now';
+            btn.onclick = restartServer;
+            actionsEl.appendChild(btn);
+        } else if (status === 'failed') {
+            var rbBtn = document.createElement('button');
+            rbBtn.className = 'px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium';
+            rbBtn.textContent = 'Rollback';
+            rbBtn.onclick = rollback;
+            actionsEl.appendChild(rbBtn);
+
+            var retryBtn = document.createElement('button');
+            retryBtn.className = 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium';
+            retryBtn.textContent = 'Retry';
+            retryBtn.onclick = startUpdate;
+            actionsEl.appendChild(retryBtn);
+        }
+    }
+
+    function applyState(data) {
+        renderVersionInfo(data);
+        renderProgress(data);
+        renderLogs(data.logs);
+        renderActions(data.status);
+    }
+
+    function connectSSE() {
+        if (sse) return;
+        sse = new EventSource('/api/system/update/stream');
+        sse.addEventListener('status', function(e) {
+            var data = JSON.parse(e.data);
+            applyState(data);
+        });
+        sse.addEventListener('done', function(e) {
+            if (sse) { sse.close(); sse = null; }
+        });
+        sse.onerror = function() {
+            if (sse) { sse.close(); sse = null; }
+        };
+    }
+
+    function startUpdate() {
+        fetch('/api/system/update/start', { method: 'POST', headers: {'Content-Type': 'application/json'} })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    ui.toast.error(data.error);
+                    return;
+                }
+                lastLogCount = 0;
+                logsEl.innerHTML = '';
+                connectSSE();
+                renderActions('updating');
+                progressSection.classList.remove('hidden');
+            })
+            .catch(function(err) { ui.toast.error('Failed to start update'); });
+    }
+
+    function rollback() {
+        fetch('/api/system/update/rollback', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) { ui.toast.error(data.error); return; }
+                lastLogCount = 0;
+                logsEl.innerHTML = '';
+                connectSSE();
+            })
+            .catch(function(err) { ui.toast.error('Rollback failed'); });
+    }
+
+    function restartServer() {
+        fetch('/api/system/update/restart', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.success) { ui.toast.error('Failed to trigger restart'); return; }
+                actionsEl.innerHTML = '<span class="text-sm text-gray-500 dark:text-gray-400">Restarting server...</span>';
+                pollHealth();
+            })
+            .catch(function() { ui.toast.error('Failed to trigger restart'); });
+    }
+
+    function pollHealth() {
+        var interval = setInterval(function() {
+            fetch('/api/health')
+                .then(function(r) {
+                    if (r.ok) {
+                        clearInterval(interval);
+                        window.location.href = '/';
+                    }
+                })
+                .catch(function() { /* server still down, keep polling */ });
+        }, 2000);
+    }
+
+    // Initialize: fetch current status, then fill version info if missing
+    fetch('/api/system/update/status')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            applyState(data);
+            if (data.status === 'updating') {
+                connectSSE();
+            }
+            // If version info is missing, trigger a check to populate it
+            if (!data.current_version || !data.latest_version) {
+                return fetch('/api/system/update/check')
+                    .then(function(r) { return r.json(); })
+                    .then(function(result) {
+                        renderVersionInfo({
+                            current_version: result.current,
+                            latest_version: result.latest,
+                        });
+                    });
+            }
+        })
+        .catch(function() {
+            renderActions('idle');
+        });
+})();
+</script>
+{% endblock %}

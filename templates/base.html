@@ -84,14 +84,23 @@
                 {% endif %}
             </nav>
         </div>
+        <!-- Update notification banner (hidden by default) -->
+        <div id="ev-update-banner" style="display:none">
+            <div class="max-w-[1600px] mx-auto px-4 py-2 flex items-center justify-between text-sm">
+                <div class="flex items-center gap-2">
+                    <span id="ev-update-banner-text"></span>
+                </div>
+                <div id="ev-update-banner-actions" class="flex items-center shrink-0"></div>
+            </div>
+        </div>
     </header>
-    
+
     <main class="max-w-[1600px] mx-auto">
         {% block content %}{% endblock %}
     </main>
     
     <footer>
     </footer>
-
+    <script src="{{ url_for('static', filename='js/update-banner.js') }}?v=1"></script>
 </body>
 </html>
