@@ -950,6 +950,15 @@ class AgentRuntime:
                 raise
             return {"response": None, "buffered": True, "tool_trace": [], "timeline": []}
 
+        # Inter-agent messages: fire-and-forget (don't block the sender's worker thread).
+        # The sub-agent/target processes asynchronously and results are delivered via
+        # _on_final_answer auto-forward, not via the return value.
+        if external_user_id and external_user_id.startswith('__agent__'):
+            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+                              send_via_channel=False)
+            self._message_queue.put(task)
+            return {"response": None, "async": True, "tool_trace": [], "timeline": []}
+
         # No buffering — queue immediately and wait for result
         task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
                                                 session_db_agent_id=db_agent_id if is_subagent else None),

@@ -1467,7 +1467,7 @@ block content %}
 
     let systemSchemeListener = null;
 
-    function setTheme(theme) {
+    async function setTheme(theme) {
         // Remove existing system listener
         if (systemSchemeListener) {
             systemSchemeListener.removeEventListener(
@@ -1477,7 +1477,7 @@ block content %}
             systemSchemeListener = null;
         }
 
-        // Apply immediately (visual only — persisted on Save Changes)
+        // Apply immediately
         const html = document.documentElement;
         if (theme === "dark") {
             html.classList.add("dark");
@@ -1497,7 +1497,13 @@ block content %}
         }
         localStorage.setItem("evonic-theme", theme);
         updateThemeButtons(theme);
-        markDirty();
+        // Persist theme immediately on the server
+        try {
+            await apiPut("/api/settings/theme", { theme });
+            markClean();
+        } catch (e) {
+            markDirty();
+        }
     }
 
     function applySystemTheme() {
