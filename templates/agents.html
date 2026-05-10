@@ -332,10 +332,7 @@ function renderAgents() {
             ? ''
             : mkToggle({ checked: enabled, onChange: `toggleAgent('${a.id}', this.checked)`, extraClass: 'ml-3 flex-shrink-0' });
         const statusBadge = enabled
-            ? `<span class="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-1 rounded-full">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Active
-               </span>`
+            ? ''
             : `<span class="inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l-2 2m7-7a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     Disabled
