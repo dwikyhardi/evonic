@@ -372,9 +372,8 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         <div id="trigger-loading" class="text-sm text-gray-400 dark:text-gray-500 text-center py-4">Loading agents...</div>
         <div id="trigger-no-agents" class="hidden text-sm text-gray-500 dark:text-gray-400 text-center py-4">No agents available.</div>
         <div id="trigger-agent-list" class="hidden grid grid-cols-3 gap-3 max-h-80 overflow-y-auto"></div>
-        <div id="trigger-actions" class="hidden flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-            <button onclick="closeTriggerModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">Cancel</button>
-            <button onclick="confirmTrigger()" id="trigger-confirm-btn" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">Trigger</button>
+        <div id="trigger-actions" class="hidden flex justify-center gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+            <button onclick="closeTriggerModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">Close</button>
         </div>
     </div>
 </div>
@@ -1531,28 +1530,14 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
     }
 
     function triggerTask(taskId, agentId, event) {
-        // Determine which button to show loading state on
+        // Show loading state on rocket button (if triggered from task card)
         let $btn = null;
         let origText = null;
-        let isRocketBtn = false;
 
         if (event && event.target) {
-            // Direct rocket button click
             $btn = $(event.target);
             origText = $btn.text();
-            isRocketBtn = true;
-        } else {
-            // Modal confirm button click
-            $btn = $('#trigger-confirm-btn');
-            origText = $btn.text();
-        }
-
-        if ($btn.length) {
-            if (isRocketBtn) {
-                $btn.html('<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>').prop('disabled', true);
-            } else {
-                $btn.text('Triggering...').prop('disabled', true);
-            }
+            $btn.html('<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>').prop('disabled', true);
         }
 
         $.ajax({
@@ -1570,11 +1555,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
             },
             complete: function() {
                 if ($btn && $btn.length) {
-                    if (isRocketBtn) {
-                        $btn.text(origText || '🚀').prop('disabled', false);
-                    } else {
-                        $btn.text(origText || 'Trigger').prop('disabled', false);
-                    }
+                    $btn.text(origText || '🚀').prop('disabled', false);
                 }
             }
         });
