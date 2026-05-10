@@ -17,6 +17,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Shared with supervisor.py — both files run as standalone scripts, so adding
+# their own directory to sys.path lets ``from _helpers import …`` resolve.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _helpers import detect_python_bin, is_windows  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Items moved to shared/ (source_name, is_directory)
@@ -178,7 +183,7 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
         if not dry_run:
             run([sys.executable, '-m', 'venv', str(venv_path)])
             if req_file.exists():
-                if sys.platform == 'win32':
+                if is_windows():
                     pip = venv_path / 'Scripts' / 'pip'
                 else:
                     pip = venv_path / 'bin' / 'pip'
@@ -207,11 +212,14 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
                     shutil.rmtree(str(link))
                 elif link.exists():
                     link.unlink()
-                if sys.platform == 'win32' and is_dir:
+                if is_windows() and is_dir:
                     subprocess.run(['cmd', '/c', 'mklink', '/J',
                                     str(link), str(target)], check=True)
                 else:
-                    os.symlink(str(target), str(link),
+                    # Relative symlink: portable across repo relocation
+                    # (matches supervisor.link_shared_dirs).
+                    rel_target = os.path.relpath(str(target), os.path.dirname(str(link)))
+                    os.symlink(rel_target, str(link),
                                target_is_directory=is_dir)
         if not dry_run:
             mark_done(state, state_file, 'link_shared')
@@ -223,7 +231,7 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
         if not dry_run:
             (release_path / 'VERSION').write_text(initial_tag)
 
-        if sys.platform == 'win32':
+        if is_windows():
             slot_file = root / 'current.slot'
             info(f'  Writing {slot_file}')
             if not dry_run:
@@ -257,7 +265,7 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
                 'health_timeout': 10,
                 'monitor_duration': 60,
                 'keep_releases': 3,
-                'python_bin': sys.executable,
+                'python_bin': detect_python_bin(str(root)),
                 'uv_bin': None,
                 'telegram_bot_token': '',
                 'telegram_chat_id': '',
