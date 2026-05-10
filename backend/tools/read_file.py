@@ -131,6 +131,7 @@ def execute(agent, args: dict) -> dict:
                 "approval_info": {
                     "risk_level": "medium",
                     "description": "Accessing SQLite database files may expose sensitive data.",
+                    "file_path": file_path,
                 },
             }
 
@@ -146,6 +147,7 @@ def execute(agent, args: dict) -> dict:
                 "approval_info": {
                     "risk_level": "medium",
                     "description": "Accessing sensitive system paths may expose critical system data.",
+                    "file_path": file_path,
                 },
             }
 
@@ -161,6 +163,7 @@ def execute(agent, args: dict) -> dict:
                 "approval_info": {
                     "risk_level": "medium",
                     "description": "Accessing environment files may expose secrets, API keys, or passwords.",
+                    "file_path": file_path,
                 },
             }
 

@@ -109,6 +109,7 @@ def execute(agent, args: dict) -> dict:
                 "approval_info": {
                     "risk_level": "medium",
                     "description": "Writing to SQLite database files may corrupt or expose sensitive data.",
+                    "file_path": file_path,
                 },
             }
 
@@ -124,6 +125,7 @@ def execute(agent, args: dict) -> dict:
                 "approval_info": {
                     "risk_level": "medium",
                     "description": "Writing to sensitive system paths may compromise system integrity.",
+                    "file_path": file_path,
                 },
             }
 

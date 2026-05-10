@@ -149,9 +149,14 @@ function populateModal(data) {
         scoreEl.classList.add('hidden');
     }
 
-    document.getElementById('ev-approval-tool').textContent = data.tool || data.tool_name || 'Unknown';
-
+    const toolName = data.tool || data.tool_name || 'Unknown';
     const args = data.args || data.tool_args || {};
+    const filePath = info.file_path || args.file_path || null;
+    if (filePath) {
+        document.getElementById('ev-approval-tool').textContent = toolName + ': ' + filePath;
+    } else {
+        document.getElementById('ev-approval-tool').textContent = toolName;
+    }
     const codeSnippet = args.script || args.code || null;
     const codeBlock = document.getElementById('ev-approval-code-block');
     if (codeSnippet) {

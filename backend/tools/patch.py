@@ -511,6 +511,7 @@ def execute(agent, args: dict) -> dict:
                 "approval_info": {
                     "risk_level": "medium",
                     "description": "Patching sensitive system paths may compromise system integrity.",
+                    "file_path": file_path,
                 },
             }
 
