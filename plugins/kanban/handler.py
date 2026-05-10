@@ -323,10 +323,18 @@ def _get_kanban_skill_agents() -> list:
             agent_id = agent['id']
             if agent.get('is_super'):
                 result.append(agent_id)
-            elif 'kanban' in db.get_agent_skills(agent_id):
-                result.append(agent_id)
+                continue
+            try:
+                if 'kanban' in db.get_agent_skills(agent_id):
+                    result.append(agent_id)
+            except Exception:
+                # Per-agent skill lookup failed — don't crash the whole list
+                import traceback
+                traceback.print_exc()
         return result
     except Exception:
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -369,6 +377,8 @@ def _agent_has_kanban_skill(agent_id: str) -> bool:
             return True
         return 'kanban' in db.get_agent_skills(agent_id)
     except Exception:
+        import traceback
+        traceback.print_exc()
         return False
 
 
