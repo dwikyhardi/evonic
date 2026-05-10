@@ -19,7 +19,6 @@ import argparse
 import json
 import logging
 import os
-import platform
 import shutil
 import signal
 import subprocess
@@ -86,7 +85,7 @@ DEFAULT_CONFIG = {
 # the same detection logic without copy-paste drift.
 # ---------------------------------------------------------------------------
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _helpers import detect_python_bin  # noqa: E402,F401  (re-exported for tests)
+from _helpers import detect_python_bin, is_windows  # noqa: E402,F401  (re-exported for tests)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -113,14 +112,6 @@ def load_config(config_path: str) -> dict:
         cfg['python_bin'] = resolved
 
     return cfg
-
-# ---------------------------------------------------------------------------
-# Platform abstraction
-# ---------------------------------------------------------------------------
-
-def is_windows() -> bool:
-    return platform.system() == 'Windows'
-
 
 def get_current_release(app_root: str) -> Optional[str]:
     """Return the tag name of the currently active release, or None.

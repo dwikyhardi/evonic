@@ -9,6 +9,13 @@ import os
 import sys
 
 
+def is_windows() -> bool:
+    """True on Windows. ``sys.platform`` returns ``'win32'`` on every Windows
+    build (32- and 64-bit), so this is the standard stdlib check — no need to
+    import the heavier ``platform`` module."""
+    return sys.platform == 'win32'
+
+
 def detect_python_bin(app_root: str) -> str:
     """Return the install venv's python if available, else fall back to sys.executable.
 
@@ -20,7 +27,7 @@ def detect_python_bin(app_root: str) -> str:
     supervisor's ``load_config`` re-runs the same detection to self-heal stale
     config values.
     """
-    if sys.platform == 'win32':
+    if is_windows():
         candidates = [
             os.path.join(app_root, '.venv', 'Scripts', 'python.exe'),
             os.path.join(app_root, 'venv', 'Scripts', 'python.exe'),

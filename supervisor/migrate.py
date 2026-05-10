@@ -20,7 +20,7 @@ from pathlib import Path
 # Shared with supervisor.py — both files run as standalone scripts, so adding
 # their own directory to sys.path lets ``from _helpers import …`` resolve.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _helpers import detect_python_bin  # noqa: E402
+from _helpers import detect_python_bin, is_windows  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
         if not dry_run:
             run([sys.executable, '-m', 'venv', str(venv_path)])
             if req_file.exists():
-                if sys.platform == 'win32':
+                if is_windows():
                     pip = venv_path / 'Scripts' / 'pip'
                 else:
                     pip = venv_path / 'bin' / 'pip'
@@ -212,7 +212,7 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
                     shutil.rmtree(str(link))
                 elif link.exists():
                     link.unlink()
-                if sys.platform == 'win32' and is_dir:
+                if is_windows() and is_dir:
                     subprocess.run(['cmd', '/c', 'mklink', '/J',
                                     str(link), str(target)], check=True)
                 else:
@@ -231,7 +231,7 @@ def migrate(app_root: str, initial_tag: str, dry_run: bool):
         if not dry_run:
             (release_path / 'VERSION').write_text(initial_tag)
 
-        if sys.platform == 'win32':
+        if is_windows():
             slot_file = root / 'current.slot'
             info(f'  Writing {slot_file}')
             if not dry_run:
