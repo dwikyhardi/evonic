@@ -437,6 +437,7 @@ def _register_builtins():
 
         lines = []
         lines.append(f"**Status \u2014 {agent.get('name', agent_id)}**")
+        lines.append(f"Session: {session_id}")
 
         # Model — resolve the same way the runtime does:
         # 1. Agent's default_model_id → llm_models table (agent-specific model config)
