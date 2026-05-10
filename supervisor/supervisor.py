@@ -81,26 +81,12 @@ DEFAULT_CONFIG = {
 }
 
 
-def detect_python_bin(app_root: str) -> str:
-    """Return the install venv's python if available, else fall back to sys.executable.
-
-    Single source of truth — ``migrate.py`` imports this helper so flat-mode
-    install and release-mode supervisor share one implementation.
-    """
-    if is_windows():
-        candidates = [
-            os.path.join(app_root, '.venv', 'Scripts', 'python.exe'),
-            os.path.join(app_root, 'venv', 'Scripts', 'python.exe'),
-        ]
-    else:
-        candidates = [
-            os.path.join(app_root, '.venv', 'bin', 'python'),
-            os.path.join(app_root, 'venv', 'bin', 'python'),
-        ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return sys.executable
+# ---------------------------------------------------------------------------
+# Shared helpers — sourced from supervisor/_helpers.py so migrate.py can reuse
+# the same detection logic without copy-paste drift.
+# ---------------------------------------------------------------------------
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _helpers import detect_python_bin  # noqa: E402,F401  (re-exported for tests)
 
 # ---------------------------------------------------------------------------
 # Config

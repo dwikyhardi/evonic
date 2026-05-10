@@ -17,11 +17,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Reuse the supervisor's helper so flat-mode and release-mode share a single
-# implementation. Both files live side-by-side in supervisor/, so adding this
-# directory to sys.path lets ``import supervisor`` resolve to supervisor.py.
+# Shared with supervisor.py — both files run as standalone scripts, so adding
+# their own directory to sys.path lets ``from _helpers import …`` resolve.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from supervisor import detect_python_bin  # noqa: E402
+from _helpers import detect_python_bin  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
