@@ -17,6 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Reuse the supervisor's helper so flat-mode and release-mode share a single
+# implementation. Both files live side-by-side in supervisor/, so adding this
+# directory to sys.path lets ``import supervisor`` resolve to supervisor.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from supervisor import detect_python_bin  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Items moved to shared/ (source_name, is_directory)
@@ -35,31 +41,6 @@ SHARED_MOVES = [
 
 # Plugin config files: plugins/*/config.json → shared/plugins/*/config.json
 PLUGIN_CONFIG_GLOB = 'plugins/*/config.json'
-
-
-def detect_python_bin(app_root: str) -> str:
-    """Return the install venv's python if available, else fall back to sys.executable.
-
-    When migration is invoked via the system interpreter (e.g. ``/usr/bin/python3``),
-    persisting that into ``supervisor/config.json`` causes the supervisor to build
-    release venvs from the system python instead of the venv the user originally
-    installed against. Detecting the install venv keeps the dependency baseline
-    consistent across releases.
-    """
-    if sys.platform == 'win32':
-        candidates = [
-            os.path.join(app_root, '.venv', 'Scripts', 'python.exe'),
-            os.path.join(app_root, 'venv', 'Scripts', 'python.exe'),
-        ]
-    else:
-        candidates = [
-            os.path.join(app_root, '.venv', 'bin', 'python'),
-            os.path.join(app_root, 'venv', 'bin', 'python'),
-        ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return sys.executable
 
 
 def info(msg):

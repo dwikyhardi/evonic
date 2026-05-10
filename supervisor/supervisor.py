@@ -84,8 +84,8 @@ DEFAULT_CONFIG = {
 def detect_python_bin(app_root: str) -> str:
     """Return the install venv's python if available, else fall back to sys.executable.
 
-    Mirrors ``supervisor/migrate.detect_python_bin``. Duplicated rather than
-    cross-imported because supervisor must remain stdlib-only.
+    Single source of truth — ``migrate.py`` imports this helper so flat-mode
+    install and release-mode supervisor share one implementation.
     """
     if is_windows():
         candidates = [
