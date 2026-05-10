@@ -78,19 +78,49 @@ check_prereqs() {
 clone_repo() {
     step "Step 2/6: Getting Evonic source code"
 
+    # Determine the latest stable tagged release
+    info "Determining latest stable release..."
+    LATEST_TAG=$(git ls-remote --tags "$REPO_URL" 2>/dev/null \
+        | grep -E 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+        | sed 's/.*refs\/tags\///' \
+        | sort -t. -k1,1 -k2,2 -k3,3 -V \
+        | tail -1)
+
+    if [ -z "$LATEST_TAG" ]; then
+        warn "No stable release tags found; falling back to main branch"
+        LATEST_TAG="main"
+    else
+        ok "Latest stable release: $LATEST_TAG"
+    fi
+
     if [ -d "$EVONIC_HOME/.git" ]; then
-        info "Repository exists — pulling latest changes..."
-        git -C "$EVONIC_HOME" pull --ff-only origin main 2>/dev/null || \
-        git -C "$EVONIC_HOME" pull origin main 2>/dev/null || \
-        warn "Could not pull; continuing with existing code."
+        info "Repository exists — updating to $LATEST_TAG..."
+        git -C "$EVONIC_HOME" fetch --tags origin 2>/dev/null
+        if [ "$LATEST_TAG" != "main" ]; then
+            git -C "$EVONIC_HOME" checkout "tags/$LATEST_TAG" 2>/dev/null || \
+                git -C "$EVONIC_HOME" checkout "$LATEST_TAG" 2>/dev/null || \
+                warn "Could not checkout $LATEST_TAG; continuing with existing code."
+        else
+            git -C "$EVONIC_HOME" pull --ff-only origin main 2>/dev/null || \
+                git -C "$EVONIC_HOME" pull origin main 2>/dev/null || \
+                warn "Could not pull; continuing with existing code."
+        fi
         ok "Repository updated"
     elif [ -d "$EVONIC_HOME" ]; then
         warn "$EVONIC_HOME exists but is not a git repo. Removing and re-cloning..."
         rm -rf "$EVONIC_HOME"
-        git clone --depth 1 "$REPO_URL" "$EVONIC_HOME"
+        if [ "$LATEST_TAG" != "main" ]; then
+            git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" "$EVONIC_HOME"
+        else
+            git clone --depth 1 "$REPO_URL" "$EVONIC_HOME"
+        fi
         ok "Repository cloned"
     else
-        git clone --depth 1 "$REPO_URL" "$EVONIC_HOME"
+        if [ "$LATEST_TAG" != "main" ]; then
+            git clone --depth 1 --branch "$LATEST_TAG" "$REPO_URL" "$EVONIC_HOME"
+        else
+            git clone --depth 1 "$REPO_URL" "$EVONIC_HOME"
+        fi
         ok "Repository cloned"
     fi
 }
