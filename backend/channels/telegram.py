@@ -11,6 +11,40 @@ from backend.channels.base import BaseChannel, strip_system_tags
 _logger = logging.getLogger(__name__)
 
 
+def _extract_name(text: str) -> str:
+    """Extract a proper name from a self-introduction phrase using LLM.
+
+    e.g. 'my name is amir' → 'Amir', 'nama saya budi' → 'Budi'.
+    Falls back to the raw text (title-cased) if LLM call fails.
+    """
+    try:
+        from backend.llm_client import llm_client
+        response = llm_client.chat_completion(
+            messages=[
+                {"role": "system", "content": (
+                    "Extract only the person's name from their message. "
+                    "Reply with the name only — no other words. "
+                    "Capitalize it properly (e.g. 'Amir Oktaviana'). "
+                    "If the message contains no name, reply with the original message verbatim."
+                )},
+                {"role": "user", "content": text},
+            ],
+            tools=None,
+            temperature=0.0,
+            enable_thinking=False,
+            max_tokens=20,
+        )
+        if response.get("success"):
+            choices = response.get("response", {}).get("choices", [])
+            if choices:
+                name = choices[0].get("message", {}).get("content", "").strip()
+                if name:
+                    return name
+    except Exception:
+        pass
+    return text.strip().title()
+
+
 def _strip_markdown(text: str) -> str:
     """Remove markdown symbols (bold, italic, headers) from text for plain Telegram messages."""
     text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)  # headers
@@ -118,7 +152,7 @@ class TelegramChannel(BaseChannel):
                 # Step 1: Fully approved user? (in allowlist AND has name set)
                 if db.is_user_allowed(self.channel_id, user_id):
                     if db.needs_name(self.channel_id, user_id):
-                        name_candidate = text.strip() if text else ''
+                        name_candidate = _extract_name(text) if text and text.strip() else ''
                         if name_candidate and len(name_candidate) <= 100:
                             db.set_user_display_name(self.channel_id, user_id, name_candidate)
                             await update.message.reply_text(
