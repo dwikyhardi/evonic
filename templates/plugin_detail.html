@@ -82,8 +82,13 @@
             </div>
             <div id="about-empty" class="hidden">
                 <div class="text-center py-16 text-gray-400">
-                    <svg class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 3.75a6 6 0 00-6 6v.375m12-6.375v.375m0 0a6 6 0 016 6v4.5m-12 0a6 6 0 016-6m-6 6v3.75a2.25 2.25 0 002.25 2.25h1.5m-3.75 0a2.25 2.25 0 01-2.25-2.25v-1.5m12 0v1.5a2.25 2.25 0 01-2.25 2.25h-1.5"/>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                        <path d="M12 7v14"/>
+                        <path d="M16 12h2"/>
+                        <path d="M16 8h2"/>
+                        <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>
+                        <path d="M6 12h2"/>
+                        <path d="M6 8h2"/>
                     </svg>
                     <p class="text-lg font-medium">No README.md</p>
                     <p class="text-sm mt-1">This plugin does not include a README.md file with documentation.</p>
@@ -122,6 +127,32 @@
                     <p class="text-sm">No logs yet</p>
                     <p class="text-xs mt-1">Logs will appear here when the plugin processes events</p>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Text Editor Modal -->
+<div id="text-editor-modal" class="hidden fixed inset-0 z-50" role="dialog">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeTextEditor()"></div>
+    <div class="relative flex flex-col h-full items-center justify-center p-4">
+        <div class="relative w-full max-w-3xl bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-600 flex flex-col max-h-[85vh]">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+                <h3 id="modal-editor-title" class="text-base font-semibold text-gray-800 dark:text-gray-100">Edit</h3>
+                <button onclick="closeTextEditor()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <div class="flex-1 overflow-y-auto px-6 py-4">
+                <textarea id="modal-editor-textarea"
+                          class="w-full h-[500px] p-4 border border-gray-300 dark:border-gray-500 rounded-lg text-sm font-mono bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-y"></textarea>
+            </div>
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-600">
+                <button onclick="closeTextEditor()" class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors">Cancel</button>
+                <button onclick="saveModalEditor()" class="px-4 py-2 text-sm bg-indigo-500 hover:bg-indigo-600 text-white rounded-md font-medium transition-colors">Save</button>
             </div>
         </div>
     </div>
@@ -214,51 +245,98 @@ function renderSettings(variables, config) {
     noVars.classList.add('hidden');
     actions.classList.remove('hidden');
 
-    form.innerHTML = variables.map(v => {
-        const val = config[v.name] !== undefined ? config[v.name] : (v.default || '');
-        if (v.type === 'boolean') {
-            return `
-            <div class="mb-4">
-                <label class="flex items-center gap-3 cursor-pointer select-none">
-                    <span class="relative inline-flex items-center">
-                        <input type="checkbox" data-var="${esc(v.name)}" data-type="boolean"
-                               ${val ? 'checked' : ''} class="sr-only peer">
-                        <span class="dyn-toggle"></span>
-                    </span>
-                    <div>
-                        <span class="text-gray-700 dark:text-gray-200 text-sm font-medium">${esc(v.label || v.name)}</span>
-                        ${v.description ? `<p class="text-xs text-gray-400 mt-0.5">${esc(v.description)}</p>` : ''}
-                    </div>
-                </label>
-            </div>`;
+    // Group variables by their 'group' field
+    const groups = new Map();
+    const groupOrder = [];
+    variables.forEach(v => {
+        const groupKey = v.group || '__ungrouped__';
+        const groupLabel = v.groupLabel || groupKey;
+        if (!groups.has(groupKey)) {
+            groups.set(groupKey, { label: groupLabel, vars: [] });
+            groupOrder.push(groupKey);
         }
-        if (v.type === 'textarea') {
+        groups.get(groupKey).vars.push(v);
+    });
+
+    // Render each group as a collapsible section
+    form.innerHTML = groupOrder.map((groupKey, idx) => {
+        const group = groups.get(groupKey);
+        const isUngrouped = groupKey === '__ungrouped__';
+        const collapseId = `group-${idx}`;
+
+        // Variables within this group
+        const varsHTML = group.vars.map(v => {
+            const val = config[v.name] !== undefined ? config[v.name] : (v.default || '');
+            if (v.type === 'boolean') {
+                return `
+                <div class="mb-4">
+                    <label class="flex items-center gap-3 cursor-pointer select-none">
+                        <span class="relative inline-flex items-center">
+                            <input type="checkbox" data-var="${esc(v.name)}" data-type="boolean"
+                                   ${val ? 'checked' : ''} class="sr-only peer">
+                            <span class="dyn-toggle"></span>
+                        </span>
+                        <div>
+                            <span class="text-gray-700 dark:text-gray-200 text-sm font-medium">${esc(v.label || v.name)}</span>
+                            ${v.description ? `<p class="text-xs text-gray-400 mt-0.5">${esc(v.description)}</p>` : ''}
+                        </div>
+                    </label>
+                </div>`;
+            }
+            if (v.type === 'textarea') {
+                return `
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-gray-700 dark:text-gray-200 text-sm font-medium">${esc(v.label || v.name)}</label>
+                        <button type="button" onclick="openTextEditor('${esc(v.name)}', '${esc(v.label || v.name)}')" class="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1 transition-colors" title="Open in larger editor">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                            Expand
+                        </button>
+                    </div>
+                    <textarea data-var="${esc(v.name)}" data-type="${esc(v.type)}"
+                              placeholder="${esc(String(v.default || ''))}"
+                              class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none overflow-hidden min-h-[120px] max-h-[500px] overflow-y-auto"
+                              oninput="this.style.height='';this.style.height=Math.min(this.scrollHeight,500)+'px'">${esc(String(val))}</textarea>
+                    ${v.description ? `<p class="text-xs text-gray-400 mt-1">${esc(v.description)}</p>` : ''}
+                </div>`;
+            }
+            const inputType = v.type === 'password' ? 'password' : (v.type === 'number' ? 'number' : 'text');
             return `
             <div class="mb-4">
                 <label class="block mb-1 text-gray-700 dark:text-gray-200 text-sm font-medium">${esc(v.label || v.name)}</label>
-                <textarea data-var="${esc(v.name)}" data-type="${esc(v.type)}"
-                          placeholder="${esc(String(v.default || ''))}"
-                          class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none overflow-hidden max-h-[700px] overflow-y-auto"
-                          oninput="this.style.height='';this.style.height=Math.min(this.scrollHeight,700)+'px'">${esc(String(val))}</textarea>
+                <input type="${inputType}" data-var="${esc(v.name)}" data-type="${esc(v.type || 'string')}"
+                       value="${esc(String(val))}"
+                       placeholder="${esc(String(v.default || ''))}"
+                       class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
                 ${v.description ? `<p class="text-xs text-gray-400 mt-1">${esc(v.description)}</p>` : ''}
             </div>`;
+        }).join('');
+
+        // If there's only one group and it's ungrouped, render flat (backward compatible)
+        if (isUngrouped && groupOrder.length === 1) {
+            return varsHTML;
         }
-        const inputType = v.type === 'number' ? 'number' : 'text';
+
+        // Collapsible section
+        const collapsed = idx > 0 ? 'hidden' : ''; // First group expanded by default
+        const arrowClass = idx > 0 ? 'rotate-0' : 'rotate-90';
         return `
-        <div class="mb-4">
-            <label class="block mb-1 text-gray-700 dark:text-gray-200 text-sm font-medium">${esc(v.label || v.name)}</label>
-            <input type="${inputType}" data-var="${esc(v.name)}" data-type="${esc(v.type || 'string')}"
-                   value="${esc(String(val))}"
-                   placeholder="${esc(String(v.default || ''))}"
-                   class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
-            ${v.description ? `<p class="text-xs text-gray-400 mt-1">${esc(v.description)}</p>` : ''}
+        <div class="mb-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+            <button onclick="this.closest('.mb-4').querySelector('.group-body').classList.toggle('hidden');this.querySelector('.chevron').classList.toggle('rotate-90');this.querySelector('.chevron').classList.toggle('rotate-0');"
+                    class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+                <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">${esc(group.label)}</span>
+                <svg class="chevron w-4 h-4 text-gray-400 ${arrowClass} transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+            <div class="group-body ${collapsed} px-4 py-3 bg-white dark:bg-gray-800">
+                ${varsHTML}
+            </div>
         </div>`;
     }).join('');
 
-    // Auto-grow textareas to fit their initial content
+    // Auto-grow textareas to fit their initial content (min 120px, max 500px)
     form.querySelectorAll('textarea[data-type="textarea"]').forEach(ta => {
         ta.style.height = '';
-        ta.style.height = Math.min(ta.scrollHeight, 700) + 'px';
+        ta.style.height = Math.min(Math.max(ta.scrollHeight, 120), 500) + 'px';
     });
 }
 
@@ -490,6 +568,50 @@ async function uninstallPlugin() {
     }
     window.location.href = '/plugins';
 }
+
+// ==================== Text Editor Modal ====================
+
+let _modalEditorVarName = null;
+
+function openTextEditor(varName, label) {
+    const source = document.querySelector(`textarea[data-var="${varName}"]`);
+    if (!source) return;
+
+    _modalEditorVarName = varName;
+    document.getElementById('modal-editor-title').textContent = label || varName;
+    document.getElementById('modal-editor-textarea').value = source.value;
+    document.getElementById('text-editor-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeTextEditor() {
+    document.getElementById('text-editor-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+    _modalEditorVarName = null;
+}
+
+function saveModalEditor() {
+    if (!_modalEditorVarName) return;
+    const modalTa = document.getElementById('modal-editor-textarea');
+    const source = document.querySelector(`textarea[data-var="${_modalEditorVarName}"]`);
+    if (source) {
+        source.value = modalTa.value;
+        // Trigger auto-resize
+        source.style.height = '';
+        source.style.height = Math.min(source.scrollHeight, 500) + 'px';
+    }
+    closeTextEditor();
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('text-editor-modal');
+        if (!modal.classList.contains('hidden')) {
+            closeTextEditor();
+        }
+    }
+});
 
 loadPlugin().then(() => showTab('settings'));
 </script>
