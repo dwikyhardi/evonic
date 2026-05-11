@@ -808,6 +808,7 @@ class AgentRuntime:
                              'metadata': {'slash_command': True}})
                 # Signal the client to clear the chat UI when the clear command was used
                 extra = {"clear_ui": True} if cmd_name == "clear" else {}
+                self._prefetcher.invalidate(session_id)
                 return {"response": response, "tool_trace": [], "timeline": [], **extra}
             # Unknown command — fall through to normal LLM processing
 
