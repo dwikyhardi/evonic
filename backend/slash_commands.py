@@ -588,11 +588,10 @@ def _register_builtins():
             if model:
                 model_name = model.get("name", "unknown")
                 model_id = model.get("model_name", "")
-                model_db_id = model.get("id", "")
                 if model_id:
-                    return f"Current model: {model_name} ({model_id}) [id: {model_db_id}]"
+                    return f"Current model: {model_name} ({model_id})"
                 else:
-                    return f"Current model: {model_name} [id: {model_db_id}]"
+                    return f"Current model: {model_name}"
             else:
                 return "No model configured. Use `/model <id>` to set one."
 
