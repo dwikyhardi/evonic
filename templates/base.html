@@ -46,9 +46,7 @@
     <header>
         <div class="header-inner">
             <a href="/" class="brand">
-                <svg class="brand-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="10" y="1.5" width="12" height="12" rx="2" transform="rotate(45 10 1.5)" fill="#667eea"/>
-                </svg>
+                <img src="{{ url_for('static', filename='img/mascot.png') }}" alt="Evonic" class="brand-icon" width="28" height="28">
                 <span>Evonic</span>
                 <small class="brand-version">v{{ evonic_version }}</small>
             </a>
