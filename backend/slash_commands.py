@@ -435,9 +435,21 @@ def _register_builtins():
         if not agent:
             return "Error: Agent not found."
 
+        # Detect platform: messaging channels need compact output
+        is_compact = False
+        if channel_id:
+            channel = db.get_channel(channel_id)
+            if channel:
+                ch_type = channel.get("type", "")
+                is_compact = ch_type in ("telegram", "whatsapp")
+
         lines = []
-        lines.append(f"**Status \u2014 {agent.get('name', agent_id)}**")
-        lines.append(f"Session: {session_id}")
+        if is_compact:
+            lines.append(f"STATUS \u2014 {agent.get('name', agent_id)}")
+            lines.append(f"Session: {session_id}")
+        else:
+            lines.append(f"**Status \u2014 {agent.get('name', agent_id)}**")
+            lines.append(f"Session: {session_id}")
 
         # Model — resolve the same way the runtime does:
         # 1. Agent's default_model_id → llm_models table (agent-specific model config)
@@ -496,38 +508,59 @@ def _register_builtins():
             lines.append("Workspace: not configured")
 
         # Toggles
-        lines.append("Toggles:")
         sandbox = "enabled" if agent.get("sandbox_enabled") else "disabled"
         safety = "enabled" if agent.get("safety_checker_enabled") else "disabled"
         vision = "enabled" if agent.get("vision_enabled") else "disabled"
         agent_msg = "enabled" if agent.get("agent_messaging_enabled") else "disabled"
-        lines.append(f"  Sandbox: {sandbox}")
-        lines.append(f"  Safety Checker: {safety}")
-        lines.append(f"  Vision: {vision}")
-        lines.append(f"  Agent Messaging: {agent_msg}")
+        if is_compact:
+            lines.append(f"Toggles: Sandbox={sandbox}, Safety={safety}, Vision={vision}, Msg={agent_msg}")
+        else:
+            lines.append("Toggles:")
+            lines.append(f"  Sandbox: {sandbox}")
+            lines.append(f"  Safety Checker: {safety}")
+            lines.append(f"  Vision: {vision}")
+            lines.append(f"  Agent Messaging: {agent_msg}")
 
         # Tools and skills count
         tools = db.get_agent_tools(agent_id)
         skills = db.get_agent_skills(agent_id)
-        lines.append(f"Tools: {len(tools)}")
-        lines.append(f"Skills: {len(skills)}")
+        if is_compact:
+            lines.append(f"Tools: {len(tools)}  |  Skills: {len(skills)}")
+        else:
+            lines.append(f"Tools: {len(tools)}")
+            lines.append(f"Skills: {len(skills)}")
 
         # Channels
         channels = db.get_channels(agent_id)
         if channels:
-            lines.append("Channels:")
             from backend.channels.registry import channel_manager
-            for ch in channels:
-                ch_name = ch.get("name", "unknown")
-                ch_type = ch.get("type", "unknown")
-                ch_id = ch.get("id", "")
-                is_connected = channel_manager.is_running(ch_id)
-                status = "connected" if is_connected else "disconnected"
-                lines.append(f"  {ch_name} ({ch_type}) \u2014 {status}")
+            if is_compact:
+                ch_parts = []
+                for ch in channels:
+                    ch_name = ch.get("name", "unknown")
+                    ch_type = ch.get("type", "unknown")
+                    ch_id = ch.get("id", "")
+                    is_connected = channel_manager.is_running(ch_id)
+                    status = "connected" if is_connected else "disconnected"
+                    ch_parts.append(f"{ch_name} ({ch_type})={status}")
+                lines.append(f"Channels: {', '.join(ch_parts)}")
+            else:
+                lines.append("Channels:")
+                for ch in channels:
+                    ch_name = ch.get("name", "unknown")
+                    ch_type = ch.get("type", "unknown")
+                    ch_id = ch.get("id", "")
+                    is_connected = channel_manager.is_running(ch_id)
+                    status = "connected" if is_connected else "disconnected"
+                    lines.append(f"  {ch_name} ({ch_type}) \u2014 {status}")
 
-        # Double newline between every field so markdown renders each as
+        # Web: double newline between every field so markdown renders each as
         # a separate paragraph (single \n would collapse into one line).
-        return "\n\n".join(lines)
+        # Telegram/WhatsApp: single newline for a compact, clean layout.
+        if is_compact:
+            return "\n".join(lines)
+        else:
+            return "\n\n".join(lines)
 
     command_registry.register(
         "status",
