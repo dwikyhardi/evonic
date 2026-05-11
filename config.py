@@ -6,16 +6,26 @@ import logging
 _envcrypt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib', 'envcrypt', 'libs', 'python')
 sys.path.append(_envcrypt_path)
 
-# Only try envcrypt if the config file (~/.envcrypt.yaml) exists
-# Note: load_dotenv() for plain .env is handled by the entrypoint (app.py)
-# before importing config, so it's not needed here.
+# Load .env from the config module itself so every entrypoint gets it —
+# not just app.py. The CLI (`evonic`), supervisor subprocesses, management
+# scripts, and tests all import config without going through app.py, so
+# relying on a single load_dotenv() in app.py leaves them with an empty
+# environment and falls back to hardcoded defaults (e.g. PORT=8080).
+#
+# Calling load_dotenv() here is safe even when app.py also calls it: python-dotenv
+# defaults to override=False, so a second call is a no-op for variables that
+# already exist in os.environ. No duplicate work, no surprises.
 _envcrypt_config = os.path.join(os.path.expanduser('~'), '.envcrypt.yaml')
 if os.path.exists(_envcrypt_config):
     try:
         import envcrypt
         envcrypt.load(".env")
     except Exception:
-        pass  # .env already loaded by the entrypoint
+        from dotenv import load_dotenv
+        load_dotenv()
+else:
+    from dotenv import load_dotenv
+    load_dotenv()
 
 _logger = logging.getLogger(__name__)
 
@@ -94,44 +104,22 @@ if not os.path.isdir(_shared_db_dir):
 DB_PATH = os.path.join(_shared_db_dir, "evonic.db")
 TEST_DB_PATH = os.path.join(BASE_DIR, "seed", "test_db.sqlite")
 
-# Flask — SECRET_KEY: auto-generate once and persist to .env if missing
+# Flask — SECRET_KEY: auto-generate once and persist to .env if missing.
+# The previous manual .env regex scanner (added when load_dotenv() was absent
+# from config.py) is gone — load_dotenv() above already makes SECRET_KEY
+# visible via os.getenv() for every entrypoint.
 _SECRET_KEY_ENV = os.getenv("SECRET_KEY")
-if not _SECRET_KEY_ENV:
-    # Double-check: maybe .env has SECRET_KEY but the env var wasn't loaded yet
-    # (e.g. daemonized subprocess, systemd, or restart via exec)
-    import re as _re
-    _env_path = os.path.join(BASE_DIR, ".env")
-    _found_in_file = False
-    if os.path.exists(_env_path):
-        try:
-            with open(_env_path, "r") as _f:
-                for _line in _f:
-                    _stripped = _line.strip()
-                    if not _stripped or _stripped.startswith("#"):
-                        continue
-                    _m = _re.match(r"^SECRET_KEY=(.+)", _stripped)
-                    if _m:
-                        _SECRET_KEY_ENV = _m.group(1).strip()
-                        _found_in_file = True
-                        _logger.info("Loaded SECRET_KEY from .env file")
-                        break
-        except Exception:
-            pass
-
 if not _SECRET_KEY_ENV:
     import secrets
     import tempfile
 
     _SECRET_KEY_ENV = secrets.token_urlsafe(48)
+    _env_path = os.path.join(BASE_DIR, ".env")
 
     # Atomic write: update existing .env or create a new one
-    if _found_in_file and os.path.exists(_env_path):
-        # SECRET_KEY was found in .env but couldn't be parsed — do NOT append duplicate
-        _logger.warning(".env has SECRET_KEY but value could not be read; generating new one anyway")
     if os.path.exists(_env_path):
         with open(_env_path, "r") as _f:
             _lines = _f.readlines()
-        # Append SECRET_KEY (it's not present since the env var was empty)
         if _lines and not _lines[-1].endswith("\n"):
             _lines.append("\n")
         _lines.append(f"SECRET_KEY={_SECRET_KEY_ENV}\n")
