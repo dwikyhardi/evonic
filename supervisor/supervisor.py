@@ -19,7 +19,6 @@ import argparse
 import json
 import logging
 import os
-import platform
 import shutil
 import signal
 import subprocess
@@ -72,11 +71,21 @@ DEFAULT_CONFIG = {
     'health_timeout': 10,
     'monitor_duration': 60,
     'keep_releases': 3,
-    'python_bin': sys.executable,
+    # python_bin defaults via detect_python_bin() at load time so the install
+    # venv (not the system interpreter) is preferred when supervisor runs.
+    'python_bin': None,
     'uv_bin': None,
     'telegram_bot_token': '',
     'telegram_chat_id': '',
 }
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers — sourced from supervisor/_helpers.py so migrate.py can reuse
+# the same detection logic without copy-paste drift.
+# ---------------------------------------------------------------------------
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _helpers import detect_python_bin, is_windows  # noqa: E402,F401  (re-exported for tests)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -91,15 +100,18 @@ def load_config(config_path: str) -> dict:
         log.warning(f'Config file not found: {config_path} — using defaults')
     except json.JSONDecodeError as e:
         log.error(f'Config parse error: {e} — using defaults')
+
+    # Validate python_bin: prefer install venv if config value is missing or
+    # points at an interpreter that no longer exists. Avoids inheriting the
+    # system python that migrate.py may have captured at install time.
+    py = cfg.get('python_bin')
+    if not py or not os.path.exists(py):
+        resolved = detect_python_bin(cfg['app_root'])
+        if py and py != resolved:
+            log.warning(f'python_bin={py!r} not found; using {resolved}')
+        cfg['python_bin'] = resolved
+
     return cfg
-
-# ---------------------------------------------------------------------------
-# Platform abstraction
-# ---------------------------------------------------------------------------
-
-def is_windows() -> bool:
-    return platform.system() == 'Windows'
-
 
 def get_current_release(app_root: str) -> Optional[str]:
     """Return the tag name of the currently active release, or None.
@@ -261,6 +273,7 @@ def stop_daemon(app_root: str, timeout: int = 15) -> bool:
         return True
     if not _is_process_alive(pid):
         log.info(f'Daemon PID {pid} not alive — already stopped')
+        _remove_daemon_pid(app_root)
         return True
 
     log.info(f'Sending SIGTERM to daemon PID {pid}')
@@ -271,12 +284,14 @@ def stop_daemon(app_root: str, timeout: int = 15) -> bool:
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
+            _remove_daemon_pid(app_root)
             return True
 
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not _is_process_alive(pid):
             log.info(f'Daemon PID {pid} stopped')
+            _remove_daemon_pid(app_root)
             return True
         time.sleep(0.5)
 
@@ -290,7 +305,34 @@ def stop_daemon(app_root: str, timeout: int = 15) -> bool:
         except ProcessLookupError:
             pass
     time.sleep(1)
+    _remove_daemon_pid(app_root)
     return not _is_process_alive(pid)
+
+
+def _write_daemon_pid(app_root: str, pid: int) -> None:
+    """Persist the running daemon's PID so the CLI can find it.
+
+    The CLI's ``evonic status`` and ``evonic stop`` read this file; without it
+    they report the server as not running even when supervisor has a live
+    daemon underneath.
+    """
+    pid_file = _pid_file(app_root)
+    try:
+        os.makedirs(os.path.dirname(pid_file), exist_ok=True)
+        with open(pid_file, 'w') as f:
+            f.write(str(pid))
+    except OSError as e:
+        log.warning(f'Could not write daemon PID file {pid_file}: {e}')
+
+
+def _remove_daemon_pid(app_root: str) -> None:
+    pid_file = _pid_file(app_root)
+    try:
+        os.remove(pid_file)
+    except FileNotFoundError:
+        pass  # already gone — nothing to do
+    except OSError as e:
+        log.warning(f'Could not remove daemon PID file {pid_file}: {e}')
 
 
 def start_daemon(release_path: str, app_root: str) -> tuple:
@@ -325,16 +367,27 @@ def start_daemon(release_path: str, app_root: str) -> tuple:
         return False, proc.pid
 
     log.info(f'Daemon started with PID {proc.pid}')
+    _write_daemon_pid(app_root, proc.pid)
     return True, proc.pid
 
 
 def start_daemon_from_current(app_root: str) -> tuple:
-    """Resolve current pointer and start daemon from that release."""
+    """Resolve current pointer and start daemon from that release.
+
+    Re-links shared/ items first. The release worktree's ``db``, ``.env`` etc.
+    may be missing or stale (manual cleanup, partial worktree, broken update);
+    without re-linking, ``config.py`` would resolve to empty paths and the app
+    would render the first-run setup screen on top of an existing install.
+    """
     tag = get_current_release(app_root)
     if not tag:
         log.error('Cannot start daemon: no current release pointer found')
         return False, 0
     release_path = os.path.join(app_root, 'releases', tag)
+    try:
+        link_shared_dirs(app_root, release_path)
+    except Exception as e:
+        log.warning(f'link_shared_dirs failed before start: {e}')
     return start_daemon(release_path, app_root)
 
 # ---------------------------------------------------------------------------
@@ -503,7 +556,14 @@ def create_venv_and_install(release_path: str, python_bin: str,
 # ---------------------------------------------------------------------------
 
 def link_shared_dirs(app_root: str, release_path: str) -> None:
-    """Symlink shared/ items into the release directory."""
+    """Symlink shared/ items into the release directory.
+
+    Idempotent: a link that already resolves to the correct shared target is
+    left untouched. A real (non-symlink) directory at the link path is *not*
+    deleted — that path may hold user data and the caller must clean it up
+    manually before retrying. This makes the function safe to invoke on every
+    daemon (re)start.
+    """
     shared_root = os.path.join(app_root, 'shared')
 
     for name, is_dir in SHARED_ITEMS:
@@ -515,11 +575,19 @@ def link_shared_dirs(app_root: str, release_path: str) -> None:
             log.debug(f'Shared item not found, skipping: {target}')
             continue
 
-        # Remove whatever git worktree put there
         if os.path.islink(link):
+            try:
+                if os.path.realpath(link) == os.path.realpath(target):
+                    continue  # already correctly linked
+            except OSError:
+                pass
             os.unlink(link)
         elif os.path.isdir(link):
-            shutil.rmtree(link)
+            log.error(
+                f'Refusing to replace real directory at {link} with symlink '
+                f'to {target}. Move or remove it manually before retrying.'
+            )
+            continue
         elif os.path.exists(link):
             os.unlink(link)
 
