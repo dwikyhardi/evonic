@@ -11,6 +11,11 @@ import shutil
 import subprocess
 import tempfile
 
+try:
+    from config import SANDBOX_WORKSPACE as _WORKSPACE_ROOT
+except ImportError:
+    _WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
 from backend.tools._workspace import resolve_workspace_path
 
 SEARCH_WINDOW = 50
