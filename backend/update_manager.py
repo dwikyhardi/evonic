@@ -16,12 +16,34 @@ import threading
 import time
 from datetime import datetime
 
+try:
+    from packaging import version
+    HAS_PACKAGING = True
+except ImportError:
+    HAS_PACKAGING = False
+
 log = logging.getLogger(__name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _version_tuple(tag: str):
+    """
+    Parse version string into comparable tuple.
+    
+    Security: Uses packaging.version when available for proper semver handling,
+    including pre-release versions. Falls back to regex for basic parsing.
+    """
+    if HAS_PACKAGING:
+        try:
+            # Remove 'v' prefix if present
+            clean_tag = tag.lstrip('v') if tag else '0.0.0'
+            return version.parse(clean_tag)
+        except Exception:
+            # Fall back to regex if parsing fails
+            pass
+    
+    # Fallback: basic regex parsing (doesn't handle pre-release correctly)
     m = re.match(r'v?(\d+)(?:\.(\d+))?(?:\.(\d+))?', tag or '')
     if not m:
         return (0, 0, 0)
