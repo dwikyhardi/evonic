@@ -223,6 +223,10 @@ def _register_builtins():
     ) -> str:
         from models.db import db
 
+        super_agent = db.get_super_agent()
+        if not super_agent or super_agent.get('id') != agent_id:
+            return "Permission denied: /cwd is only available to the super agent."
+
         agent = db.get_agent(agent_id)
         if not agent:
             return "Error: Agent not found."
@@ -249,9 +253,9 @@ def _register_builtins():
     ) -> str:
         from models.db import db
 
-        # super_agent = db.get_super_agent()
-        # if not super_agent or super_agent.get('id') != agent_id:
-        #     return "Permission denied: /cd is only available to the super agent."
+        super_agent = db.get_super_agent()
+        if not super_agent or super_agent.get('id') != agent_id:
+            return "Permission denied: /cd is only available to the super agent."
 
         if not args or not args.strip():
             return "Usage: /cd [path] — change workspace directory"

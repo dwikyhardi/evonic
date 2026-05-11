@@ -286,13 +286,13 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
         ("/help", "Show available commands"),
         ("/summary", "Force regenerate session summary"),
         ("/stop", "Stop the agent's current processing loop"),
-        ("/cwd", "Show current workspace directory"),
-        ("/cd", "Change workspace directory"),
     ]
-    if is_super:
-        slash_commands.append(("/restart", "Restart the service (super agent only)"))
     slash_commands.append(("/plan", "Switch to plan mode"))
     slash_commands.append(("/unfocus", "Force-clear focus mode — use when agent is stuck in focus after a failed task"))
+    if is_super:
+        slash_commands.append(("/restart", "Restart the service (super agent only)"))
+        slash_commands.append(("/cwd", "Show current workspace directory"))
+        slash_commands.append(("/cd", "Change workspace directory"))
     # /autopilot is not yet implemented, omit from listing
 
     if slash_commands:
