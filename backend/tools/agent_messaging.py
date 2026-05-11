@@ -375,28 +375,41 @@ def _exec_escalate_to_user(args: dict, agent_context: dict) -> dict:
         _logger.debug("Agent '%s' already in user session — escalate skipped.", agent_id)
         return {'error': 'Already in a user session — use send_agent_message or reply directly.'}
 
-    human_session = db.get_latest_human_session(agent_id)
-    if not human_session:
+    # Priority 1: send to the primary session (prefers channel sessions like Telegram)
+    primary_session = db.get_latest_human_session(agent_id)
+    if not primary_session:
         _logger.warning("Escalate failed: no human session found for agent '%s'.", agent_id)
         return {'error': 'No active human user session found for this agent.'}
 
     from backend.agent_runtime.notifier import notify_agent
-    result = notify_agent(
-        agent_id=agent_id,
-        tag='SYSTEM',
-        message=message,
-        external_user_id=human_session['external_user_id'],
-        channel_id=human_session.get('channel_id'),
-        dedup=False,
-        trigger_llm=False,
-        metadata={'escalated_from_agent_session': True},
+
+    def _deliver(session: dict) -> None:
+        notify_agent(
+            agent_id=agent_id,
+            tag='SYSTEM',
+            message=message,
+            external_user_id=session['external_user_id'],
+            channel_id=session.get('channel_id'),
+            dedup=False,
+            trigger_llm=False,
+            metadata={'escalated_from_agent_session': True},
+        )
+
+    _deliver(primary_session)
+    _logger.info("Agent '%s' escalated message to primary session '%s' (channel=%s).",
+                 agent_id, primary_session['external_user_id'], primary_session.get('channel_id'))
+
+    # Priority 2: also deliver to a web fallback session (no channel),
+    # so the user can see the message in the web UI too.
+    secondary = db.get_web_fallback_session(
+        agent_id,
+        exclude_session_id=primary_session.get('id'),
     )
+    if secondary:
+        _deliver(secondary)
+        _logger.info("Agent '%s' also escalated message to web session '%s'.",
+                     agent_id, secondary['external_user_id'])
 
-    if not result.get('success'):
-        _logger.error("Escalate failed for agent '%s': %s", agent_id, result.get('reason', 'unknown'))
-        return {'error': f"Failed to reach user session: {result.get('reason', 'unknown')}"}
-
-    _logger.info("Agent '%s' escalated message to user session '%s'.", agent_id, human_session['external_user_id'])
     return {
         'success': True,
         'message': 'Message forwarded to user session.',

@@ -547,16 +547,37 @@ class AgentChatDB:
             return bool(row[0]) if row else True
 
     def get_latest_human_session(self, agent_id: str) -> Optional[Dict[str, Any]]:
-        """Return the most recent non-archived session belonging to a human user
-        (excludes __agent__ and __scheduler__ system user IDs)."""
+        """Return the most recent non-archived session belonging to a human user.
+
+        Priority:
+          1. Sessions with a real channel (channel_id IS NOT NULL) — Telegram, etc.
+          2. Fallback to web sessions (channel_id IS NULL) excluding test/system users.
+
+        Excludes __agent__ and __scheduler__ system user IDs.
+        """
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
+            # Priority 1: find a session with a real channel (Telegram, etc.)
             cursor.execute("""
                 SELECT * FROM chat_sessions
                 WHERE agent_id = ? AND (archived IS NULL OR archived = 0)
                   AND external_user_id NOT LIKE '__agent__%'
                   AND external_user_id != '__scheduler__'
+                  AND channel_id IS NOT NULL
+                ORDER BY updated_at DESC LIMIT 1
+            """, (agent_id,))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            # Priority 2: fallback to web session (no channel), exclude test/system
+            cursor.execute("""
+                SELECT * FROM chat_sessions
+                WHERE agent_id = ? AND (archived IS NULL OR archived = 0)
+                  AND external_user_id NOT LIKE '__agent__%'
+                  AND external_user_id != '__scheduler__'
+                  AND external_user_id != 'web_test'
+                  AND external_user_id != '__system__'
                 ORDER BY updated_at DESC LIMIT 1
             """, (agent_id,))
             row = cursor.fetchone()
@@ -600,6 +621,38 @@ class AgentChatDB:
             cursor.execute("SELECT COUNT(*) FROM chat_messages")
             mc = cursor.fetchone()[0]
             return sc, mc
+
+    def get_web_fallback_session(self, agent_id: str,
+                                 exclude_session_id: str = None) -> Optional[Dict[str, Any]]:
+        """Return the most recent web session (channel_id IS NULL) for a human user.
+
+        Used by escalate_to_user as a secondary delivery target so the user
+        can also see escalated messages in the web UI.
+
+        Excludes __agent__, __scheduler__, and __system__ user IDs.
+        web_test is intentionally NOT excluded here — it IS the valid web
+        session for the user chatting via browser.
+        Optionally excludes a specific session_id (e.g., the primary channel session).
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            query = """
+                SELECT * FROM chat_sessions
+                WHERE agent_id = ? AND (archived IS NULL OR archived = 0)
+                  AND external_user_id NOT LIKE '__agent__%'
+                  AND external_user_id != '__scheduler__'
+                  AND external_user_id != '__system__'
+                  AND channel_id IS NULL
+            """
+            params = [agent_id]
+            if exclude_session_id:
+                query += " AND id != ?"
+                params.append(exclude_session_id)
+            query += " ORDER BY updated_at DESC LIMIT 1"
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     # ---- Long-term Memory ----
 
