@@ -1,0 +1,92 @@
+{
+  "id": "github_webhook",
+  "name": "GitHub Webhook",
+  "version": "1.2.0",
+  "description": "Receive GitHub webhooks and notify agents for automated tasks per event type.",
+  "author": "Evonic",
+  "enabled": true,
+  "events": [],
+  "variables": [
+    {
+      "name": "WEBHOOK_SECRET",
+      "label": "Webhook Secret",
+      "type": "string",
+      "secret": true,
+      "default": "",
+      "group": "General",
+      "description": "HMAC-SHA256 secret key used to verify incoming GitHub webhook signatures."
+    },
+    {
+      "name": "RELEASE_AGENT_ID",
+      "label": "Agent ID",
+      "type": "string",
+      "default": "adit",
+      "group": "release",
+      "groupLabel": "📦 Release Events",
+      "description": "Agent ID to notify when a release is published. Leave empty to ignore."
+    },
+    {
+      "name": "RELEASE_PROMPT",
+      "label": "Prompt Template",
+      "type": "textarea",
+      "default": "[Webhook-triggered task — execute immediately without planning or asking for approval.]\n\nA new release has been published for Evonic. Please create a documentation task for this release.\n\nRelease Details:\n- Tag: {{tag_name}}\n- Name: {{name}}\n- Repository: {{repository}}\n- URL: {{html_url}}\n\nRelease Notes:\n{{body}}",
+      "group": "release",
+      "groupLabel": "📦 Release Events",
+      "description": "Prompt template sent to the agent. Variables: {{tag_name}}, {{name}}, {{body}}, {{html_url}}, {{repository}}, {{action}}."
+    },
+    {
+      "name": "PR_AGENT_ID",
+      "label": "Agent ID",
+      "type": "string",
+      "default": "",
+      "group": "pull_request",
+      "groupLabel": "🔀 Pull Request Events",
+      "description": "Agent ID to notify on PR events. Leave empty to ignore."
+    },
+    {
+      "name": "PR_PROMPT",
+      "label": "Prompt Template",
+      "type": "textarea",
+      "default": "[Webhook-triggered task — execute immediately without planning or asking for approval.]\n\nA pull request event has been detected.\n\nDetails:\n- Title: {{title}}\n- Action: {{action}}\n- State: {{state}}\n- Repository: {{repository}}\n- URL: {{html_url}}\n\nDescription:\n{{body}}",
+      "group": "pull_request",
+      "groupLabel": "🔀 Pull Request Events",
+      "description": "Prompt template for PR events. Variables: {{title}}, {{action}}, {{html_url}}, {{body}}, {{repository}}, {{state}}."
+    },
+    {
+      "name": "ISSUES_AGENT_ID",
+      "label": "Agent ID",
+      "type": "string",
+      "default": "",
+      "group": "issues",
+      "groupLabel": "🐛 Issues Events",
+      "description": "Agent ID to notify on issues events. Leave empty to ignore."
+    },
+    {
+      "name": "ISSUES_PROMPT",
+      "label": "Prompt Template",
+      "type": "textarea",
+      "default": "[Webhook-triggered task — execute immediately without planning or asking for approval.]\n\nAn issue event has been detected.\n\nDetails:\n- Title: {{title}}\n- Action: {{action}}\n- State: {{state}}\n- Repository: {{repository}}\n- URL: {{html_url}}\n\nDescription:\n{{body}}",
+      "group": "issues",
+      "groupLabel": "🐛 Issues Events",
+      "description": "Prompt template for issues events. Variables: {{title}}, {{action}}, {{html_url}}, {{body}}, {{repository}}, {{state}}."
+    },
+    {
+      "name": "PUSH_AGENT_ID",
+      "label": "Agent ID",
+      "type": "string",
+      "default": "",
+      "group": "push",
+      "groupLabel": "🔶 Push Events",
+      "description": "Agent ID to notify on push events. Leave empty to ignore."
+    },
+    {
+      "name": "PUSH_PROMPT",
+      "label": "Prompt Template",
+      "type": "textarea",
+      "default": "[Webhook-triggered task — execute immediately without planning or asking for approval.]\n\nA push event has been detected.\n\nDetails:\n- Branch: {{ref}}\n- Commits: {{commits_count}}\n- Repository: {{repository}}\n- Compare URL: {{compare}}",
+      "group": "push",
+      "groupLabel": "🔶 Push Events",
+      "description": "Prompt template for push events. Variables: {{ref}}, {{commits_count}}, {{repository}}, {{compare}}."
+    }
+  ]
+}

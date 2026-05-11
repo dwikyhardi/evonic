@@ -347,6 +347,8 @@ def enforce_auth():
         return None  # Evonet connector authenticates via Bearer token, not session
     if request.path.startswith('/static/'):
         return None
+    if request.path.startswith('/webhook'):
+        return None  # Plugin webhook endpoints handle their own auth
     if request.path in ('/login', '/logout'):
         return None
 
