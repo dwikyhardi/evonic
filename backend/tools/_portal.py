@@ -75,7 +75,7 @@ def resolve_portal_path(agent_id: str, file_path: str) -> tuple:
     real_path = os.path.join(best_match.get("real_path", ""), remainder)
 
     # Get or create the backend
-    from backend.portals.manager import portal_manager
+    from backend.portals import portal_manager
     try:
         backend = portal_manager.get_backend(best_match)
     except RuntimeError as e:

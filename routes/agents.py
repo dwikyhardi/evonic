@@ -1468,7 +1468,7 @@ def api_delete_portal(portal_id):
 
     # Disconnect backend if active
     try:
-        from backend.portals.manager import portal_manager
+        from backend.portals import portal_manager
         portal_manager.disconnect(portal_id)
     except Exception:
         pass
@@ -1498,7 +1498,7 @@ def api_portal_connect(portal_id):
             portal['backend_config'] = {}
 
     try:
-        from backend.portals.manager import portal_manager
+        from backend.portals import portal_manager
         backend = portal_manager.get_backend(portal)
         s = backend.status()
         db.update_portal_status(portal_id, 'connected')
@@ -1516,7 +1516,7 @@ def api_portal_disconnect(portal_id):
         return jsonify({'error': 'Portal not found'}), 404
 
     try:
-        from backend.portals.manager import portal_manager
+        from backend.portals import portal_manager
         result = portal_manager.disconnect(portal_id)
         db.update_portal_status(portal_id, 'disconnected')
         return jsonify(result)
