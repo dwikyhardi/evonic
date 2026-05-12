@@ -1,0 +1,27 @@
+{
+  "id": "brave_search",
+  "name": "Brave Search",
+  "version": "1.0.0",
+  "description": "Web search via Brave Search API. Agents call /brave/search to get results.",
+  "author": "Evonic",
+  "enabled": true,
+  "routes": [
+    {
+      "path": "/api/brave_search",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "handler": "api"
+    }
+  ],
+  "variables": [
+    {
+      "name": "BRAVE_API_KEY",
+      "label": "Brave API Key",
+      "type": "string",
+      "default": "",
+      "description": "Brave Search API key"
+    }
+  ]
+}
