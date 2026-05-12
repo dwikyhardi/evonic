@@ -3587,7 +3587,17 @@ function showAddPortalModal() {
     document.getElementById('portal-virtual-path').value = '';
     document.getElementById('portal-backend-type').value = 'local';
     document.getElementById('portal-real-path').value = '';
-    document.getElementById('portal-workplace-id').value = '';
+    document.getElementById('portal-workplace-select').value = '';
+    // Reset checkbox and SSH fields
+    const cb = document.getElementById('portal-use-workplace');
+    if (cb) { cb.checked = false; cb.disabled = false; }
+    document.getElementById('portal-ssh-host').value = '';
+    document.getElementById('portal-ssh-port').value = '22';
+    document.getElementById('portal-ssh-username').value = '';
+    document.getElementById('portal-ssh-auth-type').value = 'key';
+    document.getElementById('portal-ssh-key-path').value = '';
+    document.getElementById('portal-ssh-passphrase').value = '';
+    document.getElementById('portal-ssh-password').value = '';
     document.getElementById('portal-modal').classList.remove('hidden');
     updatePortalConfigFields();
 }
@@ -3605,7 +3615,25 @@ async function showEditPortalModal(portalId) {
     document.getElementById('portal-backend-type').value = portal.backend_type || 'local';
     document.getElementById('portal-real-path').value = portal.real_path || '';
     const cfg = typeof portal.backend_config === 'string' ? JSON.parse(portal.backend_config || '{}') : (portal.backend_config || {});
-    document.getElementById('portal-workplace-id').value = cfg.workplace_id || '';
+    document.getElementById('portal-workplace-select').value = cfg.workplace_id || '';
+    if (cfg.workplace_id) {
+        const cb = document.getElementById('portal-use-workplace');
+        if (cb) cb.checked = true;
+        const sel = document.getElementById('portal-workplace-select');
+        if (sel) sel.classList.remove('hidden');
+    }
+    // Pre-populate SSH standalone fields if editing
+    if (portal.backend_type === 'ssh' && !cfg.workplace_id) {
+        document.getElementById('portal-ssh-host').value = cfg.host || '';
+        document.getElementById('portal-ssh-port').value = cfg.port || '22';
+        document.getElementById('portal-ssh-username').value = cfg.username || '';
+        document.getElementById('portal-ssh-auth-type').value = cfg.auth_type || 'key';
+        document.getElementById('portal-ssh-key-path').value = cfg.key_path || '';
+        document.getElementById('portal-ssh-passphrase').value = cfg.passphrase || '';
+        if (cfg.auth_type === 'password') {
+            document.getElementById('portal-ssh-password').value = cfg.password || '';
+        }
+    }
     document.getElementById('portal-modal').classList.remove('hidden');
     updatePortalConfigFields();
 }
@@ -3616,17 +3644,44 @@ function closePortalModal() {
 
 function updatePortalConfigFields() {
     const type = document.getElementById('portal-backend-type').value;
-    const sshNewConfig = document.getElementById('portal-ssh-new-config');
-    const workplaceRow = document.getElementById('portal-workplace-row');
+    const sshNewConfig = document.getElementById('portal-ssh-config');
+    const workplaceRow = document.getElementById('portal-workplace-picker');
+    const useWorkplaceCb = document.getElementById('portal-use-workplace');
+    const workplaceSelect = document.getElementById('portal-workplace-select');
+
     if (type === 'local') {
         if (sshNewConfig) sshNewConfig.classList.add('hidden');
         if (workplaceRow) workplaceRow.classList.add('hidden');
+        if (useWorkplaceCb) useWorkplaceCb.checked = false;
     } else if (type === 'ssh') {
-        if (sshNewConfig) sshNewConfig.classList.remove('hidden');
         if (workplaceRow) workplaceRow.classList.remove('hidden');
+        loadPortalWorkplaces();
+        _applyWorkplaceToggle();
     } else if (type === 'evonet') {
         if (sshNewConfig) sshNewConfig.classList.add('hidden');
         if (workplaceRow) workplaceRow.classList.remove('hidden');
+        if (useWorkplaceCb) { useWorkplaceCb.checked = true; useWorkplaceCb.disabled = true; }
+        if (workplaceSelect) workplaceSelect.classList.remove('hidden');
+        loadPortalWorkplaces();
+    }
+}
+
+function _applyWorkplaceToggle() {
+    const sshNewConfig = document.getElementById('portal-ssh-config');
+    const useWorkplaceCb = document.getElementById('portal-use-workplace');
+    const workplaceSelect = document.getElementById('portal-workplace-select');
+    if (!useWorkplaceCb) return;
+    const useExisting = useWorkplaceCb.checked;
+    if (sshNewConfig) {
+        if (useExisting) sshNewConfig.classList.add('hidden');
+        else sshNewConfig.classList.remove('hidden');
+    }
+    if (workplaceSelect) {
+        if (useExisting) workplaceSelect.classList.remove('hidden');
+        else {
+            workplaceSelect.classList.add('hidden');
+            workplaceSelect.value = '';
+        }
     }
 }
 
@@ -3635,7 +3690,7 @@ async function savePortal() {
     const virtualPath = document.getElementById('portal-virtual-path').value.trim().replace(/^\/+|\/+$/g, '');
     const backendType = document.getElementById('portal-backend-type').value;
     const realPath = document.getElementById('portal-real-path').value.trim();
-    const workplaceId = document.getElementById('portal-workplace-id').value.trim();
+    const workplaceId = document.getElementById('portal-workplace-select').value.trim();
 
     if (!name) return alert('Name is required.');
     if (!virtualPath) return alert('Virtual path is required.');
@@ -3652,9 +3707,9 @@ async function savePortal() {
             backendConfig = {
                 host: document.getElementById('portal-ssh-host')?.value?.trim() || '',
                 port: parseInt(document.getElementById('portal-ssh-port')?.value || '22'),
-                username: document.getElementById('portal-ssh-user')?.value?.trim() || '',
-                auth_type: document.getElementById('portal-ssh-auth')?.value || 'key',
-                key_path: document.getElementById('portal-ssh-key')?.value?.trim() || '',
+                username: document.getElementById('portal-ssh-username')?.value?.trim() || '',
+                auth_type: document.getElementById('portal-ssh-auth-type')?.value || 'key',
+                key_path: document.getElementById('portal-ssh-key-path')?.value?.trim() || '',
                 passphrase: document.getElementById('portal-ssh-passphrase')?.value?.trim() || '',
             };
             if (backendConfig.auth_type === 'password') {
@@ -3724,13 +3779,19 @@ async function loadPortalWorkplaces() {
         const res = await fetch('/api/workplaces');
         const data = await res.json();
         const workplaces = data || [];
-        const sel = document.getElementById('portal-workplace-id');
+        const sel = document.getElementById('portal-workplace-select');
         if (!sel) return;
+        const prevVal = sel.value;
         sel.innerHTML = '<option value="">-- Configure new connection --</option>';
         workplaces.forEach(w => {
             const label = `${w.name} (${w.type})`;
             sel.innerHTML += `<option value="${w.id}">${label}</option>`;
         });
+        // Restore previously selected value if it still exists in the new options
+        if (prevVal) {
+            const exists = Array.from(sel.options).some(o => o.value === prevVal);
+            if (exists) sel.value = prevVal;
+        }
     } catch (e) {
         console.error('Failed to load workplaces for portal picker:', e);
     }
