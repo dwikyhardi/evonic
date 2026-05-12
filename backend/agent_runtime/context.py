@@ -47,6 +47,50 @@ def _get_mtime(path: str) -> float:
         return 0.0
 
 
+def _build_portal_info(agent_id: str) -> list:
+    """Build per-agent portal virtual path listing for system prompt injection."""
+    try:
+        from models.db import db
+        portals = db.get_agent_portals(agent_id)
+    except Exception:
+        return []
+
+    if not portals:
+        return []
+
+    lines = []
+    for p in portals:
+        vpath = p.get("virtual_path", "")
+        backend_type = p.get("backend_type", "?")
+        real_path = p.get("real_path", "")
+        name = p.get("name", vpath)
+        status = p.get("status", "disconnected")
+        status_note = " (⚠ disconnected)" if status != "connected" else ""
+
+        if backend_type == "local":
+            lines.append(
+                f"- `/_portal/{vpath}/` → `{real_path}` "
+                f"(local filesystem{status_note}) — {name}"
+            )
+        elif backend_type == "ssh":
+            lines.append(
+                f"- `/_portal/{vpath}/` → `{real_path}` "
+                f"(SSH remote{status_note}) — {name}"
+            )
+        elif backend_type == "evonet":
+            lines.append(
+                f"- `/_portal/{vpath}/` → `{real_path}` "
+                f"(Evonet cloud{status_note}) — {name}"
+            )
+        else:
+            lines.append(
+                f"- `/_portal/{vpath}/` → `{real_path}` "
+                f"({backend_type}{status_note}) — {name}"
+            )
+
+    return lines
+
+
 def _build_static_prompt(agent: Dict[str, Any]) -> str:
     """Build the static portion of the system prompt (no datetime, no onboarding).
 
@@ -154,6 +198,18 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
         f"- `/_self/kb/` — your knowledge base files\n"
         f"- `/_self/sessions/` — your session data"
     )
+
+    # Inform agents about portal virtual paths configured for them
+    _portal_lines = _build_portal_info(eid)
+    if _portal_lines:
+        parts.append("\n## Portals — Virtual Path Mappings")
+        parts.append(
+            "Your administrator has configured the following virtual path mappings "
+            "for file I/O (read_file, write_file, patch, str_replace). "
+            "Use `/_portal/<name>/...` to access files on these locations. "
+            "Portals do NOT work with bash or runpy."
+        )
+        parts.extend(_portal_lines)
 
     return "\n".join(parts) if parts else "You are a helpful assistant."
 

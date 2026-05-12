@@ -1337,3 +1337,188 @@ def api_agent_busy(agent_id):
         result['session_id'] = entry.get('session_id')
         result['elapsed'] = entry.get('elapsed')
     return jsonify(result)
+
+
+# ==================== Portal API ====================
+
+
+@agents_bp.route('/api/agents/<agent_id>/portals', methods=['GET'])
+def api_list_portals(agent_id):
+    """List all portals for an agent."""
+    agent = db.get_agent(agent_id)
+    if not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+    portals = db.get_agent_portals(agent_id)
+    # Parse backend_config from JSON strings
+    for p in portals:
+        cfg = p.get('backend_config', '{}')
+        if isinstance(cfg, str):
+            try:
+                p['backend_config'] = json.loads(cfg)
+            except (json.JSONDecodeError, TypeError):
+                p['backend_config'] = {}
+    return jsonify({'portals': portals})
+
+
+@agents_bp.route('/api/agents/<agent_id>/portals', methods=['POST'])
+def api_create_portal(agent_id):
+    """Create a new portal for an agent."""
+    agent = db.get_agent(agent_id)
+    if not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    virtual_path = (data.get('virtual_path') or '').strip()
+    backend_type = (data.get('backend_type') or '').strip()
+    real_path = (data.get('real_path') or '').strip()
+
+    if not name:
+        return jsonify({'error': 'name is required'}), 400
+    if not virtual_path:
+        return jsonify({'error': 'virtual_path is required'}), 400
+    if backend_type not in ('local', 'ssh', 'evonet'):
+        return jsonify({'error': 'backend_type must be local, ssh, or evonet'}), 400
+    if not real_path:
+        return jsonify({'error': 'real_path is required'}), 400
+
+    backend_config = data.get('backend_config', {})
+    if isinstance(backend_config, str):
+        try:
+            backend_config = json.loads(backend_config)
+        except (json.JSONDecodeError, ValueError):
+            return jsonify({'error': 'backend_config must be valid JSON'}), 400
+
+    portal_data = {
+        'agent_id': agent_id,
+        'name': name,
+        'virtual_path': virtual_path,
+        'backend_type': backend_type,
+        'backend_config': backend_config,
+        'real_path': real_path,
+    }
+    portal_id = db.create_portal(portal_data)
+
+    # Invalidate portal cache for this agent
+    from backend.tools._portal import invalidate_portal_cache
+    invalidate_portal_cache(agent_id)
+
+    portal = db.get_portal(portal_id)
+    cfg = portal.get('backend_config', '{}')
+    if isinstance(cfg, str):
+        try:
+            portal['backend_config'] = json.loads(cfg)
+        except (json.JSONDecodeError, TypeError):
+            portal['backend_config'] = {}
+    return jsonify(portal), 201
+
+
+@agents_bp.route('/api/portals/<portal_id>', methods=['PUT'])
+def api_update_portal(portal_id):
+    """Update a portal's configuration."""
+    portal = db.get_portal(portal_id)
+    if not portal:
+        return jsonify({'error': 'Portal not found'}), 404
+
+    data = request.get_json() or {}
+    updates = {}
+    if 'name' in data:
+        updates['name'] = (data['name'] or '').strip()
+    if 'virtual_path' in data:
+        updates['virtual_path'] = (data['virtual_path'] or '').strip()
+    if 'backend_type' in data:
+        btype = (data['backend_type'] or '').strip()
+        if btype not in ('local', 'ssh', 'evonet'):
+            return jsonify({'error': 'backend_type must be local, ssh, or evonet'}), 400
+        updates['backend_type'] = btype
+    if 'real_path' in data:
+        updates['real_path'] = (data['real_path'] or '').strip()
+    if 'backend_config' in data:
+        cfg = data['backend_config']
+        if isinstance(cfg, str):
+            try:
+                cfg = json.loads(cfg)
+            except (json.JSONDecodeError, ValueError):
+                return jsonify({'error': 'backend_config must be valid JSON'}), 400
+        updates['backend_config'] = json.dumps(cfg)
+
+    if updates:
+        db.update_portal(portal_id, updates)
+
+    # Invalidate portal cache for the portal's agent
+    from backend.tools._portal import invalidate_portal_cache
+    invalidate_portal_cache(portal['agent_id'])
+
+    portal = db.get_portal(portal_id)
+    cfg = portal.get('backend_config', '{}')
+    if isinstance(cfg, str):
+        try:
+            portal['backend_config'] = json.loads(cfg)
+        except (json.JSONDecodeError, TypeError):
+            portal['backend_config'] = {}
+    return jsonify(portal)
+
+
+@agents_bp.route('/api/portals/<portal_id>', methods=['DELETE'])
+def api_delete_portal(portal_id):
+    """Delete a portal and disconnect its backend."""
+    portal = db.get_portal(portal_id)
+    if not portal:
+        return jsonify({'error': 'Portal not found'}), 404
+
+    # Disconnect backend if active
+    try:
+        from backend.portals.manager import portal_manager
+        portal_manager.disconnect(portal_id)
+    except Exception:
+        pass
+
+    db.delete_portal(portal_id)
+
+    # Invalidate portal cache
+    from backend.tools._portal import invalidate_portal_cache
+    invalidate_portal_cache(portal['agent_id'])
+
+    return jsonify({'ok': True})
+
+
+@agents_bp.route('/api/portals/<portal_id>/connect', methods=['POST'])
+def api_portal_connect(portal_id):
+    """Test connection for a portal — creates the backend if not already active."""
+    portal = db.get_portal(portal_id)
+    if not portal:
+        return jsonify({'error': 'Portal not found'}), 404
+
+    # Parse backend_config to dict
+    cfg = portal.get('backend_config', '{}')
+    if isinstance(cfg, str):
+        try:
+            portal['backend_config'] = json.loads(cfg)
+        except (json.JSONDecodeError, TypeError):
+            portal['backend_config'] = {}
+
+    try:
+        from backend.portals.manager import portal_manager
+        backend = portal_manager.get_backend(portal)
+        s = backend.status()
+        db.update_portal_status(portal_id, 'connected')
+        return jsonify({'ok': True, 'status': 'connected', 'backend': s})
+    except Exception as e:
+        db.update_portal_status(portal_id, 'disconnected', str(e))
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@agents_bp.route('/api/portals/<portal_id>/disconnect', methods=['POST'])
+def api_portal_disconnect(portal_id):
+    """Disconnect a portal's backend."""
+    portal = db.get_portal(portal_id)
+    if not portal:
+        return jsonify({'error': 'Portal not found'}), 404
+
+    try:
+        from backend.portals.manager import portal_manager
+        result = portal_manager.disconnect(portal_id)
+        db.update_portal_status(portal_id, 'disconnected')
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500

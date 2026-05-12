@@ -679,6 +679,28 @@ class SchemaMixin:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_cloud_connectors_token ON cloud_connectors(connector_token)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_agents_workplace ON agents(workplace_id)")
 
+            # ==================== Portals Table ====================
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS portals (
+                    id TEXT PRIMARY KEY,
+                    agent_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    virtual_path TEXT NOT NULL,
+                    backend_type TEXT NOT NULL CHECK(backend_type IN ('local', 'ssh', 'evonet')),
+                    backend_config TEXT NOT NULL DEFAULT '{}',
+                    real_path TEXT NOT NULL,
+                    status TEXT DEFAULT 'disconnected',
+                    error_msg TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+                )
+            """)
+
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_portals_agent ON portals(agent_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_portals_backend_type ON portals(backend_type)")
+
             # ==================== HMADS Safety Rules Table ====================
 
             cursor.execute("""
