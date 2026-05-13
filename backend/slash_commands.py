@@ -306,6 +306,8 @@ def _register_builtins():
         db.set_setting('restart_ready_needed', json.dumps({
             'channel_id': channel_id,
             'external_user_id': external_user_id,
+            'session_id': session_id,
+            'agent_id': agent_id,
         }))
 
         def _do_restart():

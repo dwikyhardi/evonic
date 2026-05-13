@@ -810,7 +810,9 @@ def api_chat(agent_id):
             'success': True,
             'response': result['response'],
             'tool_trace': result.get('tool_trace', []),
-            'timeline': result.get('timeline', [])
+            'timeline': result.get('timeline', []),
+            'slash_command': result.get('slash_command', False),
+            'clear_ui': result.get('clear_ui', False),
         }
         if result.get('error'):
             resp['error'] = True
