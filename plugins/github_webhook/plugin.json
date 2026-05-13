@@ -11,7 +11,7 @@
       "name": "WEBHOOK_SECRET",
       "label": "Webhook Secret",
       "type": "string",
-      "secret": true,
+      "secret": false,
       "default": "",
       "group": "General",
       "description": "HMAC-SHA256 secret key used to verify incoming GitHub webhook signatures."
