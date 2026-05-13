@@ -312,15 +312,32 @@ def _exec_send_agent_message(args: dict, agent_context: dict) -> dict:
     # Fix: fall back to the sender's most recent human session so the reply chain
     # always terminates in a human-visible session.
     if report_to_id.startswith(_AGENT_MSG_PREFIX):
+        # Sub-agents are ephemeral / in-memory only — they have no row in `agents`
+        # and no human session in `chat_sessions`. Resolve to the parent agent first
+        # so the human-session lookup actually finds something.
+        lookup_id = sender_id
+        if agent_context.get('is_subagent'):
+            parent_id_for_lookup = agent_context.get('parent_id', '')
+            if parent_id_for_lookup:
+                lookup_id = parent_id_for_lookup
+                _logger.debug(
+                    "sender '%s' is a sub-agent — using parent '%s' for human-session lookup.",
+                    sender_id, parent_id_for_lookup,
+                )
         _logger.debug(
-            "sender '%s' is in inter-agent session ('%s') — looking up human session for report_to_id.",
-            sender_id, report_to_id,
+            "sender '%s' is in inter-agent session ('%s') — looking up human session for report_to_id (lookup_id=%s).",
+            sender_id, report_to_id, lookup_id,
         )
-        human_sess = db.get_latest_human_session(sender_id)
+        human_sess = db.get_latest_human_session(lookup_id)
         if human_sess:
             report_to_id = human_sess.get('external_user_id', '')
             report_to_channel_id = human_sess.get('channel_id') or ''
         else:
+            _logger.warning(
+                "send_agent_message: no human session found for sender '%s' (lookup_id=%s). "
+                "Reply auto-forward will be skipped.",
+                sender_id, lookup_id,
+            )
             report_to_id = ''
             report_to_channel_id = ''
 
