@@ -3,6 +3,8 @@ Server-side update state manager.
 
 Provides daily-cached update checks, background update execution with log
 capture, and SSE listener management for real-time web UI notifications.
+
+Progress state is persisted to disk to survive crashes and restarts.
 """
 
 import json
@@ -27,6 +29,46 @@ def _version_tuple(tag: str):
         return (0, 0, 0)
     return tuple(int(x or '0') for x in m.groups())
 
+
+def _get_state_file_path() -> str:
+    """Return path to persistent state file in shared directory."""
+    import config
+    shared_dir = os.path.join(config.APP_ROOT, 'shared', 'update')
+    os.makedirs(shared_dir, exist_ok=True)
+    return os.path.join(shared_dir, 'update_state.json')
+
+
+def _load_persisted_state() -> dict:
+    """Load update state from disk if it exists."""
+    state_file = _get_state_file_path()
+    if not os.path.exists(state_file):
+        return {}
+    
+    try:
+        with open(state_file, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        log.warning(f'Failed to load persisted state: {e}')
+        return {}
+
+
+def _persist_state(state: dict) -> None:
+    """Save update state to disk atomically."""
+    state_file = _get_state_file_path()
+    temp_file = state_file + '.tmp'
+    
+    try:
+        with open(temp_file, 'w') as f:
+            json.dump(state, f, indent=2)
+        os.replace(temp_file, state_file)
+    except (IOError, OSError) as e:
+        log.error(f'Failed to persist state: {e}')
+        if os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except OSError:
+                pass
+
 # ---------------------------------------------------------------------------
 # State
 # ---------------------------------------------------------------------------
@@ -34,17 +76,32 @@ def _version_tuple(tag: str):
 _lock = threading.Lock()
 _listeners: list = []  # list of queue.Queue, one per SSE client
 
+# Load persisted state on module import (survives crashes/restarts)
+_persisted = _load_persisted_state()
+
 _state = {
-    'status': 'idle',           # idle | checking | available | updating | success | failed
-    'current_version': None,
-    'latest_version': None,
-    'progress': 0,              # 0-100
-    'step': 0,
-    'step_label': '',
-    'logs': [],                 # [{ts, level, message}, ...]
-    'error': None,
-    'last_check': 0,            # unix timestamp of last successful check
+    'status': _persisted.get('status', 'idle'),
+    'current_version': _persisted.get('current_version'),
+    'latest_version': _persisted.get('latest_version'),
+    'progress': _persisted.get('progress', 0),
+    'step': _persisted.get('step', 0),
+    'step_label': _persisted.get('step_label', ''),
+    'logs': _persisted.get('logs', []),
+    'error': _persisted.get('error'),
+    'last_check': _persisted.get('last_check', 0),
+    'last_update_attempt': _persisted.get('last_update_attempt', 0),
+    'crashed': _persisted.get('status') == 'updating',  # Detect crash during update
 }
+
+# If we crashed during update, log it and reset to failed state
+if _state['crashed']:
+    log.warning(
+        f'Detected incomplete update to {_state.get("latest_version")} '
+        f'(was at step {_state.get("step")}/{TOTAL_STEPS if "TOTAL_STEPS" in dir() else 6})'
+    )
+    _state['status'] = 'failed'
+    _state['error'] = 'Update interrupted (server crash or restart)'
+    _append_log('error', 'Update was interrupted by server crash or restart')
 
 
 def _append_log(level: str, message: str):
@@ -55,6 +112,8 @@ def _append_log(level: str, message: str):
     }
     with _lock:
         _state['logs'].append(entry)
+        # Persist state after log update
+        _persist_state(_state)
     _notify_listeners()
 
 
@@ -114,22 +173,26 @@ class WebNotifier:
     def begin(self, from_tag, to_tag):
         _state['current_version'] = from_tag
         _state['latest_version'] = to_tag
+        _persist_state(_state)
 
     def send_progress(self, step, total, description):
         _state['step'] = step
         _state['step_label'] = description
         _state['progress'] = int(step / total * 100)
         _append_log('info', f'Step {step}/{total}: {description}')
+        _persist_state(_state)
 
     def send_failure(self, step, total, error):
         _state['status'] = 'failed'
         _state['error'] = str(error)
         _append_log('error', f'FAILED at step {step}/{total}: {error}')
+        _persist_state(_state)
 
     def send_success(self, tag):
         _state['status'] = 'success'
         _state['progress'] = 100
         _append_log('info', f'Update to {tag} successful')
+        _persist_state(_state)
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +214,7 @@ class _UpdateLogHandler(logging.Handler):
 
 def get_status() -> dict:
     with _lock:
-        return {
+        status = {
             'status': _state['status'],
             'current_version': _state['current_version'],
             'latest_version': _state['latest_version'],
@@ -160,7 +223,13 @@ def get_status() -> dict:
             'step_label': _state['step_label'],
             'logs': list(_state['logs']),
             'error': _state['error'],
+            'crashed': _state.get('crashed', False),
+            'last_update_attempt': _state.get('last_update_attempt', 0),
         }
+        # Clear crashed flag after first status read
+        if _state.get('crashed'):
+            _state['crashed'] = False
+        return status
 
 
 def check_for_update(force=False) -> dict:
@@ -180,6 +249,8 @@ def check_for_update(force=False) -> dict:
         }
 
     _state['status'] = 'checking'
+    _persist_state(_state)
+    
     try:
         sup = _load_supervisor()
         cfg = _load_config()
@@ -199,13 +270,16 @@ def check_for_update(force=False) -> dict:
 
         if latest and _version_tuple(latest) > _version_tuple(current):
             _state['status'] = 'available'
+            _persist_state(_state)
             return {'available': True, 'current': current, 'latest': latest}
         else:
             _state['status'] = 'idle'
+            _persist_state(_state)
             return {'available': False, 'current': current, 'latest': latest}
     except Exception as e:
         log.error(f'Update check failed: {e}')
         _state['status'] = 'idle'
+        _persist_state(_state)
         return {'available': False, 'current': None, 'latest': None, 'error': str(e)}
 
 
@@ -218,13 +292,16 @@ def start_update(tag=None) -> dict:
     _state['step'] = 0
     _state['step_label'] = ''
     _state['error'] = None
+    _state['last_update_attempt'] = time.time()
     with _lock:
         _state['logs'] = []
+    _persist_state(_state)
 
     target = tag or _state['latest_version']
     if not target:
         _state['status'] = 'failed'
         _state['error'] = 'No target version specified'
+        _persist_state(_state)
         return {'error': 'No target version specified'}
 
     _append_log('info', f'Starting update to {target}...')
@@ -253,16 +330,19 @@ def _run_update_thread(target):
                 _state['status'] = 'success'
                 _state['progress'] = 100
                 _append_log('info', 'Update completed successfully')
+                _persist_state(_state)
         else:
             if _state['status'] != 'failed':
                 _state['status'] = 'failed'
                 if not _state['error']:
                     _state['error'] = 'Update failed (see logs for details)'
                 _append_log('error', 'Update failed')
+                _persist_state(_state)
     except Exception as e:
         _state['status'] = 'failed'
         _state['error'] = str(e)
         _append_log('error', f'Unexpected error: {e}')
+        _persist_state(_state)
     finally:
         sup_logger.removeHandler(handler)
         _notify_listeners()
@@ -275,6 +355,7 @@ def trigger_rollback() -> dict:
     _append_log('info', 'Starting rollback...')
     _state['status'] = 'updating'
     _state['step_label'] = 'Rolling back...'
+    _persist_state(_state)
     _notify_listeners()
 
     def _do_rollback():
@@ -286,14 +367,17 @@ def trigger_rollback() -> dict:
                 _state['status'] = 'success'
                 _state['step_label'] = 'Rollback complete'
                 _append_log('info', 'Rollback successful')
+                _persist_state(_state)
             else:
                 _state['status'] = 'failed'
                 _state['error'] = 'Rollback failed'
                 _append_log('error', 'Rollback failed')
+                _persist_state(_state)
         except Exception as e:
             _state['status'] = 'failed'
             _state['error'] = str(e)
             _append_log('error', f'Rollback error: {e}')
+            _persist_state(_state)
         _notify_listeners()
 
     threading.Thread(target=_do_rollback, daemon=True).start()
