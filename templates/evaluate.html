@@ -503,6 +503,10 @@ function loadSavedState() {
                 document.getElementById('run-id-display').classList.remove('hidden');
                 currentRunId = state.run_id;
             }
+            // Restore summary box on page refresh for completed evaluations
+            if (state.status === 'completed') {
+                fetchSummary();
+            }
         } catch (e) {
             console.error('Error loading saved state:', e);
         }
