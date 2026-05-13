@@ -51,7 +51,8 @@ class TestRunUpdateSuccess(unittest.TestCase):
     @patch.object(sup, 'create_worktree', return_value=(True, ''))
     @patch.object(sup, 'verify_tag', return_value=(True, 'Good signature'))
     @patch.object(sup, 'get_current_release', return_value='v1.0.0')
-    def test_happy_path(self, mock_current, mock_verify, mock_worktree,
+    @patch.object(sup, 'preflight_checks', return_value=(True, []))
+    def test_happy_path(self, mock_preflight, mock_current, mock_verify, mock_worktree,
                         mock_venv, mock_link, mock_health_temp, mock_health,
                         mock_stop, mock_start, mock_alive):
         # Create fake release path so atomic_swap and VERSION write work
@@ -85,7 +86,8 @@ class TestRunUpdateRollback(unittest.TestCase):
     @patch.object(sup, 'rollback', return_value=True)
     @patch.object(sup, 'verify_tag', return_value=(False, 'Bad signature'))
     @patch.object(sup, 'get_current_release', return_value='v1.0.0')
-    def test_fails_at_verify_triggers_rollback(self, mock_cur, mock_verify,
+    @patch.object(sup, 'preflight_checks', return_value=(True, []))
+    def test_fails_at_verify_triggers_rollback(self, mock_preflight, mock_cur, mock_verify,
                                                mock_rollback, mock_remove):
         result = sup.run_update('v1.1.0', self.cfg, None)
 
@@ -98,7 +100,8 @@ class TestRunUpdateRollback(unittest.TestCase):
     @patch.object(sup, 'create_worktree', return_value=(True, ''))
     @patch.object(sup, 'verify_tag', return_value=(True, 'Good'))
     @patch.object(sup, 'get_current_release', return_value='v1.0.0')
-    def test_fails_at_venv_triggers_rollback(self, mock_cur, mock_verify,
+    @patch.object(sup, 'preflight_checks', return_value=(True, []))
+    def test_fails_at_venv_triggers_rollback(self, mock_preflight, mock_cur, mock_verify,
                                               mock_worktree, mock_venv,
                                               mock_rollback, mock_remove):
         release_path = os.path.join(self.tmp, 'releases', 'v1.1.0')
@@ -116,7 +119,8 @@ class TestRunUpdateRollback(unittest.TestCase):
     @patch.object(sup, 'create_worktree', return_value=(True, ''))
     @patch.object(sup, 'verify_tag', return_value=(True, 'Good'))
     @patch.object(sup, 'get_current_release', return_value='v1.0.0')
-    def test_fails_at_health_check_triggers_rollback(self, mock_cur, mock_verify,
+    @patch.object(sup, 'preflight_checks', return_value=(True, []))
+    def test_fails_at_health_check_triggers_rollback(self, mock_preflight, mock_cur, mock_verify,
                                                       mock_worktree, mock_venv,
                                                       mock_link, mock_health,
                                                       mock_rollback, mock_remove):
@@ -140,7 +144,8 @@ class TestRunUpdateRollback(unittest.TestCase):
     @patch.object(sup, 'create_worktree', return_value=(True, ''))
     @patch.object(sup, 'verify_tag', return_value=(True, 'Good'))
     @patch.object(sup, 'get_current_release', return_value='v1.0.0')
-    def test_fails_at_start_triggers_rollback(self, mock_cur, mock_verify,
+    @patch.object(sup, 'preflight_checks', return_value=(True, []))
+    def test_fails_at_start_triggers_rollback(self, mock_preflight, mock_cur, mock_verify,
                                                mock_worktree, mock_venv,
                                                mock_link, mock_health_temp,
                                                mock_stop, mock_start,
