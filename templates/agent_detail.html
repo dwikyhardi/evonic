@@ -2893,6 +2893,13 @@ async function sendChat() {
             thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null;
             chatUI.closeStream();
             await syncLastChatTs();
+        } else if (data.slash_command) {
+            // Slash command response — no LLM involved, remove the eager thinking bubble
+            chatUI.removeThinkingIndicator(thinkingId);
+            thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null;
+            chatUI.closeStream();
+            chatUI.appendMessage('assistant', data.response);
+            await syncLastChatTs();
         } else {
             // Non-buffered success: agent responded immediately.
             // Thinking bubble was already created eagerly; populate it and close SSE.
