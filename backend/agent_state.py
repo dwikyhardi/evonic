@@ -35,7 +35,7 @@ _PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
 # Maximum characters of plan file content injected into each LLM call
 _PLAN_FILE_MAX_CHARS = 4000
 
-GUARDED_TOOLS = {"write_file", "patch", "file_edit", "file_create"}
+GUARDED_TOOLS = {"write_file", "str_replace", "patch", "file_edit", "file_create"}
 
 VALID_MODES = {"plan", "execute"}
 
