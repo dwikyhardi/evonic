@@ -6,6 +6,7 @@ and runs them. Tools without `test_execute()` are skipped.
 """
 
 import os
+import sys
 import importlib.util
 import pytest
 
@@ -23,6 +24,10 @@ def _discover_tool_modules():
         spec = importlib.util.spec_from_file_location(f'backend.tools.{name}', path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        # Register in sys.modules so patches in test_execute() resolve correctly.
+        # Without this, unittest.mock.patch(“backend.tools.foo.bar“) would
+        # resolve to a *different* module object and the patch would not apply.
+        sys.modules[spec.name] = module
         yield name, module
 
 
