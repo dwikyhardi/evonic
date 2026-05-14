@@ -1,7 +1,6 @@
 flask>=3.0
 flask-sock>=0.2
 requests>=2.31
-python-dotenv>=1.0.0
 anthropic>=0.40.0
 python-telegram-bot>=21.0
 Pillow>=10.0
