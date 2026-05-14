@@ -80,6 +80,7 @@ def login_submit():
                                error='Invalid password.')
 
     session['authenticated'] = True
+    session.permanent = True  # Persist cookie for 7 days (configured in app.py)
     if not _is_safe_redirect_url(next_url):
         next_url = '/'
     return redirect(next_url)
