@@ -175,7 +175,8 @@ class BackendRegistry:
 
         if sandbox_enabled:
             from backend.tools.lib.backends.docker_backend import DockerBackend
-            backend = DockerBackend(session_id, workspace=workspace)
+            agent_id = (agent_context or {}).get('agent_id', (agent_context or {}).get('id', ''))
+            backend = DockerBackend(session_id, agent_id=agent_id, workspace=workspace)
         else:
             from backend.tools.lib.backends.local_backend import LocalBackend
             backend = LocalBackend(workspace=workspace)

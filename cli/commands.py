@@ -3199,6 +3199,46 @@ def doctor_command(quick=False):
     return 0 if failed == 0 else 1
 
 
+# ─── Sandbox Management ───────────────────────────────────────────────────────
+
+
+def clear_sandbox():
+    """Destroy all running evonic sandbox containers (force sweep)."""
+    result = subprocess.run(
+        ['docker', 'ps', '--filter', 'label=evonic.managed=1', '--format', '{{.Names}}'],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f'Error querying Docker: {result.stderr.strip()}')
+        sys.exit(1)
+
+    names = [n.strip() for n in result.stdout.splitlines() if n.strip()]
+    if not names:
+        print('No evonic sandbox containers running.')
+        return
+
+    print(f'Found {len(names)} sandbox container(s):')
+    for name in names:
+        print(f'  {name}')
+    print()
+
+    destroyed = 0
+    failed = 0
+    for name in names:
+        rm = subprocess.run(['docker', 'rm', '-f', name], capture_output=True, text=True)
+        if rm.returncode == 0:
+            print(f'  ✓ Destroyed {name}')
+            destroyed += 1
+        else:
+            print(f'  ✗ Failed to destroy {name}: {rm.stderr.strip()}')
+            failed += 1
+
+    print()
+    print(f'Done: {destroyed} destroyed, {failed} failed.')
+    if failed:
+        sys.exit(1)
+
+
 # ─── Channel Management ───────────────────────────────────────────────────────
 
 
