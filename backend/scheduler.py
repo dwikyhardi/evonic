@@ -269,6 +269,14 @@ class Scheduler:
                 method = action_config.get('method', 'POST').upper()
                 url = action_config.get('url', '')
                 action_summary = f"{method} {url} -> {status_code}"
+            elif action_type == 'user_notification':
+                sent = self._action_user_notification(action_config)
+                action_summary = (
+                    f"Sent notification to user '{action_config.get('external_user_id', '?')}' "
+                    f"via channel '{action_config.get('channel_id', '?')}'"
+                    if sent else
+                    f"Failed to send notification — channel not found or not running"
+                )
             else:
                 log.warning("Unknown action_type '%s' for %s",
                             action_type, schedule_id)
@@ -344,6 +352,35 @@ class Scheduler:
                                 timeout=timeout)
         log.info("Webhook %s %s -> %d", method, url, resp.status_code)
         return resp.status_code
+
+    def _action_user_notification(self, config: dict) -> bool:
+        """Send a push notification to a user via their active channel.
+
+        Requires action_config with:
+            - channel_id: the channel UUID (e.g. Telegram bot)
+            - external_user_id: the user's ID on that channel (e.g. chat_id)
+            - message: the notification text to send
+        """
+        from backend.channels.registry import channel_manager
+
+        channel_id = config['channel_id']
+        external_user_id = config['external_user_id']
+        message = config['message']
+
+        channel = channel_manager.get_channel_instance(channel_id)
+        if not channel or not channel.is_running:
+            log.warning(
+                "user_notification: channel '%s' not found or not running — "
+                "cannot send to user '%s'", channel_id, external_user_id,
+            )
+            return False
+
+        channel.send_message(external_user_id, message)
+        log.info(
+            "user_notification: sent to user '%s' via channel '%s'",
+            external_user_id, channel_id,
+        )
+        return True
 
     # ------------------------------------------------------------------
     # Internal: APScheduler event listener
