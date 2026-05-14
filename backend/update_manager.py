@@ -92,13 +92,13 @@ def _version_tuple(tag: str):
     
     # Try packaging.version if available
     version_obj = None
-    if HAS_PACKAGING:
+    if HAS_PACKAGING and tag:
         try:
             # Remove 'v' prefix if present
-            clean_tag = tag.lstrip('v') if tag else '0.0.0'
+            clean_tag = tag.removeprefix('v')
             version_obj = pkg_version.parse(clean_tag)
-        except Exception:
-            # Fall back to tuple only
+        except (ValueError, TypeError):
+            # Fall back to tuple only if parsing fails
             pass
     
     return _VersionComparable(version_obj, tuple_version)
