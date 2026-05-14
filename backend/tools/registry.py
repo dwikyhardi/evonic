@@ -42,6 +42,8 @@ class ToolRegistry:
         # Long-term memory tools
         self._builtins['builtin:remember'] = _builtin_remember_factory
         self._builtins['builtin:recall'] = _builtin_recall_factory
+        # Session recall tool
+        self._builtins['builtin:recall_sessions'] = _builtin_recall_sessions_factory
 
     def get_tool_defs_from_json(self) -> List[Dict[str, Any]]:
         """Load tool definitions from tools/*.json (for eval & agent config UI)."""
@@ -766,5 +768,68 @@ def _builtin_state_factory(agent_context: dict):
             })
 
         return result
+
+    return tool_def, executor
+
+
+def _builtin_recall_sessions_factory(agent_context: dict):
+    """Factory for the built-in 'recall_sessions' tool — queries session summaries from DB."""
+    tool_def = {
+        "type": "function",
+        "function": {
+            "name": "recall_sessions",
+            "description": (
+                "Recall session summaries from previous conversations with this agent. "
+                "Use without query to get all recent sessions. "
+                "Use query to search for specific topics by keyword. "
+                "Example: recall_sessions() or recall_sessions(query='login bug')"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search keyword (e.g. 'login bug', 'kanban'). Leave empty to get all sessions."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of sessions to return (default: 20, max: 50)."
+                    }
+                },
+                "required": []
+            }
+        }
+    }
+
+    def executor(args: dict) -> dict:
+        from models.db import db
+        agent_id = agent_context.get('id', '')
+        query = args.get('query', '')
+        limit = min(args.get('limit', 20), 50)
+
+        summaries = db.get_agent_summaries(agent_id, query=query, limit=limit)
+
+        if not summaries:
+            return {"result": "No session summaries found."}
+
+        # Format as markdown
+        lines = [f"## Session Summaries", f"\nFound {len(summaries)} session(s):\n"]
+        for s in summaries:
+            date = s.get("created_at", "")[:10] if s.get("created_at") else "?"
+            channel = s.get("channel_id") or "web"
+            msg_count = s.get("message_count", 0)
+            session_id = s.get("session_id", "?")
+            summary_text = s.get("summary", "")
+
+            # Extract session ID short form (last part after the dash)
+            short_id = session_id.split('-')[-1][:8] if '-' in session_id else session_id[:8]
+
+            lines.append(f"### Session {short_id} ({channel}, {date})")
+            lines.append(f"- Messages: {msg_count}")
+            lines.append("")
+            lines.append(summary_text)
+            lines.append("")
+
+        return {"result": "\n".join(lines)}
 
     return tool_def, executor

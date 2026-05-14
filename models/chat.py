@@ -369,6 +369,61 @@ class AgentChatDB:
             """, (session_id, summary, last_message_id, message_count, last_message_ts))
             conn.commit()
 
+    def get_agent_summaries(self, query: str = "", limit: int = 50) -> List[Dict[str, Any]]:
+        """List all session summaries for this agent with optional keyword filter.
+
+        Returns list of dicts containing session metadata and summary text.
+        Filtered to non-archived sessions only, sorted by most recently updated.
+
+        Args:
+            query: Optional keyword filter (searches summary text via LIKE).
+                   Empty string returns all sessions.
+            limit: Maximum number of results (max 50).
+        """
+        limit = min(limit, 50)
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            if query:
+                like_pattern = f"%{query}%"
+                cursor.execute("""
+                    SELECT
+                        cs.id AS session_id,
+                        cs.channel_id,
+                        cs.external_user_id,
+                        cs.created_at,
+                        cs.updated_at,
+                        COALESCE(csm.summary, '') AS summary,
+                        COALESCE(csm.message_count, 0) AS message_count
+                    FROM chat_sessions cs
+                    LEFT JOIN chat_summaries csm ON cs.id = csm.session_id
+                    WHERE cs.agent_id = ?
+                      AND (csm.summary IS NOT NULL AND csm.summary != '')
+                      AND csm.summary LIKE ?
+                      AND (cs.archived IS NULL OR cs.archived = 0)
+                    ORDER BY cs.updated_at DESC
+                    LIMIT ?
+                """, (self.agent_id, like_pattern, limit))
+            else:
+                cursor.execute("""
+                    SELECT
+                        cs.id AS session_id,
+                        cs.channel_id,
+                        cs.external_user_id,
+                        cs.created_at,
+                        cs.updated_at,
+                        COALESCE(csm.summary, '') AS summary,
+                        COALESCE(csm.message_count, 0) AS message_count
+                    FROM chat_sessions cs
+                    LEFT JOIN chat_summaries csm ON cs.id = csm.session_id
+                    WHERE cs.agent_id = ?
+                      AND (csm.summary IS NOT NULL AND csm.summary != '')
+                      AND (cs.archived IS NULL OR cs.archived = 0)
+                    ORDER BY cs.updated_at DESC
+                    LIMIT ?
+                """, (self.agent_id, limit))
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_messages_after(self, session_id: str, after_id: int) -> List[Dict[str, Any]]:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row

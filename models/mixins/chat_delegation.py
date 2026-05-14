@@ -120,6 +120,12 @@ class ChatDelegationMixin:
                 session_id, summary, last_message_id, message_count,
                 last_message_ts=last_message_ts)
 
+    def get_agent_summaries(self, agent_id: str, query: str = "", limit: int = 50) -> List[Dict[str, Any]]:
+        """List all session summaries for an agent with optional keyword filter."""
+        if not agent_id:
+            return []
+        return self._chat_db(agent_id).get_agent_summaries(query=query, limit=limit)
+
     def get_messages_after(self, session_id: str, after_id: int,
                             agent_id: str = None):
         agent_id = agent_id or self._find_agent_for_session(session_id)
