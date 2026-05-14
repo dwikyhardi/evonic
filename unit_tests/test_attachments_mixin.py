@@ -151,3 +151,64 @@ def test_get_agent_attachment_config_caps_max_size_to_20():
 def test_get_agent_attachment_config_unknown_agent():
     cfg = db.get_agent_attachment_config('does_not_exist')
     assert cfg == {'enabled': False, 'max_size_mb': 20, 'supported': False, 'model_id': None}
+
+
+def test_delete_session_attachments_removes_rows_and_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _make_agent('del_sess_agent')
+    # Place files under the conventional data/attachments/<agent>/<session>/ tree
+    # so the per-session subdir cleanup can be exercised.
+    sess_dir = tmp_path / 'data' / 'attachments' / 'del_sess_agent' / 'sX'
+    sess_dir.mkdir(parents=True)
+    p1 = sess_dir / 'one.txt'
+    p1.write_bytes(b'AA')
+    p2 = sess_dir / 'two.txt'
+    p2.write_bytes(b'BBB')
+    a1 = db.save_attachment(agent_id='del_sess_agent', session_id='sX',
+                            filename='one.txt', file_path=str(p1), size_bytes=2)
+    a2 = db.save_attachment(agent_id='del_sess_agent', session_id='sX',
+                            filename='two.txt', file_path=str(p2), size_bytes=3)
+    # Another session must remain untouched.
+    other_dir = tmp_path / 'data' / 'attachments' / 'del_sess_agent' / 'sY'
+    other_dir.mkdir(parents=True)
+    p_other = other_dir / 'keep.txt'
+    p_other.write_bytes(b'KEEP')
+    a_other = db.save_attachment(agent_id='del_sess_agent', session_id='sY',
+                                 filename='keep.txt', file_path=str(p_other),
+                                 size_bytes=4)
+
+    deleted, freed = db.delete_session_attachments('sX', 'del_sess_agent')
+    assert deleted == 2
+    assert freed == 5
+    assert db.get_attachment(a1) is None
+    assert db.get_attachment(a2) is None
+    assert not p1.exists()
+    assert not p2.exists()
+    # Session subdir was wiped, but the other session's tree survived.
+    assert not sess_dir.exists()
+    assert db.get_attachment(a_other) is not None
+    assert p_other.exists()
+
+
+def test_delete_session_attachments_without_agent_id(tmp_path):
+    _make_agent('del_sess_agent2')
+    path = _write_file(tmp_path, 'solo.txt', b'SOLO')
+    aid = db.save_attachment(agent_id='del_sess_agent2', session_id='sZ',
+                             filename='solo.txt', file_path=path, size_bytes=4)
+    deleted, freed = db.delete_session_attachments('sZ')
+    assert deleted == 1
+    assert freed == 4
+    assert db.get_attachment(aid) is None
+    assert not os.path.exists(path)
+
+
+def test_delete_session_attachments_no_rows():
+    _make_agent('del_sess_agent3')
+    deleted, freed = db.delete_session_attachments('nonexistent', 'del_sess_agent3')
+    assert deleted == 0
+    assert freed == 0
+
+
+def test_delete_session_attachments_empty_session_id():
+    deleted, freed = db.delete_session_attachments('')
+    assert (deleted, freed) == (0, 0)

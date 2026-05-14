@@ -1,4 +1,5 @@
 import os
+import shutil
 import sqlite3
 import logging
 from typing import Dict, Any, List, Optional, Tuple
@@ -121,6 +122,132 @@ class AttachmentsMixin:
                 cursor.execute("DELETE FROM attachments WHERE id = ?", (row['id'],))
                 conn.commit()
                 deleted += cursor.rowcount or 0
+        return deleted, freed
+
+    def delete_session_attachments(self,
+                                   session_id: str,
+                                   agent_id: Optional[str] = None,
+                                   base_dir: Optional[str] = None) -> Tuple[int, int]:
+        """Delete every attachment row for a single session and remove its files.
+
+        Returns a (deleted_rows, freed_bytes) tuple. When ``agent_id`` is
+        provided, the on-disk subdirectory ``<base_dir>/<agent_id>/<session_id>/``
+        is also best-effort removed to clean up any orphaned files left behind
+        by earlier crashes. ``base_dir`` defaults to ``data/attachments``
+        relative to the current working directory.
+        """
+        if not session_id:
+            return 0, 0
+        deleted = 0
+        freed = 0
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            if agent_id:
+                cursor.execute(
+                    "SELECT id, file_path, size_bytes FROM attachments "
+                    "WHERE session_id = ? AND agent_id = ?",
+                    (session_id, agent_id),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, file_path, size_bytes FROM attachments "
+                    "WHERE session_id = ?",
+                    (session_id,),
+                )
+            rows = [dict(r) for r in cursor.fetchall()]
+        for row in rows:
+            path = row.get('file_path')
+            if path:
+                try:
+                    if os.path.isfile(path):
+                        os.remove(path)
+                        freed += int(row.get('size_bytes') or 0)
+                except OSError as e:
+                    logger.warning(
+                        "Failed to remove attachment file %s: %s", path, e
+                    )
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            if agent_id:
+                cursor.execute(
+                    "DELETE FROM attachments WHERE session_id = ? AND agent_id = ?",
+                    (session_id, agent_id),
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM attachments WHERE session_id = ?",
+                    (session_id,),
+                )
+            deleted = cursor.rowcount or 0
+            conn.commit()
+        # Best-effort wipe of the per-session on-disk subdir to catch any
+        # orphaned files (e.g. written before the DB row was committed).
+        if agent_id:
+            target_root = base_dir or os.path.join('data', 'attachments')
+            session_dir = os.path.join(target_root, agent_id, session_id)
+            try:
+                if os.path.isdir(session_dir):
+                    shutil.rmtree(session_dir, ignore_errors=True)
+            except OSError as e:
+                logger.warning(
+                    "Failed to remove attachment session dir %s: %s",
+                    session_dir, e,
+                )
+        return deleted, freed
+
+    def delete_all_attachments(self, base_dir: Optional[str] = None) -> Tuple[int, int]:
+        """Bulk delete every attachment row and best-effort wipe the on-disk tree.
+
+        Returns a (deleted_rows, freed_bytes) tuple. ``base_dir`` defaults to
+        ``data/attachments`` relative to the current working directory and is
+        only used when individual file paths in the DB are missing or fail to
+        remove (e.g. orphaned files left behind by earlier crashes).
+        """
+        deleted = 0
+        freed = 0
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, file_path, size_bytes FROM attachments")
+            rows = [dict(r) for r in cursor.fetchall()]
+        for row in rows:
+            path = row.get('file_path')
+            if path:
+                try:
+                    if os.path.isfile(path):
+                        os.remove(path)
+                        freed += int(row.get('size_bytes') or 0)
+                except OSError as e:
+                    logger.warning(
+                        "Failed to remove attachment file %s: %s", path, e
+                    )
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM attachments")
+            deleted = cursor.rowcount or 0
+            conn.commit()
+        # Best-effort wipe of the on-disk tree to clean up any orphaned files
+        # (e.g. files written before the DB row was committed, or stale dirs).
+        target_dir = base_dir or os.path.join('data', 'attachments')
+        try:
+            if os.path.isdir(target_dir):
+                for entry in os.listdir(target_dir):
+                    entry_path = os.path.join(target_dir, entry)
+                    try:
+                        if os.path.isdir(entry_path):
+                            shutil.rmtree(entry_path, ignore_errors=True)
+                        elif os.path.isfile(entry_path):
+                            os.remove(entry_path)
+                    except OSError as e:
+                        logger.warning(
+                            "Failed to remove attachment path %s: %s",
+                            entry_path, e,
+                        )
+        except OSError as e:
+            logger.warning(
+                "Failed to wipe attachments base dir %s: %s", target_dir, e
+            )
         return deleted, freed
 
     def get_agent_attachment_config(self, agent_id: str) -> Dict[str, Any]:

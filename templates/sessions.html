@@ -184,9 +184,22 @@ html.dark #mobile-dropdown .border-b { border-color: #374151; }
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Clear All Sessions</h3>
-                        <p class="text-xs text-gray-500 mt-1">Permanently delete all chat sessions, messages, and summaries across all agents. This action cannot be undone.</p>
+                        <p class="text-xs text-gray-500 mt-1">Permanently delete all chat sessions, messages, summaries, and their attachments across all agents. This action cannot be undone.</p>
                     </div>
                     <button onclick="clearAllSessions()" class="flex-shrink-0 px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Clear All Attachments -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Clear All Attachments</h3>
+                        <p class="text-xs text-gray-500 mt-1">Permanently delete every stored attachment (files and database rows) across all agents and sessions, without removing the conversations themselves. This action cannot be undone.</p>
+                    </div>
+                    <button onclick="clearAllAttachments()" class="flex-shrink-0 px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors">
                         Clear All
                     </button>
                 </div>
@@ -1284,7 +1297,7 @@ function updateReplyPlaceholder() {
 async function clearAllSessions() {
     if (!await showConfirm({
         title: 'Clear All Sessions',
-        message: 'This will permanently delete ALL chat sessions, messages, and summaries across ALL agents. This cannot be undone.',
+        message: 'This will permanently delete ALL chat sessions, messages, summaries, and their attachments across ALL agents. This cannot be undone.',
         confirmText: 'Clear All'
     })) return;
 
@@ -1305,6 +1318,27 @@ async function clearAllSessions() {
         showMobileSummaryBtn(false);
         clearSummaryPanel();
         showToast('All sessions cleared successfully');
+    }
+}
+
+async function clearAllAttachments() {
+    if (!await showConfirm({
+        title: 'Clear All Attachments',
+        message: 'This will permanently delete EVERY stored attachment (files and database rows) across ALL agents and sessions. The conversations themselves will be kept. This cannot be undone.',
+        confirmText: 'Clear All'
+    })) return;
+
+    try {
+        const res = await fetch('/api/attachments/clear-all', {method: 'POST'});
+        const data = await res.json();
+        if (data.success) {
+            const freedMb = data.freed_bytes ? (data.freed_bytes / (1024 * 1024)).toFixed(2) : '0.00';
+            showToast(`Cleared ${data.deleted || 0} attachments (${freedMb} MB freed)`);
+        } else {
+            showToast('Failed to clear attachments', true);
+        }
+    } catch (e) {
+        showToast('Failed to clear attachments', true);
     }
 }
 

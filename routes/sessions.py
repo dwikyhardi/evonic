@@ -112,6 +112,15 @@ def api_delete_session(session_id):
 
 @sessions_bp.route('/api/sessions/clear-all', methods=['POST'])
 def api_clear_all_sessions():
-    """Delete all chat sessions, messages, and summaries across all agents."""
+    """Delete all chat sessions, messages, summaries, and attachments
+    across all agents."""
     db.clear_all_sessions()
     return jsonify({'success': True})
+
+
+@sessions_bp.route('/api/attachments/clear-all', methods=['POST'])
+def api_clear_all_attachments():
+    """Delete every stored attachment (DB rows + on-disk files) across all
+    agents and sessions, without touching chat sessions/messages."""
+    deleted, freed = db.delete_all_attachments()
+    return jsonify({'success': True, 'deleted': deleted, 'freed_bytes': freed})
