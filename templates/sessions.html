@@ -1083,11 +1083,14 @@ async function loadSessionSummary() {
         const data = await sumRes.json();
         const stateData = (stateRes && stateRes.ok) ? await stateRes.json() : {};
 
-        // Build mode badge + tasks header from agent state
+        // Build mode badge + plan file + tasks header from agent state
         let headerHtml = '';
         if (stateData.mode) {
             const modeColor = stateData.mode === 'execute' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
             headerHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${modeColor}">${esc(stateData.mode)}</span> `;
+        }
+        if (stateData.plan_file) {
+            headerHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 ml-1">📋 ${esc(stateData.plan_file)}</span> `;
         }
         if (stateData.tasks && stateData.tasks.length > 0) {
             const icons = {pending: '\u2610', in_progress: '\u27f3', done: '\u2713'};
