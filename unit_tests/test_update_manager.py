@@ -74,6 +74,46 @@ class TestVersionTuple(unittest.TestCase):
         # An unparseable latest tag should not be treated as newer than any real version
         self.assertFalse(_version_tuple('main') > _version_tuple('v0.1.0'))
 
+    # -- Pre-release version security tests (FINDING-010) --------------------
+
+    def test_prerelease_less_than_stable(self):
+        """Pre-release versions should be less than their stable counterparts."""
+        # This is the core security fix: v2.0.0-alpha should NOT be treated as >= v2.0.0
+        self.assertLess(_version_tuple('v2.0.0-alpha'), _version_tuple('v2.0.0'))
+
+    def test_prerelease_not_upgrade_from_stable(self):
+        """Pre-release should never be considered an upgrade from stable."""
+        # Prevents version downgrade attack: v2.0.0-alpha should not trigger upgrade from v1.0.0
+        self.assertFalse(_version_tuple('v2.0.0-alpha') > _version_tuple('v2.0.0'))
+
+    def test_rc_less_than_stable(self):
+        """Release candidates should be less than stable releases."""
+        self.assertLess(_version_tuple('v1.0.0-rc.1'), _version_tuple('v1.0.0'))
+
+    def test_beta_less_than_rc(self):
+        """Beta versions should be less than release candidates."""
+        self.assertLess(_version_tuple('v1.0.0-beta'), _version_tuple('v1.0.0-rc.1'))
+
+    def test_alpha_less_than_beta(self):
+        """Alpha versions should be less than beta versions."""
+        self.assertLess(_version_tuple('v1.0.0-alpha'), _version_tuple('v1.0.0-beta'))
+
+    def test_dev_version_less_than_stable(self):
+        """Development versions should be less than stable releases."""
+        self.assertLess(_version_tuple('v1.0.0.dev1'), _version_tuple('v1.0.0'))
+
+    def test_stable_upgrade_over_prerelease(self):
+        """Stable version should be considered an upgrade over pre-release."""
+        self.assertGreater(_version_tuple('v1.0.0'), _version_tuple('v1.0.0-rc.1'))
+
+    def test_prerelease_ordering(self):
+        """Pre-release versions should be ordered correctly."""
+        # v1.0.0-alpha.1 < v1.0.0-alpha.2 < v1.0.0-beta < v1.0.0-rc.1 < v1.0.0
+        self.assertLess(_version_tuple('v1.0.0-alpha.1'), _version_tuple('v1.0.0-alpha.2'))
+        self.assertLess(_version_tuple('v1.0.0-alpha.2'), _version_tuple('v1.0.0-beta'))
+        self.assertLess(_version_tuple('v1.0.0-beta'), _version_tuple('v1.0.0-rc.1'))
+        self.assertLess(_version_tuple('v1.0.0-rc.1'), _version_tuple('v1.0.0'))
+
 
 if __name__ == '__main__':
     unittest.main()

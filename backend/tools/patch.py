@@ -11,6 +11,11 @@ import shutil
 import subprocess
 import tempfile
 
+try:
+    from config import SANDBOX_WORKSPACE as _WORKSPACE_ROOT
+except ImportError:
+    _WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
 from backend.tools._workspace import resolve_workspace_path
 
 SEARCH_WINDOW = 50
@@ -523,6 +528,45 @@ def execute(agent, args: dict) -> dict:
         if not local_path:
             return {'error': "Access denied — path escapes agent directory."}
         return apply_patch(local_path, patch_text)
+
+    # /_portal/ path: route through a virtual path mapping to local/SSH/evonet.
+    from backend.tools._portal import is_portal_path, resolve_portal_path
+    if agent_id and is_portal_path(file_path):
+        backend, real_path = resolve_portal_path(agent_id, file_path)
+        if backend is None:
+            return {'error': real_path}  # error message
+
+        # Parse hunks to check if this is creating a new file
+        creating_new = False
+        try:
+            hunks = parse_hunks(patch_text)
+            creating_new = all(h['old_start'] == 0 and h['old_count'] == 0 for h in hunks)
+        except Exception:
+            pass
+
+        if not backend.file_exists(real_path):
+            if not creating_new:
+                return {'error': f'File not found: {file_path}'}
+            parent = os.path.dirname(real_path)
+            if parent:
+                backend.make_dirs(parent)
+
+        if creating_new and not backend.file_exists(real_path):
+            backend.write_file(real_path, '')
+
+        read_result = backend.read_file(real_path)
+        if 'error' in read_result:
+            return {'error': read_result['error']}
+
+        result = _apply_hunks_to_content(read_result['content'], patch_text)
+        if 'error' in result:
+            return result
+
+        wr = backend.write_file(real_path, result['content'])
+        if 'error' in wr:
+            return {'error': wr['error']}
+
+        return {'result': 'success', 'hunks_applied': result.get('hunks_applied', 0)}
 
     # When sandbox is enabled, route file I/O through the execution backend.
     sandbox_enabled = (agent or {}).get('sandbox_enabled', 1)

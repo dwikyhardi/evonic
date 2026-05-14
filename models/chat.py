@@ -369,6 +369,61 @@ class AgentChatDB:
             """, (session_id, summary, last_message_id, message_count, last_message_ts))
             conn.commit()
 
+    def get_agent_summaries(self, query: str = "", limit: int = 50) -> List[Dict[str, Any]]:
+        """List all session summaries for this agent with optional keyword filter.
+
+        Returns list of dicts containing session metadata and summary text.
+        Filtered to non-archived sessions only, sorted by most recently updated.
+
+        Args:
+            query: Optional keyword filter (searches summary text via LIKE).
+                   Empty string returns all sessions.
+            limit: Maximum number of results (max 50).
+        """
+        limit = min(limit, 50)
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            if query:
+                like_pattern = f"%{query}%"
+                cursor.execute("""
+                    SELECT
+                        cs.id AS session_id,
+                        cs.channel_id,
+                        cs.external_user_id,
+                        cs.created_at,
+                        cs.updated_at,
+                        COALESCE(csm.summary, '') AS summary,
+                        COALESCE(csm.message_count, 0) AS message_count
+                    FROM chat_sessions cs
+                    LEFT JOIN chat_summaries csm ON cs.id = csm.session_id
+                    WHERE cs.agent_id = ?
+                      AND (csm.summary IS NOT NULL AND csm.summary != '')
+                      AND csm.summary LIKE ?
+                      AND (cs.archived IS NULL OR cs.archived = 0)
+                    ORDER BY cs.updated_at DESC
+                    LIMIT ?
+                """, (self.agent_id, like_pattern, limit))
+            else:
+                cursor.execute("""
+                    SELECT
+                        cs.id AS session_id,
+                        cs.channel_id,
+                        cs.external_user_id,
+                        cs.created_at,
+                        cs.updated_at,
+                        COALESCE(csm.summary, '') AS summary,
+                        COALESCE(csm.message_count, 0) AS message_count
+                    FROM chat_sessions cs
+                    LEFT JOIN chat_summaries csm ON cs.id = csm.session_id
+                    WHERE cs.agent_id = ?
+                      AND (csm.summary IS NOT NULL AND csm.summary != '')
+                      AND (cs.archived IS NULL OR cs.archived = 0)
+                    ORDER BY cs.updated_at DESC
+                    LIMIT ?
+                """, (self.agent_id, limit))
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_messages_after(self, session_id: str, after_id: int) -> List[Dict[str, Any]]:
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
@@ -547,16 +602,37 @@ class AgentChatDB:
             return bool(row[0]) if row else True
 
     def get_latest_human_session(self, agent_id: str) -> Optional[Dict[str, Any]]:
-        """Return the most recent non-archived session belonging to a human user
-        (excludes __agent__ and __scheduler__ system user IDs)."""
+        """Return the most recent non-archived session belonging to a human user.
+
+        Priority:
+          1. Sessions with a real channel (channel_id IS NOT NULL) — Telegram, etc.
+          2. Fallback to web sessions (channel_id IS NULL) excluding test/system users.
+
+        Excludes __agent__ and __scheduler__ system user IDs.
+        """
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
+            # Priority 1: find a session with a real channel (Telegram, etc.)
             cursor.execute("""
                 SELECT * FROM chat_sessions
                 WHERE agent_id = ? AND (archived IS NULL OR archived = 0)
                   AND external_user_id NOT LIKE '__agent__%'
                   AND external_user_id != '__scheduler__'
+                  AND channel_id IS NOT NULL
+                ORDER BY updated_at DESC LIMIT 1
+            """, (agent_id,))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            # Priority 2: fallback to web session (no channel), exclude test/system
+            cursor.execute("""
+                SELECT * FROM chat_sessions
+                WHERE agent_id = ? AND (archived IS NULL OR archived = 0)
+                  AND external_user_id NOT LIKE '__agent__%'
+                  AND external_user_id != '__scheduler__'
+                  AND external_user_id != 'web_test'
+                  AND external_user_id != '__system__'
                 ORDER BY updated_at DESC LIMIT 1
             """, (agent_id,))
             row = cursor.fetchone()
@@ -600,6 +676,38 @@ class AgentChatDB:
             cursor.execute("SELECT COUNT(*) FROM chat_messages")
             mc = cursor.fetchone()[0]
             return sc, mc
+
+    def get_web_fallback_session(self, agent_id: str,
+                                 exclude_session_id: str = None) -> Optional[Dict[str, Any]]:
+        """Return the most recent web session (channel_id IS NULL) for a human user.
+
+        Used by escalate_to_user as a secondary delivery target so the user
+        can also see escalated messages in the web UI.
+
+        Excludes __agent__, __scheduler__, and __system__ user IDs.
+        web_test is intentionally NOT excluded here — it IS the valid web
+        session for the user chatting via browser.
+        Optionally excludes a specific session_id (e.g., the primary channel session).
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            query = """
+                SELECT * FROM chat_sessions
+                WHERE agent_id = ? AND (archived IS NULL OR archived = 0)
+                  AND external_user_id NOT LIKE '__agent__%'
+                  AND external_user_id != '__scheduler__'
+                  AND external_user_id != '__system__'
+                  AND channel_id IS NULL
+            """
+            params = [agent_id]
+            if exclude_session_id:
+                query += " AND id != ?"
+                params.append(exclude_session_id)
+            query += " ORDER BY updated_at DESC LIMIT 1"
+            cursor.execute(query, params)
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     # ---- Long-term Memory ----
 

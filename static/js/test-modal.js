@@ -191,55 +191,55 @@ function renderTestDetail(test, domain) {
                 <div class="section-content thinking-box" id="thinking-content" style="display: none;">
                     <div class="space-y-2">
                         ${details.conversation_log.map((turn, i) => `
-                            <div class="border border-gray-200 rounded text-xs">
-                                <div class="bg-gray-100 px-2 py-1 font-semibold text-gray-600 border-b border-gray-200">Turn ${turn.turn || i+1}</div>
+                            <div class="border border-gray-200 dark:border-gray-700 rounded text-xs">
+                                <div class="bg-gray-100 dark:bg-gray-700 px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">Turn ${turn.turn || i+1}</div>
                                 ${turn.thinking ? `
-                                    <div class="px-2 py-1 bg-purple-50 border-b border-gray-100">
-                                        <span class="text-purple-600 font-medium">💭 [thinking]</span><br />
-                                        <pre class="text-gray-700 ml-1 overflow-wrap text-wrap max-h-full overflow-y-auto">${escapeHtml(turn.thinking)}</pre>
+                                    <div class="px-2 py-1 bg-purple-50 dark:bg-purple-900/20 border-b border-gray-100 dark:border-gray-700">
+                                        <span class="text-purple-600 dark:text-purple-400 font-medium">💭 [thinking]</span><br />
+                                        <pre class="text-gray-700 dark:text-gray-300 ml-1 overflow-wrap text-wrap max-h-full overflow-y-auto">${escapeHtml(turn.thinking)}</pre>
                                     </div>
                                 ` : ''}
                                 ${turn.tool_calls && turn.tool_calls.length > 0 ? `
-                                    <div class="px-2 py-1 bg-blue-50 border-b border-gray-100 font-mono">
+                                    <div class="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 border-b border-gray-100 dark:border-gray-700 font-mono">
                                         ${turn.tool_calls.map((tc, tcIdx) => {
                                             const argsJson = JSON.stringify(tc.arguments || {}, null, 2);
                                             const argsShort = JSON.stringify(tc.arguments || {});
                                             const truncated = argsShort.length > 60;
                                             const elId = `tc-args-${test.id}-${i}-${tcIdx}`;
                                             return `<div class="flex items-start gap-1 flex-wrap">
-                                                <span class="text-blue-600">🔧</span>
-                                                <span class="text-indigo-600 font-semibold">${escapeHtml(tc.name)}</span>
-                                                <span class="text-gray-500">(${escapeHtml(argsShort.substring(0, 60))}${truncated ? '…' : ''})</span>
-                                                ${truncated ? `<button onclick="toggleToolDetail('${elId}')" class="text-blue-500 hover:text-blue-700 underline text-xs ml-1" data-expanded="false">▼ args</button>
+                                                <span class="text-blue-600 dark:text-blue-400">🔧</span>
+                                                <span class="text-indigo-600 dark:text-indigo-400 font-semibold">${escapeHtml(tc.name)}</span>
+                                                <span class="text-gray-500 dark:text-gray-400">(${escapeHtml(argsShort.substring(0, 60))}${truncated ? '…' : ''})</span>
+                                                ${truncated ? `<button onclick="toggleToolDetail('${elId}')" class="text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline text-xs ml-1" data-expanded="false">▼ args</button>
                                                 <div id="${elId}" class="hidden w-full mt-1">
-                                                    <pre class="bg-blue-50 border border-blue-200 rounded p-2 text-xs overflow-auto max-h-48 text-gray-700 whitespace-pre-wrap">${escapeHtml(argsJson)}</pre>
+                                                    <pre class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2 text-xs overflow-auto max-h-48 text-gray-700 dark:text-gray-300 whitespace-pre-wrap">${escapeHtml(argsJson)}</pre>
                                                 </div>` : ''}
                                             </div>`;
                                         }).join('')}
                                     </div>
                                 ` : ''}
                                 ${turn.tool_results && turn.tool_results.length > 0 ? `
-                                    <div class="px-2 py-1 bg-green-50 border-b border-gray-100 font-mono text-gray-600">
+                                    <div class="px-2 py-1 bg-green-50 dark:bg-green-900/20 border-b border-gray-100 dark:border-gray-700 font-mono text-gray-600 dark:text-gray-300">
                                         ${turn.tool_results.map((tr, trIdx) => {
                                             const resultJson = JSON.stringify(tr.result || {}, null, 0);
                                             const truncated = resultJson.length > 120;
                                             const elId = `tr-result-${test.id}-${i}-${trIdx}`;
                                             return `<div class="flex items-start gap-1 flex-wrap">
-                                                <span class="text-green-600">📥</span>
-                                                <span class="text-gray-500 font-semibold">${escapeHtml(tr.function_name || '')}</span>
+                                                <span class="text-green-600 dark:text-green-400">📥</span>
+                                                <span class="text-gray-500 dark:text-gray-400 font-semibold">${escapeHtml(tr.function_name || '')}</span>
                                                 <span class="ml-1">${escapeHtml(resultJson.substring(0, 120))}${truncated ? '…' : ''}</span>
-                                                ${truncated ? `<button onclick="expandToolResult('${elId}', ${test.id}, ${i}, ${trIdx})" class="text-green-600 hover:text-green-800 underline text-xs ml-1 whitespace-nowrap" data-expanded="false">▼ expand</button>
+                                                ${truncated ? `<button onclick="expandToolResult('${elId}', ${test.id}, ${i}, ${trIdx})" class="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 underline text-xs ml-1 whitespace-nowrap" data-expanded="false">▼ expand</button>
                                                 <div id="${elId}" class="hidden w-full mt-1">
-                                                    <div class="text-gray-400 text-xs italic p-1">Loading…</div>
+                                                    <div class="text-gray-400 dark:text-gray-500 text-xs italic p-1">Loading…</div>
                                                 </div>` : ''}
                                             </div>`;
                                         }).join('')}
                                     </div>
                                 ` : ''}
                                 ${turn.response ? `
-                                    <div class="px-2 py-1 bg-amber-50 font-semibold text-md">
-                                        <p class="text-amber-600">💬 [response]</p>
-                                        <pre class="text-gray-700 ml-1">${escapeHtml(turn.response)}</pre>
+                                    <div class="px-2 py-1 bg-amber-50 dark:bg-amber-900/20 font-semibold text-md">
+                                        <p class="text-amber-600 dark:text-amber-400">💬 [response]</p>
+                                        <pre class="text-gray-700 dark:text-gray-300 ml-1">${escapeHtml(turn.response)}</pre>
                                     </div>
                                 ` : ''}
                             </div>

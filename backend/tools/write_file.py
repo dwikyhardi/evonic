@@ -149,6 +149,34 @@ def execute(agent, args: dict) -> dict:
             return {'error': "Access denied — path escapes agent directory."}
         return write_file(local_path, content, overwrite=overwrite, create_dirs=create_dirs)
 
+    # /_portal/ path: route through a virtual path mapping to local/SSH/evonet.
+    from backend.tools._portal import is_portal_path, resolve_portal_path
+    if agent_id and is_portal_path(file_path):
+        backend, real_path = resolve_portal_path(agent_id, file_path)
+        if backend is None:
+            return {'error': real_path}  # error message
+        already_exists = backend.file_exists(real_path)
+        if not overwrite and already_exists:
+            return {
+                'error': (
+                    f"File already exists: {file_path}. "
+                    "Set overwrite=true to replace it."
+                )
+            }
+        parent = real_path.rsplit("/", 1)[0] if "/" in real_path else ""
+        if parent and create_dirs and not backend.file_exists(parent):
+            result = backend.make_dirs(parent)
+            if 'error' in result:
+                return result
+        result = backend.write_file(real_path, content, create_dirs=False)
+        if 'error' in result:
+            return result
+        return {
+            'result': 'success',
+            'bytes_written': len(content.encode('utf-8')),
+            'created': not already_exists,
+        }
+
     # When sandbox is enabled, route file I/O through the execution backend
     # (Docker container, SSH remote, etc.) instead of the host filesystem.
     sandbox_enabled = (agent or {}).get('sandbox_enabled', 1)

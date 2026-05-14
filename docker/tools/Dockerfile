@@ -58,6 +58,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Utilities
     ccrypt \
     xxd \
+    jq \
     sqlite3 libsqlite3-dev \
     rsync \
     && apt-get clean \

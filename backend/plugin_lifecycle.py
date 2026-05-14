@@ -77,119 +77,122 @@ class PluginManager:
         """Load a plugin's handler.py and register its event handlers."""
         plugin_dir = os.path.join(PLUGINS_DIR, plugin_id)
         handler_path = os.path.join(plugin_dir, 'handler.py')
-        if not os.path.isfile(handler_path):
-            return
 
-        try:
-            # Register the plugin directory as a package so relative imports work
-            pkg_name = f'plugin_pkg_{plugin_id}_{id(self)}'
-            pkg = types.ModuleType(pkg_name)
-            pkg.__path__ = [plugin_dir]
-            pkg.__package__ = pkg_name
-            pkg.__file__ = os.path.join(plugin_dir, '__init__.py')
-            sys.modules[pkg_name] = pkg
+        # Register the plugin directory as a package so relative imports work
+        pkg_name = f'plugin_pkg_{plugin_id}_{id(self)}'
+        pkg = types.ModuleType(pkg_name)
+        pkg.__path__ = [plugin_dir]
+        pkg.__package__ = pkg_name
+        pkg.__file__ = os.path.join(plugin_dir, '__init__.py')
+        sys.modules[pkg_name] = pkg
 
-            # Load handler.py as a submodule of that package
-            module_name = f'{pkg_name}.handler'
-            spec = importlib.util.spec_from_file_location(module_name, handler_path)
-            module = importlib.util.module_from_spec(spec)
-            module.__package__ = pkg_name
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
-            self._modules[plugin_id] = module
+        # Read manifest to know which events and slash commands this plugin subscribes to
+        manifest_path = os.path.join(plugin_dir, 'plugin.json')
+        if os.path.isfile(manifest_path):
+            with open(manifest_path, encoding='utf-8') as f:
+                manifest = json.load(f)
+            events = manifest.get('events', [])
+            slash_commands = manifest.get('slash_commands', [])
+            dashboard_cards = manifest.get('dashboard_cards', [])
+        else:
+            events = []
+            slash_commands = []
+            dashboard_cards = []
 
-            # Read manifest to know which events and slash commands this plugin subscribes to
-            manifest_path = os.path.join(plugin_dir, 'plugin.json')
-            if os.path.isfile(manifest_path):
-                with open(manifest_path, encoding='utf-8') as f:
-                    manifest = json.load(f)
-                events = manifest.get('events', [])
-                slash_commands = manifest.get('slash_commands', [])
-            else:
-                events = []
-                slash_commands = []
+        module = None
 
-            # Register handler functions and bridge them to the event stream
-            from backend.event_stream import event_stream
-            bridges = []
-            for event_name in events:
-                fn_name = f'on_{event_name}'
-                fn = getattr(module, fn_name, None)
-                if fn and callable(fn):
-                    if event_name not in self._handlers:
-                        self._handlers[event_name] = []
-                    self._handlers[event_name].append((plugin_id, fn))
+        if os.path.isfile(handler_path):
+            try:
+                # Load handler.py as a submodule of that package
+                module_name = f'{pkg_name}.handler'
+                spec = importlib.util.spec_from_file_location(module_name, handler_path)
+                module = importlib.util.module_from_spec(spec)
+                module.__package__ = pkg_name
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+                self._modules[plugin_id] = module
 
-                    bridge = self._make_event_bridge(plugin_id, fn)
-                    event_stream.on(event_name, bridge)
-                    bridges.append((event_name, bridge))
+                # Register handler functions and bridge them to the event stream
+                from backend.event_stream import event_stream
+                bridges = []
+                for event_name in events:
+                    fn_name = f'on_{event_name}'
+                    fn = getattr(module, fn_name, None)
+                    if fn and callable(fn):
+                        if event_name not in self._handlers:
+                            self._handlers[event_name] = []
+                        self._handlers[event_name].append((plugin_id, fn))
 
-            self._event_bridges[plugin_id] = bridges
+                        bridge = self._make_event_bridge(plugin_id, fn)
+                        event_stream.on(event_name, bridge)
+                        bridges.append((event_name, bridge))
 
-            # Register slash commands declared in the manifest
-            if slash_commands:
-                for sc in slash_commands:
-                    sc_name = sc.get('id', '')
-                    sc_desc = sc.get('description', '')
-                    if sc_name:
-                        try:
-                            sdk = PluginSDK(plugin_id, manifest, {}, log_callback=self.add_log)
-                            sdk.register_slash_command(sc_name, sc_desc)
-                            self.add_log(plugin_id, 'info', f"Slash command registered: /{sc_name}")
-                        except Exception as e:
-                            self.add_log(plugin_id, 'error', f"Failed to register slash command '{sc_name}': {e}")
-                            _logger.error("Failed to register slash command '%s' for '%s': %s", sc_name, plugin_id, e, exc_info=True)
+                self._event_bridges[plugin_id] = bridges
 
-            # Check for route registration (create_blueprint function)
-            route_module = module
-            route_module_found = False
+            except Exception as e:
+                _logger.error("Failed to load plugin '%s': %s", plugin_id, e, exc_info=True)
+                # Don't return — still try to load routes.py if it exists
 
-            if not hasattr(module, 'create_blueprint') or not callable(module.create_blueprint):
-                routes_path = os.path.join(plugin_dir, 'routes.py')
-                if os.path.isfile(routes_path):
+        # Register slash commands declared in the manifest
+        if slash_commands:
+            for sc in slash_commands:
+                sc_name = sc.get('id', '')
+                sc_desc = sc.get('description', '')
+                if sc_name:
                     try:
-                        routes_module_name = f'{pkg_name}.routes'
-                        routes_spec = importlib.util.spec_from_file_location(routes_module_name, routes_path)
-                        routes_module = importlib.util.module_from_spec(routes_spec)
-                        routes_module.__package__ = pkg_name
-                        sys.modules[routes_module_name] = routes_module
-                        routes_spec.loader.exec_module(routes_module)
-                        route_module = routes_module
+                        sdk = PluginSDK(plugin_id, manifest, {}, log_callback=self.add_log)
+                        sdk.register_slash_command(sc_name, sc_desc)
+                        self.add_log(plugin_id, 'info', f"Slash command registered: /{sc_name}")
                     except Exception as e:
-                        self.add_log(plugin_id, 'error', f"Failed to load routes.py: {e}")
-                        _logger.error("Failed to load routes.py for '%s': %s", plugin_id, e)
-                        traceback.print_exc()
+                        self.add_log(plugin_id, 'error', f"Failed to register slash command '{sc_name}': {e}")
+                        _logger.error("Failed to register slash command '%s' for '%s': %s", sc_name, plugin_id, e, exc_info=True)
 
-            if hasattr(route_module, 'create_blueprint') and callable(route_module.create_blueprint):
+        # Check for route registration (create_blueprint function)
+        route_module = module
+
+        if route_module is None or not hasattr(route_module, 'create_blueprint') or not callable(route_module.create_blueprint):
+            routes_path = os.path.join(plugin_dir, 'routes.py')
+            if os.path.isfile(routes_path):
                 try:
-                    bp = route_module.create_blueprint()
-                    self._blueprints[plugin_id] = bp
-                    self.add_log(plugin_id, 'info', f"Route blueprint registered: {bp.name}")
+                    routes_module_name = f'{pkg_name}.routes'
+                    routes_spec = importlib.util.spec_from_file_location(routes_module_name, routes_path)
+                    routes_module = importlib.util.module_from_spec(routes_spec)
+                    routes_module.__package__ = pkg_name
+                    sys.modules[routes_module_name] = routes_module
+                    routes_spec.loader.exec_module(routes_module)
+                    route_module = routes_module
                 except Exception as e:
-                    self.add_log(plugin_id, 'error', f"Failed to create blueprint: {e}")
-                    _logger.error("Failed to create blueprint for '%s': %s", plugin_id, e)
+                    self.add_log(plugin_id, 'error', f"Failed to load routes.py: {e}")
+                    _logger.error("Failed to load routes.py for '%s': %s", plugin_id, e)
                     traceback.print_exc()
 
-            # Register dashboard card handlers
-            dashboard_cards = manifest.get('dashboard_cards', [])
-            if dashboard_cards:
-                self._dashboard_cards[plugin_id] = []
-                for card in dashboard_cards:
-                    fn_name = card.get('handler')
-                    if fn_name:
-                        fn = getattr(module, fn_name, None)
-                        if fn and callable(fn):
-                            card_id = card.get('id', fn_name)
-                            self._dashboard_cards[plugin_id].append((card_id, fn))
-                        else:
-                            self.add_log(plugin_id, 'error', f"Dashboard card handler '{fn_name}' not found")
-                            _logger.error("Dashboard card handler '%s' not found for '%s'", fn_name, plugin_id)
-                    else:
-                        self.add_log(plugin_id, 'warn', f"Dashboard card missing 'handler' field: {card.get('id', '?')}")
-                self.add_log(plugin_id, 'info', f"Registered {len(self._dashboard_cards[plugin_id])} dashboard card(s)")
+        if route_module and hasattr(route_module, 'create_blueprint') and callable(route_module.create_blueprint):
+            try:
+                bp = route_module.create_blueprint()
+                self._blueprints[plugin_id] = bp
+                self.add_log(plugin_id, 'info', f"Route blueprint registered: {bp.name}")
+            except Exception as e:
+                self.add_log(plugin_id, 'error', f"Failed to create blueprint: {e}")
+                _logger.error("Failed to create blueprint for '%s': %s", plugin_id, e)
+                traceback.print_exc()
 
-        except Exception as e:
-            _logger.error("Failed to load plugin '%s': %s", plugin_id, e, exc_info=True)
+        # Register dashboard card handlers (from handler.py if loaded)
+        if dashboard_cards and module:
+            self._dashboard_cards[plugin_id] = []
+            for card in dashboard_cards:
+                fn_name = card.get('handler')
+                if fn_name:
+                    fn = getattr(module, fn_name, None)
+                    if fn and callable(fn):
+                        card_id = card.get('id', fn_name)
+                        self._dashboard_cards[plugin_id].append((card_id, fn))
+                    else:
+                        self.add_log(plugin_id, 'error', f"Dashboard card handler '{fn_name}' not found")
+                        _logger.error("Dashboard card handler '%s' not found for '%s'", fn_name, plugin_id)
+                else:
+                    self.add_log(plugin_id, 'warn', f"Dashboard card missing 'handler' field: {card.get('id', '?')}")
+            if self._dashboard_cards.get(plugin_id):
+                self.add_log(plugin_id, 'info', f"Registered {len(self._dashboard_cards[plugin_id])} dashboard card(s)")
 
     def _unload_plugin(self, plugin_id: str):
         """Remove all handler registrations for a plugin."""
@@ -569,16 +572,20 @@ class PluginManager:
             key = f'plugin_config:{plugin_id}:{v["name"]}'
             stored = db.get_setting(key)
             if stored is not None:
-                var_type = v.get('type', 'string')
-                if var_type == 'boolean':
-                    config[v['name']] = stored in ('1', 'true', 'True')
-                elif var_type == 'number':
-                    try:
-                        config[v['name']] = float(stored) if '.' in stored else int(stored)
-                    except ValueError:
-                        pass
+                # Mask secret values in API responses
+                if v.get('secret', False):
+                    config[v['name']] = '••••••••'
                 else:
-                    config[v['name']] = stored
+                    var_type = v.get('type', 'string')
+                    if var_type == 'boolean':
+                        config[v['name']] = stored in ('1', 'true', 'True')
+                    elif var_type == 'number':
+                        try:
+                            config[v['name']] = float(stored) if '.' in stored else int(stored)
+                        except ValueError:
+                            pass
+                    else:
+                        config[v['name']] = stored
 
         return config
 

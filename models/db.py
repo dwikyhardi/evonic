@@ -17,6 +17,7 @@ from models.mixins import (
     DashboardMixin,
     ModelsMixin,
     WorkplaceMixin,
+    PortalMixin,
     SafetyRuleMixin,
 )
 
@@ -34,6 +35,7 @@ class Database(
     DashboardMixin,
     ModelsMixin,
     WorkplaceMixin,
+    PortalMixin,
     SafetyRuleMixin,
 ):
     def __init__(self, db_path: str = config.DB_PATH):

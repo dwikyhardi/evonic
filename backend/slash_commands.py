@@ -223,6 +223,10 @@ def _register_builtins():
     ) -> str:
         from models.db import db
 
+        super_agent = db.get_super_agent()
+        if not super_agent or super_agent.get('id') != agent_id:
+            return "Permission denied: /cwd is only available to the super agent."
+
         agent = db.get_agent(agent_id)
         if not agent:
             return "Error: Agent not found."
@@ -249,9 +253,9 @@ def _register_builtins():
     ) -> str:
         from models.db import db
 
-        # super_agent = db.get_super_agent()
-        # if not super_agent or super_agent.get('id') != agent_id:
-        #     return "Permission denied: /cd is only available to the super agent."
+        super_agent = db.get_super_agent()
+        if not super_agent or super_agent.get('id') != agent_id:
+            return "Permission denied: /cd is only available to the super agent."
 
         if not args or not args.strip():
             return "Usage: /cd [path] — change workspace directory"
@@ -302,6 +306,8 @@ def _register_builtins():
         db.set_setting('restart_ready_needed', json.dumps({
             'channel_id': channel_id,
             'external_user_id': external_user_id,
+            'session_id': session_id,
+            'agent_id': agent_id,
         }))
 
         def _do_restart():
@@ -566,6 +572,68 @@ def _register_builtins():
         "status",
         status_handler,
         "Show agent status information",
+    )
+
+    # /model — Show or set the agent's LLM model
+    def model_handler(
+        session_id: str,
+        agent_id: str,
+        external_user_id: str,
+        channel_id: Optional[str],
+        args: str,
+    ) -> str:
+        from models.db import db
+
+        if not args or not args.strip():
+            # No args — show current model
+            model = db.get_agent_default_model(agent_id)
+            if model:
+                model_name = model.get("name", "unknown")
+                model_id = model.get("model_name", "")
+                if model_id:
+                    return f"Current model: {model_name} ({model_id})"
+                else:
+                    return f"Current model: {model_name}"
+            else:
+                return "No model configured. Use `/model <id>` to set one."
+
+        # Set model
+        new_model_id = args.strip()
+        model = db.get_model_by_id(new_model_id)
+        if not model:
+            # Try matching by model_name field too
+            model = db.get_model_by_model_name(new_model_id)
+        if not model:
+            # List available models so user knows what's valid
+            all_models = db.get_llm_models()
+            if all_models:
+                lines = [f"Model '{new_model_id}' not found. Available models:"]
+                for m in all_models:
+                    m_name = m.get("name", "unknown")
+                    m_id = m.get("id", "")
+                    m_model = m.get("model_name", "")
+                    enabled = "✓" if m.get("enabled") else "✗"
+                    lines.append(f"  [{enabled}] {m_id} — {m_name} ({m_model})")
+                return "\n".join(lines)
+            else:
+                return f"Model '{new_model_id}' not found and no models are configured."
+
+        # Set the agent's default model
+        success = db.set_agent_default_model(agent_id, model["id"])
+        if not success:
+            return f"Failed to set model to '{new_model_id}'."
+
+        model_name = model.get("name", "unknown")
+        model_model = model.get("model_name", "")
+        if model_model:
+            return f"Model set to: {model_name} ({model_model}) [id: {model['id']}]"
+        else:
+            return f"Model set to: {model_name} [id: {model['id']}]"
+
+    command_registry.register(
+        "model",
+        model_handler,
+        "Show or set agent's LLM model — /model [id]",
     )
 
 

@@ -167,17 +167,44 @@ if not _reloader_active or _is_reloader_child:
                 _data = _json.loads(_restart_ready_flag)
                 _channel_id = _data.get('channel_id')
                 _user_id = _data.get('external_user_id')
-                _log.info("Sending 'Evonic ready!' (channel=%s, user=%s)",
-                           _channel_id, _user_id)
+                _session_id = _data.get('session_id')
+                _agent_id = _data.get('agent_id')
+                _log.info("Sending 'Evonic ready!' (channel=%s, user=%s, session=%s)",
+                           _channel_id, _user_id, _session_id)
 
-                from backend.channels.registry import channel_manager
-                _channel = channel_manager.get_channel_instance(_channel_id)
-                if _channel:
-                    _channel.send_message(_user_id, "Evonic ready!")
-                    _log.info("'Evonic ready!' sent")
+                if _channel_id is not None:
+                    # Messaging channel (Telegram, WhatsApp, etc.)
+                    from backend.channels.registry import channel_manager
+                    _channel = channel_manager.get_channel_instance(_channel_id)
+                    if _channel:
+                        _channel.send_message(_user_id, "Evonic ready!")
+                        _log.info("'Evonic ready!' sent via channel %s", _channel_id)
+                    else:
+                        _log.warning("Channel %s not found, cannot send restart ready message",
+                                     _channel_id)
+                elif _session_id and _agent_id:
+                    # Web chat — inject directly as system message (no LLM)
+                    # Write to SQLite DB so it appears in chat history
+                    db.add_chat_message(_session_id, 'system', 'Evonic ready!',
+                                        agent_id=_agent_id, metadata={'restart_ready': True})
+                    # Write to JSONL chatlog so it appears when polling
+                    from models.chatlog import chatlog_manager
+                    _cl = chatlog_manager.get(_agent_id, _session_id)
+                    _cl.append({'type': 'system', 'session_id': _session_id,
+                                'content': 'Evonic ready!',
+                                'metadata': {'restart_ready': True}})
+                    # Emit SSE event for any reconnected clients
+                    from backend.event_stream import event_stream
+                    event_stream.emit('message_received', {
+                        'agent_id': _agent_id,
+                        'session_id': _session_id,
+                        'external_user_id': _user_id,
+                        'channel_id': None,
+                        'message': 'Evonic ready!',
+                    })
+                    _log.info("'Evonic ready!' sent via web chat (session=%s)", _session_id)
                 else:
-                    _log.warning("Channel %s not found, cannot send restart ready message",
-                                 _channel_id)
+                    _log.warning("No channel_id or session_id available, cannot send restart ready message")
 
                 db.set_setting('restart_ready_needed', '')
                 _log.info("Restart ready flag cleared")
@@ -347,6 +374,8 @@ def enforce_auth():
         return None  # Evonet connector authenticates via Bearer token, not session
     if request.path.startswith('/static/'):
         return None
+    if request.path.startswith('/webhook'):
+        return None  # Plugin webhook endpoints handle their own auth
     if request.path in ('/login', '/logout'):
         return None
 

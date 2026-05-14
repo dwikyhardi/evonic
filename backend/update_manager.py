@@ -18,16 +18,92 @@ import threading
 import time
 from datetime import datetime
 
+try:
+    from packaging import version as pkg_version
+    HAS_PACKAGING = True
+except ImportError:
+    HAS_PACKAGING = False
+
 log = logging.getLogger(__name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+class _VersionComparable:
+    """
+    Wrapper for version comparison that works with both packaging.version
+    and tuple-based comparison for backward compatibility.
+    """
+    def __init__(self, version_obj, tuple_fallback):
+        self.version_obj = version_obj
+        self.tuple_fallback = tuple_fallback
+    
+    def __lt__(self, other):
+        if isinstance(other, _VersionComparable):
+            if self.version_obj is not None and other.version_obj is not None:
+                return self.version_obj < other.version_obj
+            return self.tuple_fallback < other.tuple_fallback
+        # Support comparison with plain tuples for tests
+        return self.tuple_fallback < other
+    
+    def __le__(self, other):
+        return self < other or self == other
+    
+    def __gt__(self, other):
+        if isinstance(other, _VersionComparable):
+            if self.version_obj is not None and other.version_obj is not None:
+                return self.version_obj > other.version_obj
+            return self.tuple_fallback > other.tuple_fallback
+        return self.tuple_fallback > other
+    
+    def __ge__(self, other):
+        return self > other or self == other
+    
+    def __eq__(self, other):
+        if isinstance(other, _VersionComparable):
+            if self.version_obj is not None and other.version_obj is not None:
+                return self.version_obj == other.version_obj
+            return self.tuple_fallback == other.tuple_fallback
+        return self.tuple_fallback == other
+    
+    def __ne__(self, other):
+        return not self == other
+    
+    def __repr__(self):
+        if self.version_obj is not None:
+            return f"_VersionComparable({self.version_obj})"
+        return f"_VersionComparable({self.tuple_fallback})"
+
+
 def _version_tuple(tag: str):
+    """
+    Parse version string into comparable version object.
+    
+    Security: Uses packaging.version when available for proper semver handling,
+    including pre-release versions. Falls back to regex for basic parsing.
+    
+    Returns a comparable object that works with both packaging.version and
+    tuple-based comparison for backward compatibility.
+    """
+    # Fallback tuple parsing
     m = re.match(r'v?(\d+)(?:\.(\d+))?(?:\.(\d+))?', tag or '')
     if not m:
-        return (0, 0, 0)
-    return tuple(int(x or '0') for x in m.groups())
+        tuple_version = (0, 0, 0)
+    else:
+        tuple_version = tuple(int(x or '0') for x in m.groups())
+    
+    # Try packaging.version if available
+    version_obj = None
+    if HAS_PACKAGING and tag:
+        try:
+            # Remove 'v' prefix if present
+            clean_tag = tag.removeprefix('v')
+            version_obj = pkg_version.parse(clean_tag)
+        except (ValueError, TypeError):
+            # Fall back to tuple only if parsing fails
+            pass
+    
+    return _VersionComparable(version_obj, tuple_version)
 
 
 def _get_state_file_path() -> str:

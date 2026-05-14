@@ -22,6 +22,7 @@ _mock_db = mock.MagicMock()
 _mock_db.get_agent = mock.MagicMock()
 _mock_db.get_latest_human_session = mock.MagicMock()
 _mock_db.get_session_messages = mock.MagicMock()
+_mock_db.get_web_fallback_session = mock.MagicMock(return_value=None)
 
 _mock_notifier = mock.MagicMock()
 _mock_notifier.notify_agent = mock.MagicMock()

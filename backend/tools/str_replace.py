@@ -144,6 +144,49 @@ def execute(agent, args: dict) -> dict:
             result['error'] = result['error'].replace(local_path, display_path)
         return result
 
+    # /_portal/ path: route through a virtual path mapping to local/SSH/evonet.
+    from backend.tools._portal import is_portal_path, resolve_portal_path
+    if agent_id and is_portal_path(file_path):
+        backend, real_path = resolve_portal_path(agent_id, file_path)
+        if backend is None:
+            return {'error': real_path}  # error message
+
+        if not backend.file_exists(real_path):
+            return {'error': f"File not found: {display_path}"}
+
+        read_result = backend.read_file(real_path)
+        if 'error' in read_result:
+            return {'error': read_result['error']}
+
+        content = read_result['content']
+        occurrences = content.count(old_str)
+
+        if occurrences == 0:
+            return {
+                'error': (
+                    f"'old_str' not found in {display_path}. "
+                    "Action: call read_file() to get the current file content "
+                    "and copy the exact text you want to replace."
+                )
+            }
+
+        if occurrences != count:
+            return {
+                'error': (
+                    f"'old_str' found {occurrences} time(s) in {display_path}, "
+                    f"but count={count}. "
+                    "Make 'old_str' more specific by including more surrounding context, "
+                    f"or set count={occurrences} if you intend to replace all occurrences."
+                )
+            }
+
+        new_content = content.replace(old_str, new_str, count)
+        wr = backend.write_file(real_path, new_content)
+        if 'error' in wr:
+            return {'error': wr['error']}
+
+        return {'result': 'success', 'replacements': count}
+
     # When sandbox is enabled, route file I/O through the execution backend.
     sandbox_enabled = (agent or {}).get('sandbox_enabled', 1)
     if sandbox_enabled:
