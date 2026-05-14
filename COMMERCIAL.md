@@ -7,6 +7,6 @@ For commercial use that requires a license without AGPL obligations
 (e.g., proprietary integrations, closed-source deployments, SaaS products),
 a separate commercial license is available.
 
-**Contact:** Robin Syihab
+**Contact:** Robin Syihab <robin@syihab.st>
 
 Please provide your use case and deployment description when inquiring.
