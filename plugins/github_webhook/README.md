@@ -12,7 +12,7 @@ This plugin exposes a webhook endpoint (`POST /webhook/github_webhook`) that Git
 4. Renders a customizable prompt template with event data
 5. Sends the rendered message to a designated Evonic agent
 
-Each event type can be configured independently with its own target agent and prompt template. If an agent ID is left empty, that event type is ignored.
+Each event type can be configured independently with its own target agent, prompt template, and input filters. If an agent ID is left empty, that event type is ignored.
 
 ## Supported Events
 
@@ -74,6 +74,55 @@ Triggered when code is **pushed** to any branch in the repository.
 | `{{repository}}`   | Repository full name                         |
 | `{{compare}}`      | GitHub compare URL for the pushed commits    |
 
+## Input Filters
+
+By default, every matching event triggers the agent. You can add **input filters** to control exactly which webhook payloads get through. Each event type has its own filter field (JSON textarea).
+
+### Filter Format
+
+Filters are a JSON array of objects. Each object specifies a field path, match type, and value:
+
+```json
+[
+  {"field": "<dot-notation-path>", "match": "equals" | "regex", "value": "<match-value>"}
+]
+```
+
+- **field**: A dot-notation path into the webhook payload (e.g. `pull_request.state`, `repository.full_name`)
+- **match**: `equals` for exact string match, or `regex` for pattern matching
+- **value**: The value or regex pattern to match against
+
+All filters for an event type are **ANDed** — the event only fires if ALL filters pass. An empty filter config means "fire always" (current behavior).
+
+### Filter Examples
+
+#### Only trigger on new (opened) PRs
+
+```json
+[{"field": "action", "match": "equals", "value": "opened"}]
+```
+
+#### Only trigger on pushes to the main branch
+
+```json
+[{"field": "ref", "match": "regex", "value": "^refs/heads/main$"}]
+```
+
+#### Only trigger on open issues in a specific organization
+
+```json
+[
+  {"field": "issue.state", "match": "equals", "value": "open"},
+  {"field": "repository.full_name", "match": "regex", "value": "^my-org/"}
+]
+```
+
+#### Only trigger on non-prerelease releases
+
+```json
+[{"field": "release.prerelease", "match": "equals", "value": "False"}]
+```
+
 ## Setup Guide
 
 ### Step 1: Generate a Webhook Secret
@@ -94,6 +143,7 @@ Copy the output — you will need it for both GitHub and Evonic configuration.
 3. Configure each event section below:
    - **Agent ID**: Enter the Evonic agent ID that should receive notifications for this event (e.g. `adit`). Leave empty to ignore the event.
    - **Prompt Template**: Customize the message sent to the agent. Use `{{variable}}` placeholders to insert event data.
+   - **Filters (JSON)**: Optional — add JSON filters to control which webhook payloads trigger the agent. See the [Input Filters](#input-filters) section above for format and examples. Leave empty to fire on all matching events.
 
 4. Click **Save** to apply settings.
 
