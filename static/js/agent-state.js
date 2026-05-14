@@ -17,7 +17,6 @@ async function renderAgentState(agentId, userId, containerIds) {
 
         const empty = '<p class="text-sm text-gray-400 dark:text-gray-500 italic">No state yet.</p>';
         const hasAnyState = data.mode || data.focus || data.plan_file ||
-            (data.tasks && data.tasks.length > 0) ||
             (data.states && Object.keys(data.states).length > 0);
         if (!hasAnyState) {
             (Array.isArray(containerIds) ? containerIds : [containerIds]).forEach(id => {
@@ -48,20 +47,6 @@ async function renderAgentState(agentId, userId, containerIds) {
 
         // Status cards row
         html += `<div class="flex flex-wrap gap-1">${cards}</div>`;
-
-        // Tasks section
-        if (data.tasks && data.tasks.length > 0) {
-            const icons = {pending: '☐', in_progress: '⟳', done: '✓'};
-            const iconColors = {pending: 'text-gray-400', in_progress: 'text-amber-500', done: 'text-green-500'};
-            html += `<div class="border-t border-gray-100 dark:border-gray-700 pt-2"><div class="text-gray-500 dark:text-gray-400 font-medium mb-1 text-xs uppercase tracking-wide">Tasks</div><ul class="space-y-0.5">`;
-            for (const t of data.tasks) {
-                const icon = icons[t.status] || '☐';
-                const color = iconColors[t.status] || 'text-gray-400';
-                const textClass = t.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200';
-                html += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${esc(t.text)}</span></li>`;
-            }
-            html += `</ul></div>`;
-        }
 
         // Plugin states section
         if (data.states && Object.keys(data.states).length > 0) {
