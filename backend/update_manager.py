@@ -152,6 +152,9 @@ def _persist_state(state: dict) -> None:
 _lock = threading.Lock()
 _listeners: list = []  # list of queue.Queue, one per SSE client
 
+# Total steps in update process (from supervisor.py STEPS)
+TOTAL_STEPS = 6
+
 # Load persisted state on module import (survives crashes/restarts)
 _persisted = _load_persisted_state()
 
@@ -173,11 +176,17 @@ _state = {
 if _state['crashed']:
     log.warning(
         f'Detected incomplete update to {_state.get("latest_version")} '
-        f'(was at step {_state.get("step")}/{TOTAL_STEPS if "TOTAL_STEPS" in dir() else 6})'
+        f'(was at step {_state.get("step")}/{TOTAL_STEPS})'
     )
-    _state['status'] = 'failed'
-    _state['error'] = 'Update interrupted (server crash or restart)'
-    _append_log('error', 'Update was interrupted by server crash or restart')
+    with _lock:
+        _state['status'] = 'failed'
+        _state['error'] = 'Update interrupted (server crash or restart)'
+        _state['logs'].append({
+            'ts': datetime.now().strftime('%H:%M:%S'),
+            'level': 'error',
+            'message': 'Update was interrupted by server crash or restart',
+        })
+        _persist_state(_state)
 
 
 def _append_log(level: str, message: str):
@@ -247,28 +256,32 @@ class WebNotifier:
     """Drop-in replacement for TelegramNotifier that updates web UI state."""
 
     def begin(self, from_tag, to_tag):
-        _state['current_version'] = from_tag
-        _state['latest_version'] = to_tag
-        _persist_state(_state)
+        with _lock:
+            _state['current_version'] = from_tag
+            _state['latest_version'] = to_tag
+            _persist_state(_state)
 
     def send_progress(self, step, total, description):
-        _state['step'] = step
-        _state['step_label'] = description
-        _state['progress'] = int(step / total * 100)
+        with _lock:
+            _state['step'] = step
+            _state['step_label'] = description
+            _state['progress'] = int(step / total * 100)
+        # _append_log already persists, no need to persist again
         _append_log('info', f'Step {step}/{total}: {description}')
-        _persist_state(_state)
 
     def send_failure(self, step, total, error):
-        _state['status'] = 'failed'
-        _state['error'] = str(error)
+        with _lock:
+            _state['status'] = 'failed'
+            _state['error'] = str(error)
+        # _append_log already persists, no need to persist again
         _append_log('error', f'FAILED at step {step}/{total}: {error}')
-        _persist_state(_state)
 
     def send_success(self, tag):
-        _state['status'] = 'success'
-        _state['progress'] = 100
+        with _lock:
+            _state['status'] = 'success'
+            _state['progress'] = 100
+        # _append_log already persists, no need to persist again
         _append_log('info', f'Update to {tag} successful')
-        _persist_state(_state)
 
 
 # ---------------------------------------------------------------------------
@@ -310,22 +323,24 @@ def get_status() -> dict:
 
 def check_for_update(force=False) -> dict:
     now = time.time()
-    if not force and _state['status'] == 'available':
-        return {
-            'available': True,
-            'current': _state['current_version'],
-            'latest': _state['latest_version'],
-        }
+    
+    with _lock:
+        if not force and _state['status'] == 'available':
+            return {
+                'available': True,
+                'current': _state['current_version'],
+                'latest': _state['latest_version'],
+            }
 
-    if not force and (now - _state['last_check']) < 86400:
-        return {
-            'available': _state['status'] == 'available',
-            'current': _state['current_version'],
-            'latest': _state['latest_version'],
-        }
+        if not force and (now - _state['last_check']) < 86400:
+            return {
+                'available': _state['status'] == 'available',
+                'current': _state['current_version'],
+                'latest': _state['latest_version'],
+            }
 
-    _state['status'] = 'checking'
-    _persist_state(_state)
+        _state['status'] = 'checking'
+        _persist_state(_state)
     
     try:
         sup = _load_supervisor()
@@ -340,45 +355,48 @@ def check_for_update(force=False) -> dict:
         current = sup.get_current_release(git_root)
         latest = sup.get_latest_tag(git_root)
 
-        _state['current_version'] = current
-        _state['latest_version'] = latest
-        _state['last_check'] = time.time()
+        with _lock:
+            _state['current_version'] = current
+            _state['latest_version'] = latest
+            _state['last_check'] = time.time()
 
-        if latest and _version_tuple(latest) > _version_tuple(current):
-            _state['status'] = 'available'
-            _persist_state(_state)
-            return {'available': True, 'current': current, 'latest': latest}
-        else:
-            _state['status'] = 'idle'
-            _persist_state(_state)
-            return {'available': False, 'current': current, 'latest': latest}
+            if latest and _version_tuple(latest) > _version_tuple(current):
+                _state['status'] = 'available'
+                _persist_state(_state)
+                return {'available': True, 'current': current, 'latest': latest}
+            else:
+                _state['status'] = 'idle'
+                _persist_state(_state)
+                return {'available': False, 'current': current, 'latest': latest}
     except Exception as e:
         log.error(f'Update check failed: {e}')
-        _state['status'] = 'idle'
-        _persist_state(_state)
+        with _lock:
+            _state['status'] = 'idle'
+            _persist_state(_state)
         return {'available': False, 'current': None, 'latest': None, 'error': str(e)}
 
 
 def start_update(tag=None) -> dict:
-    if _state['status'] == 'updating':
-        return {'error': 'Update already in progress'}
-
-    _state['status'] = 'updating'
-    _state['progress'] = 0
-    _state['step'] = 0
-    _state['step_label'] = ''
-    _state['error'] = None
-    _state['last_update_attempt'] = time.time()
     with _lock:
-        _state['logs'] = []
-    _persist_state(_state)
+        if _state['status'] == 'updating':
+            return {'error': 'Update already in progress'}
 
-    target = tag or _state['latest_version']
-    if not target:
-        _state['status'] = 'failed'
-        _state['error'] = 'No target version specified'
+        _state['status'] = 'updating'
+        _state['progress'] = 0
+        _state['step'] = 0
+        _state['step_label'] = ''
+        _state['error'] = None
+        _state['last_update_attempt'] = time.time()
+        _state['logs'] = []
+        
+        target = tag or _state['latest_version']
+        if not target:
+            _state['status'] = 'failed'
+            _state['error'] = 'No target version specified'
+            _persist_state(_state)
+            return {'error': 'No target version specified'}
+        
         _persist_state(_state)
-        return {'error': 'No target version specified'}
 
     _append_log('info', f'Starting update to {target}...')
     _notify_listeners()
@@ -402,36 +420,38 @@ def _run_update_thread(target):
     try:
         ok = sup.run_update(target, cfg, notifier=notifier)
         if ok:
-            if _state['status'] != 'success':
-                _state['status'] = 'success'
-                _state['progress'] = 100
-                _append_log('info', 'Update completed successfully')
-                _persist_state(_state)
+            with _lock:
+                if _state['status'] != 'success':
+                    _state['status'] = 'success'
+                    _state['progress'] = 100
+            _append_log('info', 'Update completed successfully')
         else:
-            if _state['status'] != 'failed':
-                _state['status'] = 'failed'
-                if not _state['error']:
-                    _state['error'] = 'Update failed (see logs for details)'
-                _append_log('error', 'Update failed')
-                _persist_state(_state)
+            with _lock:
+                if _state['status'] != 'failed':
+                    _state['status'] = 'failed'
+                    if not _state['error']:
+                        _state['error'] = 'Update failed (see logs for details)'
+            _append_log('error', 'Update failed')
     except Exception as e:
-        _state['status'] = 'failed'
-        _state['error'] = str(e)
+        with _lock:
+            _state['status'] = 'failed'
+            _state['error'] = str(e)
         _append_log('error', f'Unexpected error: {e}')
-        _persist_state(_state)
     finally:
         sup_logger.removeHandler(handler)
         _notify_listeners()
 
 
 def trigger_rollback() -> dict:
-    if _state['status'] == 'updating':
-        return {'error': 'Cannot rollback while update is in progress'}
+    with _lock:
+        if _state['status'] == 'updating':
+            return {'error': 'Cannot rollback while update is in progress'}
 
+        _state['status'] = 'updating'
+        _state['step_label'] = 'Rolling back...'
+        _persist_state(_state)
+    
     _append_log('info', 'Starting rollback...')
-    _state['status'] = 'updating'
-    _state['step_label'] = 'Rolling back...'
-    _persist_state(_state)
     _notify_listeners()
 
     def _do_rollback():
@@ -440,20 +460,20 @@ def trigger_rollback() -> dict:
         try:
             ok = sup.rollback(cfg['app_root'], cfg, None)
             if ok:
-                _state['status'] = 'success'
-                _state['step_label'] = 'Rollback complete'
+                with _lock:
+                    _state['status'] = 'success'
+                    _state['step_label'] = 'Rollback complete'
                 _append_log('info', 'Rollback successful')
-                _persist_state(_state)
             else:
-                _state['status'] = 'failed'
-                _state['error'] = 'Rollback failed'
+                with _lock:
+                    _state['status'] = 'failed'
+                    _state['error'] = 'Rollback failed'
                 _append_log('error', 'Rollback failed')
-                _persist_state(_state)
         except Exception as e:
-            _state['status'] = 'failed'
-            _state['error'] = str(e)
+            with _lock:
+                _state['status'] = 'failed'
+                _state['error'] = str(e)
             _append_log('error', f'Rollback error: {e}')
-            _persist_state(_state)
         _notify_listeners()
 
     threading.Thread(target=_do_rollback, daemon=True).start()
