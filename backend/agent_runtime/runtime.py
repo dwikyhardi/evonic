@@ -1022,16 +1022,26 @@ class AgentRuntime:
             _logger.error("Unhandled exception in _do_process_inner for session %s: %s\n%s",
                             ctx.session_id, exc, traceback.format_exc())
             if not _turn_complete_emitted:
+                _err_dur = round(time.time() - _turn_start, 1)
+                _err_msg = 'An unexpected error occurred while processing your request.'
+                # Write to chatlog so reconnecting clients (poll-based) also see the turn ended.
+                try:
+                    chatlog = chatlog_manager.get(agent.get('_db_agent_id', agent_id), ctx.session_id)
+                    chatlog.append({'type': 'error', 'session_id': ctx.session_id,
+                                    'content': _err_msg, 'metadata': {'error': True, 'thinking_duration': _err_dur}})
+                    chatlog.append({'type': 'turn_end', 'session_id': ctx.session_id, 'thinking_duration': _err_dur})
+                except Exception:
+                    pass
                 event_stream.emit('turn_complete', {
                     'agent_id': agent_id,
                     'agent_name': agent.get('name', ''),
                     'session_id': ctx.session_id,
                     'external_user_id': ctx.external_user_id,
                     'channel_id': ctx.channel_id,
-                    'response': 'An unexpected error occurred while processing your request.',
+                    'response': _err_msg,
                     'tool_trace': [],
                     'is_error': True,
-                    'thinking_duration': round(time.time() - _turn_start, 1),
+                    'thinking_duration': _err_dur,
                 })
                 self._bg_executor.submit(
                     lambda sid=ctx.session_id: (time.sleep(SESSION_BUFFER_CLEANUP_DELAY), event_stream.cleanup_session_buffer(sid)),
@@ -1759,6 +1769,50 @@ class AgentRuntime:
         agent_id = session['agent_id']
         external_user_id = session['external_user_id']
         channel_id = session.get('channel_id')
+
+        # Slash command interception — execute immediately instead of sending to LLM
+        parsed = parse_command(text)
+        if parsed:
+            cmd_name, cmd_args = parsed
+            response = execute_command(
+                cmd_name, cmd_args, session_id, agent_id,
+                external_user_id, channel_id,
+            )
+            if response is not None:
+                # Command was recognized — save command echo and response, then return
+                db.add_chat_message(session_id, 'user', text,
+                                    agent_id=agent_id, metadata={'slash_command': True})
+                db.add_chat_message(session_id, 'assistant', response,
+                                    agent_id=agent_id, metadata={'slash_command': True})
+                _cl = chatlog_manager.get(agent_id, session_id)
+                _cl.append({'type': 'user', 'session_id': session_id, 'content': text,
+                            'sender_id': external_user_id,
+                            'metadata': {'slash_command': True}})
+                _cl.append({'type': 'system', 'session_id': session_id, 'content': response,
+                            'metadata': {'slash_command': True}})
+                agent = db.get_agent(agent_id)
+                # Emit turn_complete so SSE client shows the response
+                event_stream.emit('turn_complete', {
+                    'agent_id': agent_id,
+                    'agent_name': agent.get('name', '') if agent else '',
+                    'session_id': session_id,
+                    'external_user_id': external_user_id,
+                    'channel_id': channel_id,
+                    'response': response,
+                    'tool_trace': [],
+                    'is_error': False,
+                    'thinking_duration': 0.0,
+                    'slash_command': True,
+                })
+                # Signal the client to clear the chat UI when the clear command was used
+                if cmd_name == 'clear':
+                    event_stream.emit('session_clear', {
+                        'session_id': session_id,
+                        'agent_id': agent_id,
+                    })
+                self._prefetcher.invalidate(session_id)
+                return True
+            # Unknown command — fall through to normal LLM processing
 
         db.add_chat_message(session_id, 'user', text, agent_id=agent_id)
         chatlog_manager.get(agent_id, session_id).append(

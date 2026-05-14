@@ -55,7 +55,12 @@ def api_session_reply(session_id):
         ok = agent_runtime.send_as_bot(session_id, text)
     if not ok:
         return jsonify({'error': 'Session not found'}), 404
-    return jsonify({'success': True})
+    # Signal the frontend to clear the UI for /clear commands
+    is_clear = text.strip().startswith('/clear') if perspective == 'A' else False
+    resp = {'success': True}
+    if is_clear:
+        resp['clear_ui'] = True
+    return jsonify(resp)
 
 
 @sessions_bp.route('/api/sessions/<session_id>/stop', methods=['POST'])
