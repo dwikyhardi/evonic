@@ -176,6 +176,60 @@ def execute(agent, args: dict) -> dict:
             return "Error: Access denied — path escapes agent directory."
         return read_file(local_path, offset=offset)
 
+    # /_portal/ path: route through a virtual path mapping to local/SSH/evonet.
+    from backend.tools._portal import is_portal_path, resolve_portal_path
+    if agent_id and is_portal_path(file_path):
+        backend, real_path = resolve_portal_path(agent_id, file_path)
+        if backend is None:
+            return real_path  # error message
+        st = backend.file_stat(real_path)
+        if not st.get("exists"):
+            return "Error: File not found."
+        file_size = st.get("size", 0)
+        if file_size > _MAX_FILE_SIZE:
+            size_kb = file_size / 1024
+            return (
+                f"Error: File size is {size_kb:.1f}KB ({file_size} bytes) which exceeds the 400KB "
+                f"limit. Only files up to 400KB (409,600 bytes) can be read with this tool."
+            )
+        if st.get("is_binary"):
+            return (
+                "Error: This is a binary file, not a text file. "
+                "Only text files (source code, configs, logs, etc.) are supported."
+            )
+        result = backend.read_file(real_path)
+        if "error" in result:
+            return f"Error: {result['error']}"
+        content = result["content"]
+        lines = content.split("\n")
+        if content.endswith("\n"):
+            lines = lines[:-1]
+        if not lines and not content:
+            return "(empty file)"
+        total_lines = len(lines)
+        file_size_kb = file_size / 1024
+        filename = os.path.basename(file_path)
+        start_idx = max(0, min(offset - 1, total_lines - 1))
+        output_lines = []
+        chars = 0
+        end_idx = start_idx
+        for i in range(start_idx, total_lines):
+            line_str = f"{i + 1}: {lines[i]}"
+            if chars + len(line_str) + 1 > _CHUNK_CHARS and output_lines:
+                break
+            output_lines.append(line_str)
+            chars += len(line_str) + 1
+            end_idx = i + 1
+        shown_start = start_idx + 1
+        shown_end = end_idx
+        header = f"[File: {filename} | {total_lines} lines | {file_size_kb:.1f}KB | showing lines {shown_start}-{shown_end}]"
+        content_block = "\n".join(output_lines)
+        if shown_end < total_lines:
+            remaining = total_lines - shown_end
+            footer = f"\n[...{remaining} lines remaining. Call read_file with offset={shown_end + 1} to continue.]"
+            return f"{header}\n\n{content_block}{footer}"
+        return f"{header}\n\n{content_block}"
+
     # When sandbox is enabled, route file I/O through the execution backend.
     sandbox_enabled = (agent or {}).get('sandbox_enabled', 1)
     if sandbox_enabled:

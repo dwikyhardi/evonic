@@ -673,7 +673,16 @@ def run_tool_loop(agent: Dict[str, Any],
                                     'content': content or '(No response)',
                                     'metadata': {'thinking_duration': _dup_dur, 'loop_terminated': True}})
                     chatlog.append({'type': 'turn_end', 'session_id': session_id, 'thinking_duration': _dup_dur})
-                    return content or "(No response)", tool_trace, timeline
+                    # Emit final_answer so auto-forward (e.g. sub-agent → parent) still fires
+                    # on this hard-stop exit path. Without this, sub-agent replies are silently lost.
+                    _final_loop_term = content or "(No response)"
+                    event_stream.emit('final_answer', {
+                        'agent_id': agent_id, 'session_id': session_id,
+                        'external_user_id': external_user_id, 'channel_id': channel_id,
+                        'answer': _final_loop_term, 'tool_trace': tool_trace, 'timeline': timeline,
+                        'loop_terminated': True,
+                    })
+                    return _final_loop_term, tool_trace, timeline
             else:
                 _last_intermediate_text = content
                 _intermediate_dup_count = 0

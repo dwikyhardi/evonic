@@ -516,6 +516,17 @@ class AnswerExtractor:
             # Strip markdown code fences if present
             cleaned_sql = re.sub(r'```(?:sql)?\s*', '', raw)
             cleaned_sql = cleaned_sql.replace('```', '').strip()
+
+            # Normalize typographic quotes to straight ASCII quotes (SQL requires ASCII delimiters)
+            # This fixes PASS 2 LLM extraction where normalize_llm_text() converts ' to ’
+            cleaned_sql = (
+                cleaned_sql
+                .replace('‘', "'")  # left single quotation mark → '
+                .replace('’', "'")  # right single quotation mark → '
+                .replace('“', '"')  # left double quotation mark → "
+                .replace('”', '"')  # right double quotation mark → "
+            )
+
             upper = cleaned_sql.upper()
             if "SELECT" in upper:
                 return {"valid": True, "cleaned": cleaned_sql, "error": ""}

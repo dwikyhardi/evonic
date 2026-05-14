@@ -127,10 +127,20 @@ class SkillsManager:
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             with zipfile.ZipFile(zip_path, 'r') as zf:
-                # Security: check for path traversal
+                # Security: check for path traversal in entry names AND extraction destinations
+                tmp_dir_real = os.path.realpath(tmp_dir)
                 for entry in zf.namelist():
+                    # Check entry name for obvious traversal attempts
                     if entry.startswith('/') or '..' in entry:
                         return {'error': f'Unsafe path in zip: {entry}'}
+                    
+                    # Validate the actual extraction destination
+                    extract_path = os.path.join(tmp_dir, entry)
+                    extract_path_real = os.path.realpath(extract_path)
+                    
+                    if not extract_path_real.startswith(tmp_dir_real + os.sep):
+                        return {'error': f'Path traversal detected in zip: {entry}'}
+                
                 zf.extractall(tmp_dir)
 
             # Find skill.json — at root or one level deep

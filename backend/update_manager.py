@@ -309,17 +309,29 @@ def trigger_restart() -> dict:
     _notify_listeners()
 
     # Detached subprocess: sleeps, stops daemon, starts from current release
+    # Security: Use json.dumps to safely serialize paths, preventing code injection
+    supervisor_path = os.path.join(app_root, 'supervisor')
+    config_path = os.path.join(app_root, 'supervisor', 'config.json')
+    
     script = (
-        f"import time, sys; "
-        f"sys.path.insert(0, {os.path.join(app_root, 'supervisor')!r}); "
-        f"import supervisor as sup; "
-        f"cfg = sup.load_config({os.path.join(app_root, 'supervisor', 'config.json')!r}); "
-        f"time.sleep(2); "
-        f"sup.stop_daemon({app_root!r}); "
-        f"sup.start_daemon_from_current({app_root!r})"
+        "import time, sys, json; "
+        "paths = json.loads(sys.argv[1]); "
+        "sys.path.insert(0, paths['supervisor']); "
+        "import supervisor as sup; "
+        "cfg = sup.load_config(paths['config']); "
+        "time.sleep(2); "
+        "sup.stop_daemon(paths['app_root']); "
+        "sup.start_daemon_from_current(paths['app_root'])"
     )
+    
+    paths_json = json.dumps({
+        'supervisor': supervisor_path,
+        'config': config_path,
+        'app_root': app_root
+    })
+    
     subprocess.Popen(
-        [sys.executable, '-c', script],
+        [sys.executable, '-c', script, paths_json],
         start_new_session=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

@@ -877,6 +877,80 @@ def _resolve_port_from_env(release_path: str, fallback: int = 8080) -> int:
     return fallback
 
 
+def preflight_checks(app_root: str, tag: str, cfg: dict, nightly: bool = False) -> tuple[bool, list[str]]:
+    """Run pre-flight checks before starting update.
+    
+    Returns (success, warnings) where warnings is a list of non-fatal issues.
+    Raises UpdateError for fatal issues that prevent update.
+    """
+    warnings = []
+    
+    # Check 1: Disk space (require at least 500MB free)
+    try:
+        stat = os.statvfs(app_root) if hasattr(os, 'statvfs') else None
+        if stat:
+            free_bytes = stat.f_bavail * stat.f_frsize
+            free_mb = free_bytes / (1024 * 1024)
+            if free_mb < 500:
+                raise UpdateError(
+                    f'Insufficient disk space: {free_mb:.0f}MB free, need at least 500MB'
+                )
+            elif free_mb < 1000:
+                warnings.append(f'Low disk space: {free_mb:.0f}MB free (recommended: 1GB+)')
+    except AttributeError:
+        # Windows doesn't have statvfs, use shutil.disk_usage
+        try:
+            usage = shutil.disk_usage(app_root)
+            free_mb = usage.free / (1024 * 1024)
+            if free_mb < 500:
+                raise UpdateError(
+                    f'Insufficient disk space: {free_mb:.0f}MB free, need at least 500MB'
+                )
+            elif free_mb < 1000:
+                warnings.append(f'Low disk space: {free_mb:.0f}MB free (recommended: 1GB+)')
+        except Exception:
+            warnings.append('Could not check disk space')
+    
+    # Check 2: Git repository health
+    if not nightly:
+        rc, out, err = _git(app_root, ['rev-parse', '--verify', f'refs/tags/{tag}'])
+        if rc != 0:
+            raise UpdateError(f'Tag {tag} not found in repository. Run git fetch first.')
+    else:
+        rc, out, err = _git(app_root, ['rev-parse', '--verify', f'origin/{tag}'])
+        if rc != 0:
+            raise UpdateError(f'Branch {tag} not found. Run git fetch first.')
+    
+    # Check 3: Git working directory clean (warn only)
+    rc, out, err = _git(app_root, ['status', '--porcelain'])
+    if rc == 0 and out.strip():
+        warnings.append('Git working directory has uncommitted changes')
+    
+    # Check 4: Network connectivity (for dependency installation)
+    # Try to resolve a common package index
+    try:
+        import socket
+        socket.create_connection(('pypi.org', 443), timeout=5).close()
+    except (socket.error, socket.timeout):
+        warnings.append('Network connectivity issue detected - dependency installation may fail')
+    except Exception:
+        pass  # Other errors are non-fatal
+    
+    # Check 5: Current release exists and is healthy
+    current_tag = get_current_release(app_root)
+    if current_tag:
+        current_path = os.path.join(app_root, 'releases', current_tag)
+        if not os.path.isdir(current_path):
+            warnings.append(f'Current release directory not found: {current_tag}')
+    
+    # Check 6: Python binary exists and is executable
+    python_bin = cfg.get('python_bin')
+    if python_bin and not os.path.isfile(python_bin):
+        raise UpdateError(f'Python binary not found: {python_bin}')
+    
+    return True, warnings
+
+
 def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
                skip_verify: bool = False, nightly: bool = False) -> bool:
     """
@@ -905,6 +979,22 @@ def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
 
     step = 0
     try:
+        # Step 0: Pre-flight checks
+        log.info('Running pre-flight checks...')
+        try:
+            ok, warnings = preflight_checks(app_root, tag, cfg, nightly)
+            if warnings:
+                for warning in warnings:
+                    log.warning(f'Pre-flight warning: {warning}')
+                    if notifier:
+                        notifier.send_progress(0, TOTAL_STEPS, f'Warning: {warning}')
+            log.info('Pre-flight checks passed')
+        except UpdateError as e:
+            log.error(f'Pre-flight check failed: {e}')
+            if notifier:
+                notifier.send_failure(0, TOTAL_STEPS, str(e))
+            return False
+        
         # Step 1: Fetch (already done in poll loop or by caller; log it)
         step = 1
         if nightly:

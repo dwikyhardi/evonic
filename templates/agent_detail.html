@@ -167,6 +167,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('skills')" data-tab="skills">Skills</button>
         {% endif %}
         <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('channels')" data-tab="channels">Channels</button>
+        <button class="tab-btn flex-shrink-0 whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" onclick="showTab('portals')" data-tab="portals">Portals</button>
     </div>
 
     <!-- Settings Tab -->
@@ -447,6 +448,21 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                 <!-- Channels loaded dynamically -->
             </div>
             <div id="channels-empty" class="hidden text-center py-8 text-gray-400 text-sm">No channels configured.</div>
+        </div>
+    </div>
+
+    <!-- Portals Tab -->
+    <div id="tab-portals" class="tab-content hidden flex-1 min-h-0 overflow-y-auto">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 p-6 max-w-3xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Portals</h3>
+                <button onclick="showAddPortalModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md text-sm transition-colors">+ Add Portal</button>
+            </div>
+            <p class="text-xs text-gray-400 mb-4">Virtual path mappings for file I/O tools (read_file, write_file, patch, str_replace). Portals do not work with bash or runpy.</p>
+            <div id="portals-list" class="space-y-3">
+                <!-- Portals loaded dynamically -->
+            </div>
+            <div id="portals-empty" class="hidden text-center py-8 text-gray-400 text-sm">No portals configured. Add a portal to give this agent access to files on another machine or directory via /_portal/ paths.</div>
         </div>
     </div>
 
@@ -788,6 +804,97 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
     </div>
 </div>
 
+<!-- Portal Modal -->
+<div id="portal-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[500px] shadow-xl">
+        <div class="flex justify-between items-center p-5 border-b border-gray-200">
+            <h3 class="text-gray-800 font-semibold dark:text-gray-100" id="portal-modal-title">Add Portal</h3>
+            <button onclick="closePortalModal()" class="bg-transparent border-none text-gray-400 text-2xl cursor-pointer hover:text-gray-800">&times;</button>
+        </div>
+        <div class="p-5">
+            <input type="hidden" id="portal-id" value="">
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Name</label>
+                <input type="text" id="portal-name" placeholder="e.g., Server B Data" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Virtual Path</label>
+                <div class="flex items-center">
+                    <span class="px-2 py-2.5 border border-r-0 border-gray-300 rounded-l-md bg-gray-50 text-gray-500 text-sm">/_portal/</span>
+                    <input type="text" id="portal-virtual-path" placeholder="data_b" class="flex-1 p-2.5 border border-gray-300 rounded-r-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                </div>
+                <p class="text-xs text-gray-400 mt-1">The virtual path prefix agents use. E.g., "data_b" → /_portal/data_b/...</p>
+            </div>
+            <div class="mb-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Backend Type</label>
+                <select id="portal-backend-type" class="w-full p-2.5 border border-gray-300 rounded-md text-sm" onchange="updatePortalConfigFields()">
+                    <option value="local">Local (host filesystem)</option>
+                    <option value="ssh">SSH (remote server)</option>
+                    <option value="evonet">Evonet (cloud-connected machine)</option>
+                </select>
+            </div>
+            <!-- Workplace picker (for SSH and evonet) -->
+            <div id="portal-workplace-picker" class="mb-4 hidden">
+                <label class="flex items-center gap-2 cursor-pointer select-none mb-2">
+                    <input type="checkbox" id="portal-use-workplace" onchange="updatePortalConfigFields()" class="rounded border-gray-300 text-indigo-500 focus:ring-indigo-400">
+                    <span class="text-sm text-gray-500">Use existing workplace</span>
+                </label>
+                <select id="portal-workplace-select" class="w-full p-2.5 border border-gray-300 rounded-md text-sm hidden">
+                    <option value="">-- Select workplace --</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">Reuse an existing workplace connection instead of creating a new one.</p>
+            </div>
+            <!-- SSH config fields -->
+            <div id="portal-ssh-config" class="hidden space-y-3">
+                <div>
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Host</label>
+                    <input type="text" id="portal-ssh-host" placeholder="192.168.1.100" class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Port</label>
+                        <input type="number" id="portal-ssh-port" value="22" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Username</label>
+                        <input type="text" id="portal-ssh-username" placeholder="root" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                    </div>
+                </div>
+                <div>
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Auth Type</label>
+                    <select id="portal-ssh-auth-type" class="w-full p-2.5 border border-gray-300 rounded-md text-sm" onchange="updatePortalConfigFields()">
+                        <option value="key">SSH Key</option>
+                        <option value="password">Password</option>
+                    </select>
+                </div>
+                <div id="portal-ssh-key-fields">
+                    <div>
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Key Path</label>
+                        <input type="text" id="portal-ssh-key-path" placeholder="~/.ssh/id_rsa" class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                    </div>
+                    <div class="mt-3">
+                        <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Passphrase (optional)</label>
+                        <input type="password" id="portal-ssh-passphrase" placeholder="Key passphrase" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                    </div>
+                </div>
+                <div id="portal-ssh-password-field" class="hidden">
+                    <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Password</label>
+                    <input type="password" id="portal-ssh-password" placeholder="SSH password" class="w-full p-2.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                </div>
+            </div>
+            <div class="mb-4 mt-4">
+                <label class="block mb-1 text-gray-600 dark:text-gray-300 text-sm font-medium">Real Path</label>
+                <input type="text" id="portal-real-path" placeholder="/home/data_b" class="w-full p-2.5 border border-gray-300 rounded-md text-sm font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 dark:bg-gray-700 dark:text-gray-100">
+                <p class="text-xs text-gray-400 mt-1">The actual filesystem path on the target machine.</p>
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closePortalModal()" class="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-600 dark:text-gray-50">Cancel</button>
+                <button onclick="savePortal()" class="px-4 py-2 bg-indigo-500 text-white rounded-md text-sm hover:bg-indigo-600">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- WhatsApp QR Modal -->
 <div id="whatsapp-qr-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white dark:bg-gray-800 rounded-xl w-[90%] max-w-[380px] shadow-xl">
@@ -878,7 +985,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=41"></script>
+<script src="{{ url_for('static', filename='js/chat-ui.js') }}?v=42"></script>
 <script src="{{ url_for('static', filename='js/agent-state.js') }}?v=3"></script>
 <script>
 function showToast(message, type = 'success') {
@@ -1090,6 +1197,7 @@ function showTab(name) {
     if (name === 'tools') loadTools();
     if (name === 'skills') loadSkills();
     if (name === 'channels') loadChannels();
+    if (name === 'portals') loadPortals();
     if (name === 'chat' && !chatLoaded) { loadChatHistory(); refreshSummary(); refreshAgentState(); }
 
     if (name === 'chat') {
@@ -2785,6 +2893,13 @@ async function sendChat() {
             thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null;
             chatUI.closeStream();
             await syncLastChatTs();
+        } else if (data.slash_command) {
+            // Slash command response — no LLM involved, remove the eager thinking bubble
+            chatUI.removeThinkingIndicator(thinkingId);
+            thinkingId = null; if (_currentTurn) _currentTurn.thinkingId = null;
+            chatUI.closeStream();
+            chatUI.appendMessage('assistant', data.response);
+            await syncLastChatTs();
         } else {
             // Non-buffered success: agent responded immediately.
             // Thinking bubble was already created eagerly; populate it and close SSE.
@@ -3420,6 +3535,272 @@ async function toggleEnabled() {
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9"/></svg><span>${label}</span>`;
         btn.title = `${label} Agent`;
         btn.className = `w-full text-left flex items-center gap-2 px-4 py-2 text-sm transition-colors ${newEnabled ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600' : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'}`;
+    }
+}
+
+// ==================== Portals Tab ====================
+let _portalEditingId = null;
+
+async function loadPortals() {
+    const res = await fetch(`/api/agents/${AGENT_ID}/portals`);
+    const data = await res.json();
+    const portals = data.portals || [];
+    const list = document.getElementById('portals-list');
+    const empty = document.getElementById('portals-empty');
+    if (portals.length === 0) {
+        list.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    list.innerHTML = portals.map(p => {
+        const cfg = p.backend_config || {};
+        const cfgDisplay = typeof cfg === 'string' ? cfg : JSON.stringify(cfg);
+        const typeBadge = p.backend_type === 'ssh' ? 'bg-blue-100 text-blue-700' :
+                          p.backend_type === 'evonet' ? 'bg-purple-100 text-purple-700' :
+                          'bg-green-100 text-green-700';
+        const statusDot = p.status === 'connected' ? 'bg-green-500' : 'bg-gray-300';
+        const statusText = p.status || 'disconnected';
+        const connectBtn = p.status !== 'connected'
+            ? `<button onclick="event.stopPropagation(); testPortalConnection('${p.id}')" class="text-xs px-3 py-1 rounded bg-green-50 text-green-600 hover:bg-green-100">Connect</button>`
+            : `<button onclick="event.stopPropagation(); disconnectPortal('${p.id}')" class="text-xs px-3 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100">Disconnect</button>`;
+        return `
+        <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md border border-gray-100 dark:border-gray-600">
+            <div>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="text-sm font-medium text-gray-800 dark:text-gray-100">${p.name || 'Unnamed'}</span>
+                    <span class="inline-block w-2 h-2 rounded-full ${statusDot}"></span>
+                    <span class="text-xs text-gray-400">${statusText}</span>
+                </div>
+                <div class="flex items-center gap-1.5 mb-1">
+                    <span class="text-xs px-2 py-0.5 rounded font-medium ${typeBadge}">${p.backend_type}</span>
+                    <code class="text-xs text-gray-500 dark:text-gray-400">/_portal/${p.virtual_path}/ → ${p.real_path}</code>
+                </div>
+                <div class="text-xs text-gray-400 dark:text-gray-500 truncate max-w-sm">${cfgDisplay.substring(0, 80)}</div>
+            </div>
+            <div class="flex items-center gap-2">
+                ${connectBtn}
+                <button onclick="event.stopPropagation(); showEditPortalModal('${p.id}')" class="text-xs text-indigo-500 hover:text-indigo-700">Edit</button>
+                <button onclick="event.stopPropagation(); deletePortal('${p.id}')" class="text-xs text-red-500 hover:text-red-700">Delete</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function showAddPortalModal() {
+    _portalEditingId = null;
+    document.getElementById('portal-modal-title').textContent = 'Add Portal';
+    document.getElementById('portal-name').value = '';
+    document.getElementById('portal-virtual-path').value = '';
+    document.getElementById('portal-backend-type').value = 'local';
+    document.getElementById('portal-real-path').value = '';
+    document.getElementById('portal-workplace-select').value = '';
+    // Reset checkbox and SSH fields
+    const cb = document.getElementById('portal-use-workplace');
+    if (cb) { cb.checked = false; cb.disabled = false; }
+    document.getElementById('portal-ssh-host').value = '';
+    document.getElementById('portal-ssh-port').value = '22';
+    document.getElementById('portal-ssh-username').value = '';
+    document.getElementById('portal-ssh-auth-type').value = 'key';
+    document.getElementById('portal-ssh-key-path').value = '';
+    document.getElementById('portal-ssh-passphrase').value = '';
+    document.getElementById('portal-ssh-password').value = '';
+    document.getElementById('portal-modal').classList.remove('hidden');
+    updatePortalConfigFields();
+}
+
+async function showEditPortalModal(portalId) {
+    _portalEditingId = portalId;
+    // Fetch single portal
+    const res = await fetch(`/api/agents/${AGENT_ID}/portals`);
+    const data = await res.json();
+    const portal = (data.portals || []).find(p => p.id === portalId);
+    if (!portal) return alert('Portal not found.');
+    document.getElementById('portal-modal-title').textContent = 'Edit Portal';
+    document.getElementById('portal-name').value = portal.name || '';
+    document.getElementById('portal-virtual-path').value = portal.virtual_path || '';
+    document.getElementById('portal-backend-type').value = portal.backend_type || 'local';
+    document.getElementById('portal-real-path').value = portal.real_path || '';
+    const cfg = typeof portal.backend_config === 'string' ? JSON.parse(portal.backend_config || '{}') : (portal.backend_config || {});
+    document.getElementById('portal-workplace-select').value = cfg.workplace_id || '';
+    if (cfg.workplace_id) {
+        const cb = document.getElementById('portal-use-workplace');
+        if (cb) cb.checked = true;
+        const sel = document.getElementById('portal-workplace-select');
+        if (sel) sel.classList.remove('hidden');
+    }
+    // Pre-populate SSH standalone fields if editing
+    if (portal.backend_type === 'ssh' && !cfg.workplace_id) {
+        document.getElementById('portal-ssh-host').value = cfg.host || '';
+        document.getElementById('portal-ssh-port').value = cfg.port || '22';
+        document.getElementById('portal-ssh-username').value = cfg.username || '';
+        document.getElementById('portal-ssh-auth-type').value = cfg.auth_type || 'key';
+        document.getElementById('portal-ssh-key-path').value = cfg.key_path || '';
+        document.getElementById('portal-ssh-passphrase').value = cfg.passphrase || '';
+        if (cfg.auth_type === 'password') {
+            document.getElementById('portal-ssh-password').value = cfg.password || '';
+        }
+    }
+    document.getElementById('portal-modal').classList.remove('hidden');
+    updatePortalConfigFields();
+}
+
+function closePortalModal() {
+    document.getElementById('portal-modal').classList.add('hidden');
+}
+
+function updatePortalConfigFields() {
+    const type = document.getElementById('portal-backend-type').value;
+    const sshNewConfig = document.getElementById('portal-ssh-config');
+    const workplaceRow = document.getElementById('portal-workplace-picker');
+    const useWorkplaceCb = document.getElementById('portal-use-workplace');
+    const workplaceSelect = document.getElementById('portal-workplace-select');
+
+    if (type === 'local') {
+        if (sshNewConfig) sshNewConfig.classList.add('hidden');
+        if (workplaceRow) workplaceRow.classList.add('hidden');
+        if (useWorkplaceCb) useWorkplaceCb.checked = false;
+    } else if (type === 'ssh') {
+        if (workplaceRow) workplaceRow.classList.remove('hidden');
+        loadPortalWorkplaces();
+        _applyWorkplaceToggle();
+    } else if (type === 'evonet') {
+        if (sshNewConfig) sshNewConfig.classList.add('hidden');
+        if (workplaceRow) workplaceRow.classList.remove('hidden');
+        if (useWorkplaceCb) { useWorkplaceCb.checked = true; useWorkplaceCb.disabled = true; }
+        if (workplaceSelect) workplaceSelect.classList.remove('hidden');
+        loadPortalWorkplaces();
+    }
+}
+
+function _applyWorkplaceToggle() {
+    const sshNewConfig = document.getElementById('portal-ssh-config');
+    const useWorkplaceCb = document.getElementById('portal-use-workplace');
+    const workplaceSelect = document.getElementById('portal-workplace-select');
+    if (!useWorkplaceCb) return;
+    const useExisting = useWorkplaceCb.checked;
+    if (sshNewConfig) {
+        if (useExisting) sshNewConfig.classList.add('hidden');
+        else sshNewConfig.classList.remove('hidden');
+    }
+    if (workplaceSelect) {
+        if (useExisting) workplaceSelect.classList.remove('hidden');
+        else {
+            workplaceSelect.classList.add('hidden');
+            workplaceSelect.value = '';
+        }
+    }
+}
+
+async function savePortal() {
+    const name = document.getElementById('portal-name').value.trim();
+    const virtualPath = document.getElementById('portal-virtual-path').value.trim().replace(/^\/+|\/+$/g, '');
+    const backendType = document.getElementById('portal-backend-type').value;
+    const realPath = document.getElementById('portal-real-path').value.trim();
+    const workplaceId = document.getElementById('portal-workplace-select').value.trim();
+
+    if (!name) return alert('Name is required.');
+    if (!virtualPath) return alert('Virtual path is required.');
+    if (!realPath) return alert('Real path is required.');
+
+    let backendConfig = {};
+    if (backendType === 'ssh' || backendType === 'evonet') {
+        if (workplaceId) {
+            backendConfig = { workplace_id: workplaceId };
+        } else if (backendType === 'evonet') {
+            return alert('Evonet portals require a workplace_id.');
+        } else {
+            // Standalone SSH config
+            backendConfig = {
+                host: document.getElementById('portal-ssh-host')?.value?.trim() || '',
+                port: parseInt(document.getElementById('portal-ssh-port')?.value || '22'),
+                username: document.getElementById('portal-ssh-username')?.value?.trim() || '',
+                auth_type: document.getElementById('portal-ssh-auth-type')?.value || 'key',
+                key_path: document.getElementById('portal-ssh-key-path')?.value?.trim() || '',
+                passphrase: document.getElementById('portal-ssh-passphrase')?.value?.trim() || '',
+            };
+            if (backendConfig.auth_type === 'password') {
+                backendConfig.password = document.getElementById('portal-ssh-password')?.value?.trim() || '';
+            }
+            if (!backendConfig.host || !backendConfig.username) {
+                return alert('Host and username are required for SSH.');
+            }
+        }
+    }
+
+    const body = {
+        name,
+        virtual_path: virtualPath,
+        backend_type: backendType,
+        backend_config: backendConfig,
+        real_path: realPath,
+    };
+
+    const url = _portalEditingId
+        ? `/api/portals/${_portalEditingId}`
+        : `/api/agents/${AGENT_ID}/portals`;
+    const method = _portalEditingId ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    closePortalModal();
+    loadPortals();
+}
+
+async function deletePortal(portalId) {
+    if (!await showConfirm({ title: 'Delete Portal', message: 'Delete this portal? This only removes the mapping — files on the target are not affected.', confirmText: 'Delete' })) return;
+    const res = await fetch(`/api/portals/${portalId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.error) return alert(data.error);
+    loadPortals();
+}
+
+async function testPortalConnection(portalId) {
+    const res = await fetch(`/api/portals/${portalId}/connect`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+        showToast('Portal connected successfully!');
+    } else {
+        alert('Connection failed: ' + (data.error || 'unknown error'));
+    }
+    loadPortals();
+}
+
+async function disconnectPortal(portalId) {
+    const res = await fetch(`/api/portals/${portalId}/disconnect`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+        showToast('Portal disconnected.');
+    }
+    loadPortals();
+}
+
+// Load workplaces for dropdown in portal modal
+async function loadPortalWorkplaces() {
+    try {
+        const res = await fetch('/api/workplaces');
+        const data = await res.json();
+        const workplaces = data || [];
+        const sel = document.getElementById('portal-workplace-select');
+        if (!sel) return;
+        const prevVal = sel.value;
+        sel.innerHTML = '<option value="">-- Configure new connection --</option>';
+        workplaces.forEach(w => {
+            const label = `${w.name} (${w.type})`;
+            sel.innerHTML += `<option value="${w.id}">${label}</option>`;
+        });
+        // Restore previously selected value if it still exists in the new options
+        if (prevVal) {
+            const exists = Array.from(sel.options).some(o => o.value === prevVal);
+            if (exists) sel.value = prevVal;
+        }
+    } catch (e) {
+        console.error('Failed to load workplaces for portal picker:', e);
     }
 }
 </script>
