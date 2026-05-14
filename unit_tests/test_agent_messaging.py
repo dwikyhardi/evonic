@@ -424,8 +424,10 @@ class TestExecEscalateToUser(unittest.TestCase):
         human_session = {'external_user_id': 'user_123', 'channel_id': 'ch1'}
         with mock.patch('backend.tools.agent_messaging.db.get_latest_human_session',
                         return_value=human_session), \
+             mock.patch('backend.tools.agent_messaging.db.get_web_fallback_session',
+                        return_value=None), \
              mock.patch('backend.agent_runtime.notifier.notify_agent',
-                        return_value={'success': True}) as mock_notify:
+                       return_value={'success': True}) as mock_notify:
             result = self._call({'message': 'User, I need your approval.'})
         self.assertTrue(result.get('success'))
         self.assertIn('forwarded', result.get('message', ''))
