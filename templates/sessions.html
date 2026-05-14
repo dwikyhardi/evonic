@@ -1075,7 +1075,7 @@ async function loadSessionSummary() {
         const fetches = [fetch(`/api/sessions/${currentSessionId}/summary`)];
         if (currentAgentId) {
             const userId = document.getElementById('hdr-user')?.textContent || 'web_test';
-            fetches.push(fetch(`/api/agents/${currentAgentId}/chat/state?user_id=${encodeURIComponent(userId)}`));
+            fetches.push(fetch(`/api/agents/${currentAgentId}/chat/state?user_id=${encodeURIComponent(userId)}&session_id=${encodeURIComponent(currentSessionId)}`));
         } else {
             fetches.push(Promise.resolve(null));
         }

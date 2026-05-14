@@ -935,10 +935,29 @@ def api_chat_summary(agent_id):
 
 @agents_bp.route('/api/agents/<agent_id>/chat/state', methods=['GET'])
 def api_chat_agent_state(agent_id):
+    """Return merged agent state (global + per-session fields).
+
+    Global fields (focus, focus_reason) come from agent_state.
+    Per-session fields (mode, tasks, plan_file, states, auto_trivial) come from
+    session_state when ?session_id= is passed — matching how _restore_agent_state
+    and _persist_agent_state_split work in the runtime.
+    """
     from backend.agent_state import AgentState
-    content = db.get_agent_state(agent_id=agent_id)
-    if content:
-        state = AgentState.deserialize(content)
+    import json as _json
+
+    agent_content = db.get_agent_state(agent_id=agent_id)
+    agent_data = _json.loads(agent_content) if agent_content else {}
+
+    session_id = request.args.get('session_id', '').strip()
+    if session_id:
+        session_content = db.get_session_state(session_id, agent_id=agent_id)
+        session_data = _json.loads(session_content) if session_content else {}
+        merged = {**agent_data, **session_data}
+    else:
+        merged = agent_data
+
+    if merged:
+        state = AgentState.deserialize(_json.dumps(merged))
         return jsonify({
             'mode': state.mode,
             'tasks': state.tasks,
