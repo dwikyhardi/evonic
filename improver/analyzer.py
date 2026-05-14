@@ -4,8 +4,6 @@ import json
 import os
 from typing import Any, Dict, List
 
-from anthropic import Anthropic
-
 ANALYSIS_SYSTEM_PROMPT = """\
 You are an expert LLM evaluation analyst specializing in fine-tuned models for \
 Indonesian-language villa customer service. Your job is to analyze failed evaluation \
@@ -57,6 +55,7 @@ class FailureAnalyzer:
     def __init__(self, api_key: str = None, model: str = "claude-opus-4-0"):
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
         self.model = model
+        from anthropic import Anthropic
         self.client = Anthropic(api_key=self.api_key)
 
     def analyze_failures(self, failed_tests: List[Dict[str, Any]], run_context: Dict[str, Any] = None) -> Dict[str, Any]:

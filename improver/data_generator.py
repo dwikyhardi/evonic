@@ -5,8 +5,6 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List
 
-from anthropic import Anthropic
-
 GENERATION_SYSTEM_PROMPT = """\
 You are a training data specialist for fine-tuning LLMs. You create high-quality \
 JSONL training examples for a villa customer service assistant that operates in \
@@ -47,6 +45,7 @@ class TrainingDataGenerator:
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "training_data", "generated"
         )
+        from anthropic import Anthropic
         self.client = Anthropic(api_key=self.api_key)
         os.makedirs(self.output_dir, exist_ok=True)
 
