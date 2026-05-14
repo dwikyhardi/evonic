@@ -10,6 +10,7 @@ from models.mixins.dashboard import DashboardMixin
 from models.mixins.models import ModelsMixin
 from models.mixins.workplaces import WorkplaceMixin
 from models.mixins.safety_rules import SafetyRuleMixin
+from models.mixins.attachments import AttachmentsMixin
 
 __all__ = [
     'EvaluationMixin',
@@ -24,4 +25,5 @@ __all__ = [
     'ModelsMixin',
     'WorkplaceMixin',
     'SafetyRuleMixin',
+    'AttachmentsMixin',
 ]
