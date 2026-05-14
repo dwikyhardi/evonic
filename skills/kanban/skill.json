@@ -3,6 +3,7 @@
   "name": "Kanban",
   "version": "1.0.0",
   "description": "Allows agents to interact with the Kanban board: search tasks, pick up free-pick tasks, update status, and release tasks.",
+  "brief": "You can manage your tasks on the Kanban board using the `kanban` skill. Load it with `use_skill('kanban')` to search, create, update, and track tasks. Use this to stay organized and track your work progress.",
   "author": "Evonic",
   "tools_file": "tools.json",
   "lazy_tools": true,
