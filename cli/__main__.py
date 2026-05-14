@@ -56,6 +56,7 @@ from cli.commands import (
     agent_list, agent_get, agent_add, agent_enable, agent_disable, agent_remove,
     model_list, model_get, model_add, model_rm,
     channel_approve,
+    clear_sandbox,
     update_server, setup_wizard, pass_setup,
     doctor_command,
     reconfigure_wizard,
@@ -492,6 +493,13 @@ def main():
         help="Model ID to remove",
     )
 
+    # --- clear-sandbox ---
+    subparsers.add_parser(
+        "clear-sandbox",
+        help="Destroy all running evonic sandbox containers",
+        description="Force-destroy all Docker sandbox containers managed by evonic (useful after a crash or for cleanup).",
+    )
+
     # --- channel ---
     channel_parser = subparsers.add_parser(
         "channel",
@@ -667,6 +675,8 @@ def main():
             )
         elif args.model_command == "rm":
             model_rm(args.model_id)
+    elif args.command == "clear-sandbox":
+        clear_sandbox()
     elif args.command == "channel":
         if args.channel_command is None:
             channel_parser.print_help()

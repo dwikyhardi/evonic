@@ -29,6 +29,7 @@ class LocalWorkplaceBackend(ExecutionBackend):
         from backend.tools.lib.backends.docker_backend import DockerBackend
         self._inner = DockerBackend(
             session_id=f'workplace-local-{id(self)}',
+            agent_id='workplace',
             workspace=self._workspace,
         )
         return self._inner
