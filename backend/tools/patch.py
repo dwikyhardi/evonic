@@ -253,7 +253,7 @@ def _apply_hunks_to_content(raw: str, patch_text: str) -> dict:
 
     # Reconstruct file content.
     result = '\n'.join(lines)
-    if trailing_newline:
+    if trailing_newline and lines:
         result += '\n'
     if crlf:
         result = result.replace('\n', '\r\n')
@@ -378,7 +378,7 @@ def apply_hunks(file_path: str, patch_text: str) -> dict:
 
     # Reconstruct file content.
     result = '\n'.join(lines)
-    if trailing_newline:
+    if trailing_newline and lines:
         result += '\n'
     if crlf:
         result = result.replace('\n', '\r\n')
