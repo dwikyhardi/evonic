@@ -109,7 +109,20 @@ def _register_builtins():
         # Reset agent state so next turn starts fresh in plan mode (no stale execute state).
         from backend.agent_state import AgentState
         fresh = AgentState()
-        db.upsert_agent_state(fresh.serialize(), agent_id)
+        # Per-session: save to session_state
+        import json
+        session_data = {
+            'mode': fresh.mode,
+            'tasks': fresh.tasks,
+            'next_task_id': fresh._next_task_id,
+            'plan_file': fresh.plan_file,
+            'states': fresh.states,
+            'auto_trivial': fresh.auto_trivial,
+        }
+        db.upsert_session_state(session_id, json.dumps(session_data), agent_id=agent_id)
+        # Global: reset focus only
+        global_data = {'focus': fresh.focus, 'focus_reason': fresh.focus_reason}
+        db.upsert_agent_state(json.dumps(global_data), agent_id)
 
         now = __import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
         # Truncate agent's llm.log file
@@ -385,8 +398,22 @@ def _register_builtins():
         # Create a fresh AgentState in plan mode
         ms = AgentState()
 
-        # Persist state to dedicated agent_state table
-        agent_chat_manager.get(agent_id).upsert_agent_state(ms.serialize())
+        # Save per-session state (mode/tasks/plan_file) to session_state
+        _db = agent_chat_manager.get(agent_id)
+        session_data = {
+            'mode': ms.mode,
+            'tasks': ms.tasks,
+            'next_task_id': ms._next_task_id,
+            'plan_file': ms.plan_file,
+            'states': ms.states,
+            'auto_trivial': ms.auto_trivial,
+        }
+        import json
+        _db.upsert_session_state(session_id, json.dumps(session_data))
+
+        # Reset focus in global agent_state (focus is cross-session)
+        global_data = {'focus': ms.focus, 'focus_reason': ms.focus_reason}
+        _db.upsert_agent_state(json.dumps(global_data))
 
         return "Switched to plan mode."
 
@@ -474,22 +501,28 @@ def _register_builtins():
         else:
             lines.append("Model: unknown")
 
-        # Agent state: mode, focus, plan file
-        state_content = agent_chat_manager.get(agent_id).get_agent_state()
+        # Agent state: per-session (mode/plan_file) from session_state, global (focus) from agent_state
+        _db = agent_chat_manager.get(agent_id)
+        session_content = _db.get_session_state(session_id)
+        if session_content:
+            sess_ms = AgentState.deserialize(session_content)
+            lines.append(f"Mode: {sess_ms.mode}")
+            if sess_ms.plan_file:
+                plan_path = os.path.join(os.path.dirname(__file__), "..", sess_ms.plan_file)
+                if os.path.exists(plan_path):
+                    lines.append(f"Plan file: {sess_ms.plan_file}")
+        else:
+            lines.append("Mode: plan")
+        # Focus (global) from agent_state
+        state_content = _db.get_agent_state()
         if state_content:
             ms = AgentState.deserialize(state_content)
-            lines.append(f"Mode: {ms.mode}")
             if ms.focus:
                 reason = f" \u2014 {ms.focus_reason}" if ms.focus_reason else ""
                 lines.append(f"Focus: yes{reason}")
             else:
                 lines.append("Focus: no")
-            if ms.plan_file:
-                plan_path = os.path.join(os.path.dirname(__file__), "..", ms.plan_file)
-                if os.path.exists(plan_path):
-                    lines.append(f"Plan file: {ms.plan_file}")
         else:
-            lines.append("Mode: plan")
             lines.append("Focus: no")
 
         # Workplace

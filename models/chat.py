@@ -14,6 +14,7 @@ def _migrate_session_id(cursor, old_id: str, new_id: str) -> None:
     cursor.execute("UPDATE chat_messages SET session_id = ? WHERE session_id = ?", (new_id, old_id))
     cursor.execute("UPDATE chat_summaries SET session_id = ? WHERE session_id = ?", (new_id, old_id))
     cursor.execute("UPDATE agent_state SET session_id = ? WHERE session_id = ?", (new_id, old_id))
+    cursor.execute("UPDATE session_state SET session_id = ? WHERE session_id = ?", (new_id, old_id))
 
 
 class AgentChatDB:
@@ -100,6 +101,16 @@ class AgentChatDB:
                 pass
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS agent_state (
+                    session_id TEXT PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+                )
+            """)
+            # Per-session state table -- stores mode/tasks/plan_file/states/auto_trivial per session_id.
+            # focus/focus_reason remain in agent_state (global) for cross-session busy rejection.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS session_state (
                     session_id TEXT PRIMARY KEY,
                     content TEXT NOT NULL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -326,11 +337,65 @@ class AgentChatDB:
                 return row[0]
         return None
 
+    # -- Per-session state --
+
+    def upsert_session_state(self, session_id: str, content: str):
+        """Save session-level state (mode/tasks/plan_file/states/auto_trivial)."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO session_state (session_id, content, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                (session_id, content))
+            conn.commit()
+
+    def get_session_state(self, session_id: str) -> str | None:
+        """Get session-level state for a specific session_id.
+
+        If no session_state exists yet, performs one-time migration from the
+        global agent_state (__agent__): copies mode/tasks/plan_file/states/auto_trivial
+        to session_state while leaving focus/focus_reason in agent_state.
+        """
+        with self._connect() as conn:
+            # Try session-specific state first
+            row = conn.execute(
+                "SELECT content FROM session_state WHERE session_id = ?",
+                (session_id,)).fetchone()
+            if row:
+                return row[0]
+
+            # One-time migration: copy per-session fields from global agent_state
+            row = conn.execute(
+                "SELECT content FROM agent_state WHERE session_id = ?",
+                (self._AGENT_STATE_KEY,)).fetchone()
+            if row:
+                try:
+                    import json
+                    data = json.loads(row[0])
+                    # Extract only per-session fields
+                    session_data = {
+                        'mode': data.get('mode', 'plan'),
+                        'tasks': data.get('tasks', []),
+                        'next_task_id': data.get('next_task_id', 1),
+                        'plan_file': data.get('plan_file'),
+                        'states': data.get('states', {}),
+                        'auto_trivial': data.get('auto_trivial', False),
+                    }
+                    session_content = json.dumps(session_data)
+                    # Save to session_state
+                    conn.execute(
+                        "INSERT OR REPLACE INTO session_state (session_id, content, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                        (session_id, session_content))
+                    conn.commit()
+                    return session_content
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        return None
+
     def clear_session(self, session_id: str):
         with self._connect() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM chat_messages WHERE session_id = ?", (session_id,))
             cursor.execute("DELETE FROM chat_summaries WHERE session_id = ?", (session_id,))
+            cursor.execute("DELETE FROM session_state WHERE session_id = ?", (session_id,))
             # Do NOT delete agent_state — it is global per-agent, not per-session
             conn.commit()
 

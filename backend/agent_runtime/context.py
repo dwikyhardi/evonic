@@ -166,6 +166,7 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
     skills_mgr = SkillsManager()
     _allowed_skills = None if agent.get('is_super') else set(db.get_agent_skills(eid))
     skills_with_system_md = []
+    skill_briefs = []
     for skill in skills_mgr.list_skills():
         if not skills_mgr.is_skill_enabled(skill.get('id', '')):
             continue
@@ -175,17 +176,27 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
         # Hide skills not in this agent's allowlist (regular agents only)
         if _allowed_skills is not None and skill['id'] not in _allowed_skills:
             continue
+        # Only list lazy skills — eager skills' tools are already in the tool list
+        if not skill.get('lazy_tools', False):
+            continue
         skill_dir = skill.get('_dir', os.path.join(_BASE_DIR, 'skills', skill['id']))
         system_md_path = os.path.join(skill_dir, 'SYSTEM.md')
         if os.path.isfile(system_md_path):
-            desc = skill.get('description', '')
-            skills_with_system_md.append((skill['id'], desc))
+            skills_with_system_md.append(skill['id'])
+            # brief is for agents; fall back to description if no brief defined
+            brief = skill.get('brief', '').strip() or skill.get('description', '').strip()
+            if brief:
+                skill_briefs.append(brief)
 
     if skills_with_system_md:
         parts.append("\n## Skills")
         parts.append("You have these skills that can be loaded using `use_skill` tool:")
-        for skill_id, desc in skills_with_system_md:
-            parts.append(f"- `{skill_id}` - {desc}")
+        for skill_id in skills_with_system_md:
+            parts.append(f"- `{skill_id}`")
+        # Inject skill briefs — short usage hints defined in skill.json
+        if skill_briefs:
+            for brief in skill_briefs:
+                parts.append(f"\n{brief}")
 
     # Inform all agents about /_self/ access to their local config directory
     parts.append("\n## Agent Home Directory")
@@ -229,14 +240,15 @@ def _cache_key_valid(agent: Dict[str, Any], cache_entry: Dict[str, Any]) -> bool
     if _get_mtime(kb_dir) != cache_entry['kb_mtime']:
         return False
 
-    # Check skills mtimes
+    # Check skills mtimes (SYSTEM.md and skill.json)
     cached_skills_mtimes = cache_entry.get('skills_mtimes', {})
     skills_mgr = SkillsManager()
     for skill in skills_mgr.list_skills():
         sid = skill.get('id', '')
         skill_dir = skill.get('_dir', os.path.join(_BASE_DIR, 'skills', sid))
-        system_md_path = os.path.join(skill_dir, 'SYSTEM.md')
-        current_mtime = _get_mtime(system_md_path)
+        system_md_mtime = _get_mtime(os.path.join(skill_dir, 'SYSTEM.md'))
+        skill_json_mtime = _get_mtime(os.path.join(skill_dir, 'skill.json'))
+        current_mtime = max(system_md_mtime, skill_json_mtime)
         if current_mtime != cached_skills_mtimes.get(sid, 0.0):
             return False
 
@@ -278,8 +290,9 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
         for skill in skills_mgr.list_skills():
             sid = skill.get('id', '')
             skill_dir = skill.get('_dir', os.path.join(_BASE_DIR, 'skills', sid))
-            system_md_path = os.path.join(skill_dir, 'SYSTEM.md')
-            skills_mtimes[sid] = _get_mtime(system_md_path)
+            system_md_mtime = _get_mtime(os.path.join(skill_dir, 'SYSTEM.md'))
+            skill_json_mtime = _get_mtime(os.path.join(skill_dir, 'skill.json'))
+            skills_mtimes[sid] = max(system_md_mtime, skill_json_mtime)
 
         assigned_ids = frozenset(db.get_agent_tools(eid))
 

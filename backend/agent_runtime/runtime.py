@@ -1401,7 +1401,7 @@ class AgentRuntime:
 
         # Agent state: restore or create, then check for user approval
         if agent.get('enable_agent_state'):
-            ms = self._restore_agent_state(db_agent_id)
+            ms = self._restore_agent_state(db_agent_id, session_id=ctx.session_id)
             is_new_session = ms is None
             if is_new_session:
                 # Classify task complexity to decide initial mode
@@ -1611,11 +1611,35 @@ class AgentRuntime:
             entry["tool_call_id"] = msg["tool_call_id"]
         return entry
 
-    def _restore_agent_state(self, agent_id: str) -> Optional['AgentState']:
-        """Restore the last persisted AgentState from the dedicated agent_state table."""
-        content = db.get_agent_state(agent_id=agent_id)
-        if content:
-            return AgentState.deserialize(content)
+    def _restore_agent_state(self, agent_id: str, session_id: str = None) -> Optional['AgentState']:
+        """Restore agent state, merging per-session and global fields.
+
+        When session_id is provided:
+          - Per-session fields (mode/tasks/plan_file/states/auto_trivial) come from session_state.
+          - Global fields (focus/focus_reason) come from agent_state (__agent__).
+          - They are merged into a single AgentState object.
+
+        When session_id is None (busy rejection path):
+          - Only global fields (focus/focus_reason) are loaded from agent_state.
+        """
+        import json as _json
+
+        agent_content = db.get_agent_state(agent_id=agent_id)
+        agent_data = _json.loads(agent_content) if agent_content else {}
+
+        if session_id:
+            session_content = db.get_session_state(session_id, agent_id=agent_id)
+            session_data = _json.loads(session_content) if session_content else {}
+            # Merge: session fields override global defaults.
+            # focus/focus_reason in agent_data act as fallback; session_data
+            # does not contain focus fields so global values are preserved.
+            merged = {**agent_data, **session_data}
+        else:
+            # Only need focus/focus_reason for busy rejection
+            merged = agent_data
+
+        if merged:
+            return AgentState.deserialize(_json.dumps(merged))
         return None
 
     _APPROVAL_PATTERNS = [
