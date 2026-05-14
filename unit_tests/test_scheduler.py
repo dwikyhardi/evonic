@@ -387,7 +387,6 @@ class TestSchedulerActions:
             scheduler._execute_action(s['id'])
             mock_es.emit.assert_not_called()
 
-
 # ---------------------------------------------------------------------------
 # TestSchedulerAPI — Flask REST API endpoints
 # ---------------------------------------------------------------------------

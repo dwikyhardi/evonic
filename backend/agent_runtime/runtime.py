@@ -1022,16 +1022,26 @@ class AgentRuntime:
             _logger.error("Unhandled exception in _do_process_inner for session %s: %s\n%s",
                             ctx.session_id, exc, traceback.format_exc())
             if not _turn_complete_emitted:
+                _err_dur = round(time.time() - _turn_start, 1)
+                _err_msg = 'An unexpected error occurred while processing your request.'
+                # Write to chatlog so reconnecting clients (poll-based) also see the turn ended.
+                try:
+                    chatlog = chatlog_manager.get(agent.get('_db_agent_id', agent_id), ctx.session_id)
+                    chatlog.append({'type': 'error', 'session_id': ctx.session_id,
+                                    'content': _err_msg, 'metadata': {'error': True, 'thinking_duration': _err_dur}})
+                    chatlog.append({'type': 'turn_end', 'session_id': ctx.session_id, 'thinking_duration': _err_dur})
+                except Exception:
+                    pass
                 event_stream.emit('turn_complete', {
                     'agent_id': agent_id,
                     'agent_name': agent.get('name', ''),
                     'session_id': ctx.session_id,
                     'external_user_id': ctx.external_user_id,
                     'channel_id': ctx.channel_id,
-                    'response': 'An unexpected error occurred while processing your request.',
+                    'response': _err_msg,
                     'tool_trace': [],
                     'is_error': True,
-                    'thinking_duration': round(time.time() - _turn_start, 1),
+                    'thinking_duration': _err_dur,
                 })
                 self._bg_executor.submit(
                     lambda sid=ctx.session_id: (time.sleep(SESSION_BUFFER_CLEANUP_DELAY), event_stream.cleanup_session_buffer(sid)),
@@ -1401,7 +1411,7 @@ class AgentRuntime:
 
         # Agent state: restore or create, then check for user approval
         if agent.get('enable_agent_state'):
-            ms = self._restore_agent_state(db_agent_id)
+            ms = self._restore_agent_state(db_agent_id, session_id=ctx.session_id)
             is_new_session = ms is None
             if is_new_session:
                 # Classify task complexity to decide initial mode
@@ -1611,11 +1621,35 @@ class AgentRuntime:
             entry["tool_call_id"] = msg["tool_call_id"]
         return entry
 
-    def _restore_agent_state(self, agent_id: str) -> Optional['AgentState']:
-        """Restore the last persisted AgentState from the dedicated agent_state table."""
-        content = db.get_agent_state(agent_id=agent_id)
-        if content:
-            return AgentState.deserialize(content)
+    def _restore_agent_state(self, agent_id: str, session_id: str = None) -> Optional['AgentState']:
+        """Restore agent state, merging per-session and global fields.
+
+        When session_id is provided:
+          - Per-session fields (mode/tasks/plan_file/states/auto_trivial) come from session_state.
+          - Global fields (focus/focus_reason) come from agent_state (__agent__).
+          - They are merged into a single AgentState object.
+
+        When session_id is None (busy rejection path):
+          - Only global fields (focus/focus_reason) are loaded from agent_state.
+        """
+        import json as _json
+
+        agent_content = db.get_agent_state(agent_id=agent_id)
+        agent_data = _json.loads(agent_content) if agent_content else {}
+
+        if session_id:
+            session_content = db.get_session_state(session_id, agent_id=agent_id)
+            session_data = _json.loads(session_content) if session_content else {}
+            # Merge: session fields override global defaults.
+            # focus/focus_reason in agent_data act as fallback; session_data
+            # does not contain focus fields so global values are preserved.
+            merged = {**agent_data, **session_data}
+        else:
+            # Only need focus/focus_reason for busy rejection
+            merged = agent_data
+
+        if merged:
+            return AgentState.deserialize(_json.dumps(merged))
         return None
 
     _APPROVAL_PATTERNS = [
@@ -1735,6 +1769,50 @@ class AgentRuntime:
         agent_id = session['agent_id']
         external_user_id = session['external_user_id']
         channel_id = session.get('channel_id')
+
+        # Slash command interception — execute immediately instead of sending to LLM
+        parsed = parse_command(text)
+        if parsed:
+            cmd_name, cmd_args = parsed
+            response = execute_command(
+                cmd_name, cmd_args, session_id, agent_id,
+                external_user_id, channel_id,
+            )
+            if response is not None:
+                # Command was recognized — save command echo and response, then return
+                db.add_chat_message(session_id, 'user', text,
+                                    agent_id=agent_id, metadata={'slash_command': True})
+                db.add_chat_message(session_id, 'assistant', response,
+                                    agent_id=agent_id, metadata={'slash_command': True})
+                _cl = chatlog_manager.get(agent_id, session_id)
+                _cl.append({'type': 'user', 'session_id': session_id, 'content': text,
+                            'sender_id': external_user_id,
+                            'metadata': {'slash_command': True}})
+                _cl.append({'type': 'system', 'session_id': session_id, 'content': response,
+                            'metadata': {'slash_command': True}})
+                agent = db.get_agent(agent_id)
+                # Emit turn_complete so SSE client shows the response
+                event_stream.emit('turn_complete', {
+                    'agent_id': agent_id,
+                    'agent_name': agent.get('name', '') if agent else '',
+                    'session_id': session_id,
+                    'external_user_id': external_user_id,
+                    'channel_id': channel_id,
+                    'response': response,
+                    'tool_trace': [],
+                    'is_error': False,
+                    'thinking_duration': 0.0,
+                    'slash_command': True,
+                })
+                # Signal the client to clear the chat UI when the clear command was used
+                if cmd_name == 'clear':
+                    event_stream.emit('session_clear', {
+                        'session_id': session_id,
+                        'agent_id': agent_id,
+                    })
+                self._prefetcher.invalidate(session_id)
+                return True
+            # Unknown command — fall through to normal LLM processing
 
         db.add_chat_message(session_id, 'user', text, agent_id=agent_id)
         chatlog_manager.get(agent_id, session_id).append(

@@ -6,8 +6,6 @@ import shutil
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from anthropic import Anthropic
-
 ADJUSTMENT_SYSTEM_PROMPT = """\
 You are a training data quality specialist. You review and adjust existing JSONL \
 training data for a villa customer service LLM (Indonesian language).
@@ -43,6 +41,7 @@ class DataAdjuster:
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "training_data"
         )
+        from anthropic import Anthropic
         self.client = Anthropic(api_key=self.api_key)
 
     def adjust(self, training_file: str, analysis: Dict[str, Any],

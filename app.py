@@ -4,7 +4,7 @@ from flask import jsonify, redirect, request, session, url_for
 import re
 import logging
 
-from dotenv import load_dotenv
+from backend.dotenv_loader import load_dotenv
 load_dotenv()
 
 from backend.logging_config import configure as configure_logging
@@ -46,6 +46,10 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 app = Flask(__name__)
 sock = Sock(app)
 app.secret_key = config.SECRET_KEY
+
+# Make session permanent so it survives mobile browser backgrounding / restarts
+from datetime import timedelta
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 # Global upload size limit (defense-in-depth for all endpoints)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB

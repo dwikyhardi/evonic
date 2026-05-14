@@ -39,6 +39,32 @@ from backend.agent_runtime.llm_tool_executor import MAX_INJECTIONS_PER_LOOP
 
 from models.db import db
 from backend.llm_client import llm_client, strip_thinking_tags, LLMClient, _split_trailing_think_close
+def _persist_agent_state_split(ms, agent_id, session_id, db_agent_id=None):
+    """Persist agent state, splitting per-session vs global fields.
+
+    - focus/focus_reason are GLOBAL  -> upsert_agent_state(__agent__)
+    - mode/tasks/plan_file/states/auto_trivial are PER-SESSION -> upsert_session_state(session_id)
+    """
+    raw = ms.serialize()
+    data = json.loads(raw)
+
+    # Global: focus/focus_reason
+    global_data = {
+        'focus': data.get('focus', False),
+        'focus_reason': data.get('focus_reason'),
+    }
+    db.upsert_agent_state(json.dumps(global_data), agent_id=agent_id)
+
+    # Per-session: everything except focus/focus_reason
+    session_data = {
+        'mode': data.get('mode', 'plan'),
+        'tasks': data.get('tasks', []),
+        'next_task_id': data.get('next_task_id', 1),
+        'plan_file': data.get('plan_file'),
+        'states': data.get('states', {}),
+        'auto_trivial': data.get('auto_trivial', False),
+    }
+    db.upsert_session_state(session_id, json.dumps(session_data), agent_id=agent_id)
 from backend.tools import tool_registry
 from config import (AGENT_MAX_TOOL_ITERATIONS as MAX_TOOL_ITERATIONS,
                     AGENT_MAX_TOOL_RESULT_CHARS as MAX_TOOL_RESULT_CHARS,
@@ -640,7 +666,7 @@ def run_tool_loop(agent: Dict[str, Any],
             # Persist mental state for next turn
             ms = agent_context.get('agent_state')
             if ms is not None:
-                db.upsert_agent_state(ms.serialize(), agent_id=agent_id)
+                _persist_agent_state_split(ms, agent_id, session_id, db_agent_id)
             final = content or "(No response)"
             event_stream.emit('final_answer', {
                 'agent_id': agent_id, 'session_id': session_id,
@@ -1074,7 +1100,7 @@ def run_tool_loop(agent: Dict[str, Any],
             if fn_name in ('save_plan', 'set_mode', 'update_tasks', 'state'):
                 _ms = agent_context.get('agent_state')
                 if _ms is not None:
-                    db.upsert_agent_state(_ms.serialize(), agent_id=agent_id)
+                    _persist_agent_state_split(_ms, agent_id, session_id, db_agent_id)
 
             # Record in trace (for animated bubbles)
             tool_trace.append({"tool": fn_name, "args": args, "result": result_dict})

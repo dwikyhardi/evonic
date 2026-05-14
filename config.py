@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 
-# Load .env file — prefer envcrypt (supports encrypted values), fall back to dotenv
+# Load .env file — prefer envcrypt (supports encrypted values), fall back to internal loader
 _envcrypt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib', 'envcrypt', 'libs', 'python')
 sys.path.append(_envcrypt_path)
 
@@ -12,19 +12,19 @@ sys.path.append(_envcrypt_path)
 # relying on a single load_dotenv() in app.py leaves them with an empty
 # environment and falls back to hardcoded defaults (e.g. PORT=8080).
 #
-# Calling load_dotenv() here is safe even when app.py also calls it: python-dotenv
-# defaults to override=False, so a second call is a no-op for variables that
-# already exist in os.environ. No duplicate work, no surprises.
+# Calling load_dotenv() here is safe even when app.py also calls it:
+# the loader defaults to override=False, so a second call is a no-op for
+# variables that already exist in os.environ. No duplicate work, no surprises.
 _envcrypt_config = os.path.join(os.path.expanduser('~'), '.envcrypt.yaml')
 if os.path.exists(_envcrypt_config):
     try:
         import envcrypt
         envcrypt.load(".env")
     except Exception:
-        from dotenv import load_dotenv
+        from backend.dotenv_loader import load_dotenv
         load_dotenv()
 else:
-    from dotenv import load_dotenv
+    from backend.dotenv_loader import load_dotenv
     load_dotenv()
 
 _logger = logging.getLogger(__name__)

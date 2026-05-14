@@ -96,6 +96,17 @@ def execute(agent: dict, args: dict) -> dict:
             "message": f"Skill '{skill_id}' is restricted to super agents only."
         }
 
+    # Eager skills have their tools loaded at startup — use_skill is only for lazy skills
+    if not manifest.get('lazy_tools', False):
+        return {
+            "status": "error",
+            "id": skill_id,
+            "message": (
+                f"Skill '{skill_id}' is eagerly loaded — its tools are already available. "
+                f"You don't need to call use_skill for it. Just use the tools directly."
+            )
+        }
+
     # Build path to SYSTEM.md
     skill_dir_norm = os.path.normpath(skill_dir)
     system_md_path = os.path.join(skill_dir_norm, "SYSTEM.md")

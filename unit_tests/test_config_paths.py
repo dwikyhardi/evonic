@@ -26,9 +26,9 @@ def _ensure_stub(name: str, **attrs):
 
 
 try:
-    import dotenv  # noqa: F401
+    import backend.dotenv_loader  # noqa: F401
 except ImportError:
-    _ensure_stub('dotenv', load_dotenv=lambda *a, **kw: None)
+    _ensure_stub('backend.dotenv_loader', load_dotenv=lambda *a, **kw: None)
 
 try:
     import envcrypt  # noqa: F401

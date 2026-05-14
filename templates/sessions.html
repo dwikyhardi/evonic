@@ -129,7 +129,7 @@ html.dark #mobile-dropdown .border-b { border-color: #374151; }
                 </button>
                 </div>
 
-                <!-- Side panels wrapper (Agent State + Session Recap stacked vertically) -->
+                <!-- Side panels wrapper (Agent State + Session State stacked vertically) -->
                 <div id="side-panels-wrapper" class="hidden lg:flex flex-col border-l dark:border-gray-600 border-gray-200 bg-white dark:bg-gray-800 flex-shrink-0 min-h-0" style="width: 300px;">
                     <!-- Agent State Panel -->
                     <div id="agent-state-panel" class="flex-shrink-0">
@@ -147,7 +147,7 @@ html.dark #mobile-dropdown .border-b { border-color: #374151; }
                     <!-- Summary Panel -->
                     <div id="summary-panel" class="flex flex-col flex-1 min-h-0">
                         <div id="SessionRecap" class="flex justify-between items-center px-4 py-3 border-b border-gray-100 dark:border-gray-600 flex-shrink-0">
-                            <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-100 uppercase tracking-wide">Session Recap</h4>
+                            <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-100 uppercase tracking-wide">Session State</h4>
                             <div class="flex items-center gap-4">
                                 <button onclick="forceRecap(this)" class="text-xs text-gray-400 hover:text-indigo-500 p-1" title="Recap Now">✨</button>
                                 <button onclick="loadSessionSummary()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
@@ -238,7 +238,7 @@ html.dark #mobile-dropdown .border-b { border-color: #374151; }
     <div class="absolute inset-0 bg-black/40" onclick="closeMobileSummary()"></div>
     <div class="absolute bottom-0 left-0 right-0 max-h-[70vh] bg-white dark:bg-gray-800 flex flex-col shadow-xl rounded-t-2xl transform transition-transform duration-200">
         <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 dark:border-gray-600">
-            <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Session Recap</h4>
+            <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Session State</h4>
             <div class="flex items-center gap-4">
                 <button onclick="forceRecap(this)" class="text-sm text-gray-400 hover:text-indigo-500 p-1" title="Recap Now">✨</button>
                 <button onclick="loadSessionSummary()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
@@ -332,6 +332,7 @@ function dispatchSessionEvent(evtName, data, sessionId) {
         chatUI.appendTimelineEntry(_sseThinkingId, {type: 'tool_result', tool: data.tool, result: data.result, error: data.error});
         if (['save_plan', 'set_mode', 'update_tasks', 'state'].includes(data.tool)) {
             loadAgentState();
+            loadSessionSummary();
         }
     } else if (evtName === 'response_chunk') {
         if (data.content && _sseThinkingId) {
@@ -1063,30 +1064,65 @@ async function deleteSession(sessionId) {
     loadSessions(search);
 }
 
-// ==================== Session Recap ====================
+// ==================== Session State ====================
 
 let lastSummaryText = null;
 
 async function loadSessionSummary() {
     if (!currentSessionId) return;
     try {
-        const res = await fetch(`/api/sessions/${currentSessionId}/summary`);
-        const data = await res.json();
-        const rendered = data.summary
+        // Fetch session summary and agent state in parallel
+        const fetches = [fetch(`/api/sessions/${currentSessionId}/summary`)];
+        if (currentAgentId) {
+            const userId = document.getElementById('hdr-user')?.textContent || 'web_test';
+            fetches.push(fetch(`/api/agents/${currentAgentId}/chat/state?user_id=${encodeURIComponent(userId)}`));
+        } else {
+            fetches.push(Promise.resolve(null));
+        }
+        const [sumRes, stateRes] = await Promise.all(fetches);
+        const data = await sumRes.json();
+        const stateData = (stateRes && stateRes.ok) ? await stateRes.json() : {};
+
+        // Build mode badge + plan file + tasks header from agent state
+        let headerHtml = '';
+        if (stateData.mode) {
+            const modeColor = stateData.mode === 'execute' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+            headerHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${modeColor}">${esc(stateData.mode)}</span> `;
+        }
+        if (stateData.plan_file) {
+            headerHtml += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 ml-1">📋 ${esc(stateData.plan_file)}</span> `;
+        }
+        if (stateData.tasks && stateData.tasks.length > 0) {
+            const icons = {pending: '\u2610', in_progress: '\u27f3', done: '\u2713'};
+            const iconColors = {pending: 'text-gray-400', in_progress: 'text-amber-500', done: 'text-green-500'};
+            headerHtml += '<div class="mt-2"><div class="text-gray-500 dark:text-gray-400 font-medium mb-1 text-xs uppercase tracking-wide">Tasks</div><ul class="space-y-0.5">';
+            for (const t of stateData.tasks) {
+                const icon = icons[t.status] || '\u2610';
+                const color = iconColors[t.status] || 'text-gray-400';
+                const textClass = t.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200';
+                headerHtml += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${esc(t.text)}</span></li>`;
+            }
+            headerHtml += '</ul></div>';
+        }
+
+        const summaryHtml = data.summary
             ? '<div class="recap-prose">' + marked.parse(data.summary) + '</div>'
             : null;
+        const rendered = (headerHtml || summaryHtml) ? (headerHtml && summaryHtml
+            ? `<div class="mb-3 pb-3 border-b border-gray-100 dark:border-gray-600">${headerHtml}</div>${summaryHtml}`
+            : headerHtml || summaryHtml) : null;
+
         const metaText = data.summary
             ? `${data.message_count} msgs summarized` + (data.updated_at ? ` \u00b7 ${formatTime(data.updated_at)}` : '')
-            : null;
+            : (headerHtml ? '' : null);
 
-        // Update both desktop and mobile panels
-        ['', 'mobile-'].forEach(prefix => {
+        ['' , 'mobile-'].forEach(prefix => {
             const content = document.getElementById(prefix + 'summary-content');
             const meta = document.getElementById(prefix + 'summary-meta');
             if (!content) return;
             if (rendered) {
-                if (data.summary !== lastSummaryText) content.innerHTML = rendered;
-                meta.textContent = metaText;
+                content.innerHTML = rendered;
+                meta.textContent = metaText || '';
                 meta.classList.remove('hidden');
             } else {
                 content.innerHTML = '<p class="text-xs text-gray-400 italic">No summary yet.</p>';
@@ -1096,7 +1132,6 @@ async function loadSessionSummary() {
         lastSummaryText = data.summary || null;
     } catch(e) { /* ignore */ }
 }
-
 async function forceRecap(btn) {
     if (!currentSessionId) return;
     const original = btn.textContent;
