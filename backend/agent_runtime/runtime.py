@@ -9,6 +9,7 @@ llm_loop, and summarizer.
 import logging
 import os
 import signal
+import sys
 import time
 import queue
 import threading
@@ -449,13 +450,15 @@ class AgentRuntime:
 
     @classmethod
     def _signal_handler(cls, signum: int, frame: Optional[Any]) -> None:
-        """Handle SIGTERM/SIGINT by triggering graceful shutdown, then re-raise."""
+        """Handle SIGTERM/SIGINT by triggering graceful shutdown, then sys.exit
+        to allow atexit handlers (including Docker container cleanup) to run."""
         sig_name = signal.Signals(signum).name
         _logger.info("\nReceived %s, initiating graceful shutdown...", sig_name)
         cls.graceful_shutdown()
-        # Re-raise so the process still exits
-        signal.signal(signum, signal.SIG_DFL)
-        os.kill(os.getpid(), signum)
+        # Use sys.exit to allow normal Python shutdown — this triggers
+        # atexit handlers (including Docker container cleanup) and
+        # thread cleanup, whereas os.kill hard-terminates the process.
+        sys.exit(0)
 
     @classmethod
     def _register_signal_handlers(cls) -> None:

@@ -52,6 +52,12 @@ def setup_module(module):
     for key in _STUB_KEYS:
         _saved_modules[key] = sys.modules.get(key)
 
+    # Evict any cached agent_messaging module so tests get a fresh import
+    # with our stubs below.  Without this, test_tool_backends.py may have
+    # already loaded the module (via _discover_tool_modules) during
+    # collection with the real Database instance attached.
+    sys.modules.pop('backend.tools.agent_messaging', None)
+
     sys.modules['models.db'] = mock.MagicMock(db=_mock_db)
     sys.modules['models'] = mock.MagicMock()
     sys.modules['backend.agent_runtime.notifier'] = _mock_notifier
