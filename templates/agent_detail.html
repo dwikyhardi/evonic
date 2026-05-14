@@ -259,6 +259,20 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
             </div>
             <div class="mb-4">
                 <label class="flex items-center gap-3 cursor-pointer select-none">
+                    {{ toggle_widget(id='agent-attachments', checked=agent.attachments_enabled) }}
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Attachments (Files)</span>
+                        <p class="text-xs text-gray-400 mt-0.5">Allow agent to receive non-image files (PDF, audio, video, etc.) from channels. Files are stored for 7 days and read on demand via the <code>read_attachment</code> tool. Requires a model with <code>attachments_supported</code>.</p>
+                    </div>
+                </label>
+                <div class="mt-2 flex items-center gap-2">
+                    <label for="agent-attachment-max-mb" class="text-xs text-gray-500 dark:text-gray-400">Max file size (MB):</label>
+                    <input type="number" id="agent-attachment-max-mb" min="1" max="20" value="{{ agent.attachment_max_size_mb if agent.attachment_max_size_mb is not none else 20 }}" class="w-20 p-1.5 border border-gray-300 rounded-md text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10">
+                    <span class="text-xs text-gray-400">Telegram hard-caps at 20 MB.</span>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer select-none">
                     {{ toggle_widget(id='agent-inject-id', checked=agent.inject_agent_id) }}
                     <div>
                         <span class="text-gray-600 dark:text-gray-300 text-sm font-medium">Inject Agent ID</span>
@@ -1369,6 +1383,8 @@ async function saveGeneral() {
             workplace_id: homeSel ? homeSel.value || null : null,
             system_prompt: document.getElementById('agent-system-prompt').value,
             vision_enabled: document.getElementById('agent-vision').checked ? 1 : 0,
+            attachments_enabled: document.getElementById('agent-attachments').checked ? 1 : 0,
+            attachment_max_size_mb: Math.min(20, Math.max(1, parseInt(document.getElementById('agent-attachment-max-mb').value) || 20)),
             sandbox_enabled: isRemoteOrCloud ? 0 : (document.getElementById('agent-sandbox').checked ? 1 : 0),
             safety_checker_enabled: document.getElementById('agent-safety-checker').checked ? 1 : 0,
             inject_agent_id: document.getElementById('agent-inject-id').checked ? 1 : 0,

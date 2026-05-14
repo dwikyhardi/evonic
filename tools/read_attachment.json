@@ -1,0 +1,31 @@
+{
+  "id": "read_attachment",
+  "name": "Read attachment",
+  "description": "Read a user-uploaded file attachment that was delivered via a channel (e.g. Telegram).",
+  "function": {
+    "name": "read_attachment",
+    "description": "Read the content of a user-sent file attachment. Use the id=N value from the [Attached: ...] line in the user's message. Returns paginated text for text/code files, extracted text for PDFs when supported, or a metadata block for binary files. Files are isolated per agent and expire after 7 days.",
+    "parameters": {
+      "properties": {
+        "attachment_id": {
+          "description": "Numeric ID from the [Attached: id=N ...] line. Preferred over 'path'.",
+          "type": "integer"
+        },
+        "path": {
+          "description": "Fallback: direct file path under data/attachments/<agent_id>/. Used only if attachment_id is not provided.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "1-based line number to start reading from for text/code/PDF content (default: 1). Use this to paginate through large files.",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "mock_response": "[Attachment: example.pdf (application/pdf, 240KB)]\n\nMock content for read_attachment.",
+  "mock_response_type": "text",
+  "created_at": "2026-05-14T11:50:00.000000",
+  "updated_at": "2026-05-14T11:50:00.000000"
+}

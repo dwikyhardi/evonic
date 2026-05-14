@@ -24,8 +24,8 @@ class ModelsMixin:
                     INSERT INTO llm_models (id, name, type, provider, base_url, api_key,
                         model_name, max_tokens, timeout, thinking, thinking_budget,
                         temperature, enabled, is_default, model_max_concurrent, api_format,
-                        vision_supported)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        vision_supported, attachments_supported)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     m.get('id'),
                     m.get('name'),
@@ -44,6 +44,7 @@ class ModelsMixin:
                     m.get('model_max_concurrent', 1),
                     m.get('api_format', 'openai'),
                     m.get('vision_supported', 0),
+                    m.get('attachments_supported', 0),
                 ))
             conn.commit()
 
@@ -118,8 +119,8 @@ class ModelsMixin:
                 INSERT INTO llm_models (id, name, type, provider, base_url, api_key,
                     model_name, max_tokens, timeout, thinking, thinking_budget,
                     temperature, enabled, is_default, model_max_concurrent, api_format,
-                    vision_supported)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    vision_supported, attachments_supported)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 model_id,
                 model_data.get('name'),
@@ -138,6 +139,7 @@ class ModelsMixin:
                 model_data.get('model_max_concurrent', 1),
                 model_data.get('api_format', 'openai'),
                 model_data.get('vision_supported', 0),
+                model_data.get('attachments_supported', 0),
             ))
             conn.commit()
         return model_id
@@ -146,7 +148,7 @@ class ModelsMixin:
         """Update an existing model."""
         allowed = {'name', 'type', 'provider', 'base_url', 'api_key', 'model_name',
                    'max_tokens', 'timeout', 'thinking', 'thinking_budget', 'temperature', 'enabled', 'is_default',
-                   'model_max_concurrent', 'api_format', 'vision_supported'}
+                   'model_max_concurrent', 'api_format', 'vision_supported', 'attachments_supported'}
         updates = {k: v for k, v in model_data.items() if k in allowed}
         if not updates:
             return False

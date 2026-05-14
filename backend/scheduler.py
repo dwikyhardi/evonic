@@ -63,7 +63,30 @@ class Scheduler:
                                      EVENT_JOB_EXECUTED | EVENT_JOB_MISSED)
         self._scheduler.start()
         self._load_from_db()
+        # Built-in: nightly attachment cleanup (rows + files older than 7 days).
+        try:
+            self._scheduler.add_job(
+                self._cleanup_expired_attachments,
+                CronTrigger(hour=3, minute=0),
+                id='builtin:attachments_cleanup',
+                replace_existing=True,
+            )
+        except Exception as e:  # pragma: no cover - defensive guard
+            log.warning("Failed to register attachments cleanup job: %s", e)
         log.info("Started with %d jobs", len(self._scheduler.get_jobs()))
+
+    def _cleanup_expired_attachments(self):
+        """Daily housekeeping: delete attachment rows + files older than 7 days."""
+        try:
+            from models.db import db
+            deleted, freed = db.cleanup_expired_attachments(max_age_days=7)
+            if deleted:
+                log.info(
+                    "Attachments cleanup: deleted %d rows, freed %d bytes",
+                    deleted, freed,
+                )
+        except Exception as e:
+            log.error("Attachments cleanup failed: %s", e, exc_info=True)
 
     def shutdown(self):
         """Gracefully shut down the scheduler."""

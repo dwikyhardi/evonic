@@ -1,0 +1,23 @@
+{
+  "id": "cleanup_attachments",
+  "name": "Cleanup attachments",
+  "description": "Admin tool: delete stored user attachments older than N days (rows + files). Restricted to super agents.",
+  "function": {
+    "name": "cleanup_attachments",
+    "description": "Delete attachment files and database rows older than `older_than_days` days. Returns the deleted count and freed bytes. Only super agents may invoke this tool.",
+    "parameters": {
+      "properties": {
+        "older_than_days": {
+          "description": "Maximum age in days (default: 7). Attachments older than this will be permanently removed.",
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "mock_response": "{\"deleted_count\": 0, \"freed_bytes\": 0}",
+  "mock_response_type": "text",
+  "created_at": "2026-05-14T11:50:00.000000",
+  "updated_at": "2026-05-14T11:50:00.000000"
+}
