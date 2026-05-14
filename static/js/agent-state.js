@@ -16,7 +16,10 @@ async function renderAgentState(agentId, userId, containerIds) {
         const data = await res.json();
 
         const empty = '<p class="text-sm text-gray-400 dark:text-gray-500 italic">No state yet.</p>';
-        if (!data.mode) {
+        const hasAnyState = data.mode || data.focus || data.plan_file ||
+            (data.tasks && data.tasks.length > 0) ||
+            (data.states && Object.keys(data.states).length > 0);
+        if (!hasAnyState) {
             (Array.isArray(containerIds) ? containerIds : [containerIds]).forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = empty;
@@ -24,12 +27,8 @@ async function renderAgentState(agentId, userId, containerIds) {
             return;
         }
 
-        // Build status cards row (Mode, Focus, Plan)
+        // Build status cards row (Focus, Plan)
         let cards = '';
-
-        // Mode badge
-        const modeColor = data.mode === 'execute' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
-        cards += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${modeColor}">${esc(data.mode)}</span>`;
 
         // Focus badge
         if (data.focus) {
