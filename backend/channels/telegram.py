@@ -22,7 +22,7 @@ def _sanitize_filename(name: str) -> str:
 
 def _human_size(size_bytes: Optional[int]) -> str:
     """Render a byte count as a human-friendly string."""
-    if not size_bytes or size_bytes < 0:
+    if size_bytes is None or size_bytes < 0:
         return '0B'
     units = ['B', 'KB', 'MB', 'GB']
     n = float(size_bytes)
@@ -40,7 +40,6 @@ _TG_FILE_TYPE_DEFAULT_MIME = {
     'video_note': 'video/mp4',
     'sticker': 'image/webp',
     'animation': 'video/mp4',
-    'photo': 'image/jpeg',
 }
 
 

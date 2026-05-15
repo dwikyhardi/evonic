@@ -79,10 +79,33 @@ def test_sanitize_filename_caps_length():
 
 
 def test_human_size_formats():
+    # Both ``None`` and a negative size fall back to "0B", but a legitimate
+    # zero-byte file MUST render as "0B" too (not be silently coerced via a
+    # truthiness check that conflates None and 0).
+    assert _human_size(None) == '0B'
+    assert _human_size(-1) == '0B'
     assert _human_size(0) == '0B'
     assert _human_size(500) == '500B'
     assert _human_size(2048) == '2.0KB'
     assert _human_size(5 * 1024 * 1024) == '5.0MB'
+
+
+def test_telegram_default_mime_keys_match_candidates():
+    """``_TG_FILE_TYPE_DEFAULT_MIME`` must only contain keys that the
+    non-photo candidate gate in ``_detect_non_photo_attachment`` actually
+    consults; otherwise the mapping has a dead branch (e.g. an old 'photo'
+    key that the photo path never reads).
+    """
+    from backend.channels.telegram import _TG_FILE_TYPE_DEFAULT_MIME
+    # Non-photo candidate types as enumerated inside _detect_non_photo_attachment.
+    candidate_types = {
+        'document', 'audio', 'voice', 'video',
+        'video_note', 'animation', 'sticker',
+    }
+    assert set(_TG_FILE_TYPE_DEFAULT_MIME.keys()).issubset(candidate_types)
+    # 'photo' is owned by the dedicated photo / vision branch and must not
+    # appear here — it would be unreachable through the non-photo gate.
+    assert 'photo' not in _TG_FILE_TYPE_DEFAULT_MIME
 
 
 def test_detect_non_photo_attachment_document():
