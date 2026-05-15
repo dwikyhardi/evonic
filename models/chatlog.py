@@ -584,7 +584,34 @@ def _reconstruct_llm_messages(entries: List[dict]) -> List[Dict[str, Any]]:
             # Skip turn_begin, turn_end, pending
             i += 1
 
-    return _fix_interleaved_user_messages(messages)
+    return _drop_orphaned_tool_messages(
+        _fix_interleaved_user_messages(messages))
+
+
+def _drop_orphaned_tool_messages(msgs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove tool messages whose tool_call_id has no preceding assistant(tool_calls).
+
+    This can happen when the summary watermark timestamp ties with a tool_call
+    entry — the forward scan excludes the tool_call (ts <= watermark) but
+    includes its tool_output (later ts), producing an orphaned tool message
+    that the LLM API rejects.  Also drops duplicate tool responses for the
+    same tool_call_id (can occur when synthetic placeholders were injected
+    and the real response appears later).
+    """
+    declared_ids: set = set()
+    responded_ids: set = set()
+    result: List[Dict[str, Any]] = []
+    for msg in msgs:
+        if msg.get('tool_calls'):
+            for tc in msg['tool_calls']:
+                declared_ids.add(tc['id'])
+        if msg.get('role') == 'tool':
+            tcid = msg.get('tool_call_id', '')
+            if tcid not in declared_ids or tcid in responded_ids:
+                continue  # orphaned or duplicate — skip
+            responded_ids.add(tcid)
+        result.append(msg)
+    return result
 
 
 # ------------------------------------------------------------------

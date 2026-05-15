@@ -34,15 +34,20 @@ def _apply_tail_start(conv_msgs, has_summary):
 class TestReconstructLlmMessages:
     """Verify that JSONL entries are correctly converted to LLM message format."""
 
-    def test_tool_output_without_tool_call_becomes_tool_role(self):
-        """Orphaned tool_output entries (after summary cut) get role='tool'."""
+    def test_orphaned_tool_output_is_dropped(self):
+        """Orphaned tool_output entries (no preceding tool_calls) are dropped.
+
+        The LLM API rejects tool messages without a preceding assistant
+        message containing matching tool_calls.  This can happen when the
+        summary watermark timestamp ties with a tool_call entry.
+        """
         entries = [
             {'type': 'tool_output', 'content': '{"result": "ok"}', 'ts': 100},
             {'type': 'user', 'content': 'yes', 'ts': 200},
         ]
         msgs = _reconstruct_llm_messages(entries)
-        assert msgs[0]['role'] == 'tool'
-        assert msgs[1]['role'] == 'user'
+        assert len(msgs) == 1
+        assert msgs[0]['role'] == 'user'
 
     def test_intermediate_becomes_assistant(self):
         entries = [
