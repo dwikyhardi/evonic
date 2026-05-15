@@ -28,7 +28,7 @@ class WorkplaceManager:
     # Public API
     # -------------------------------------------------------------------------
 
-    def get_backend(self, workplace_id: str) -> ExecutionBackend:
+    def get_backend(self, workplace_id: str, sandbox_enabled: bool = False) -> ExecutionBackend:
         """Return (or create) the backend for a workplace. Raises RuntimeError if not ready."""
         with self._lock:
             if workplace_id in self._backends:
@@ -42,7 +42,7 @@ class WorkplaceManager:
         config = self._parse_config(workplace)
 
         if workplace_type == 'local':
-            backend = self._create_local(config)
+            backend = self._create_local(config, sandbox_enabled=sandbox_enabled)
             with self._lock:
                 self._backends[workplace_id] = backend
             self._set_status(workplace_id, 'connected')
@@ -220,9 +220,9 @@ class WorkplaceManager:
         except Exception:
             pass
 
-    def _create_local(self, config: dict) -> ExecutionBackend:
+    def _create_local(self, config: dict, sandbox_enabled: bool = False) -> ExecutionBackend:
         from backend.workplaces.backends.local_workplace import LocalWorkplaceBackend
-        return LocalWorkplaceBackend(config=config, sandbox_enabled=False)
+        return LocalWorkplaceBackend(config=config, sandbox_enabled=sandbox_enabled)
 
     def _connect_remote(self, workplace_id: str, config: dict) -> ExecutionBackend:
         self._set_status(workplace_id, 'connecting')

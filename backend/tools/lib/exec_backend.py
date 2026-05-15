@@ -163,14 +163,16 @@ class BackendRegistry:
             if session_id in self._backends:
                 return self._backends[session_id]
 
+        # Extract sandbox setting from agent_context (used by both workplace and default paths)
+        sandbox_enabled = bool((agent_context or {}).get('sandbox_enabled', 1))
+
         # If agent has a Workplace assigned, delegate to WorkplaceManager
         workplace_id = (agent_context or {}).get('workplace_id')
         if workplace_id:
             from backend.workplaces.manager import workplace_manager
-            return workplace_manager.get_backend(workplace_id)
+            return workplace_manager.get_backend(workplace_id, sandbox_enabled=sandbox_enabled)
 
         # Create default backend based on agent_context
-        sandbox_enabled = (agent_context or {}).get('sandbox_enabled', 1)
         workspace = (agent_context or {}).get('workspace') or None
 
         if sandbox_enabled:
