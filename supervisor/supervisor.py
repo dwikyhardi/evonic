@@ -118,17 +118,19 @@ def get_current_release(app_root: str) -> Optional[str]:
 
     Resolution order:
     1. ``current`` symlink (Unix) / ``current.slot`` (Windows) — production
-       mode.  The target release directory must exist *and* its ``VERSION``
-       file must match the app root ``VERSION`` for the symlink to be
-       considered authoritative.
+       mode.  The symlink is authoritative when the release directory
+       exists **and** its ``VERSION`` agrees with the symlink target.
+       ``app-root/VERSION`` is only a cache; a mismatch with the
+       self-consistent symlink just means the cache is stale.
     2. ``VERSION`` file at the app root — fallback for flat-repo /
        development mode or when the symlink is stale.  The value is
        normalised to match the git tag format (``v`` prefix added if
        missing).
 
     If the symlink is stale (points to a release that no longer exists or
-    whose version differs from the running code), a warning is logged and
-    the VERSION file is used instead.
+    whose version disagrees with *both* the symlink target and the
+    app-root VERSION), a warning is logged and the VERSION file is used
+    instead.
     """
     version_from_file: Optional[str] = None
     version_file = os.path.join(app_root, 'VERSION')
@@ -140,7 +142,15 @@ def get_current_release(app_root: str) -> Optional[str]:
 
     def _check_symlink_tag(tag: str, release_dir: str) -> Optional[str]:
         """Return the tag if the symlink is authoritative, else None to
-        indicate the VERSION-file fallback should be used."""
+        indicate the VERSION-file fallback should be used.
+
+        Trust model: when ``current`` points to a release directory that
+        exists **and** whose ``VERSION`` matches the symlink tag, the
+        symlink is authoritative — ``app-root/VERSION`` is just a cache
+        that may be stale.  If the release VERSION disagrees with *both*
+        the symlink tag and app-root VERSION, something is wrong and we
+        fall back.
+        """
         if not os.path.isdir(release_dir):
             log.warning(
                 'current points to %s but release dir %s does not exist '
@@ -152,6 +162,17 @@ def get_current_release(app_root: str) -> Optional[str]:
         if os.path.exists(release_ver_file):
             with open(release_ver_file) as f2:
                 rv = f2.read().strip()
+            if rv == tag:
+                # Symlink and release agree — symlink is authoritative.
+                # The app-root VERSION cache may be stale; that's fine.
+                if version_from_file and rv != version_from_file:
+                    log.warning(
+                        'current symlink says %s, release VERSION confirms '
+                        '%s, but app-root VERSION is stale (%s) — trusting '
+                        'symlink',
+                        tag, rv, version_from_file,
+                    )
+                return tag
             if version_from_file and rv != version_from_file:
                 log.warning(
                     'current symlink says %s but release VERSION=%s differs '
@@ -581,10 +602,18 @@ def link_shared_dirs(app_root: str, release_path: str) -> None:
     """Symlink shared/ items into the release directory.
 
     Idempotent: a link that already resolves to the correct shared target is
-    left untouched. A real (non-symlink) directory at the link path is *not*
-    deleted — that path may hold user data and the caller must clean it up
-    manually before retrying. This makes the function safe to invoke on every
-    daemon (re)start.
+    left untouched.
+
+    When a real (non-symlink) directory sits at the link path, the behaviour
+    depends on whether the shared target exists:
+
+    * If the shared target **exists**, the real directory is almost certainly
+      a git-tracked directory created by ``git worktree add`` (e.g.
+      ``plugins/``) and does **not** hold user data — it is removed and
+      replaced with a symlink to ``shared/``.
+    * If the shared target does **not** exist, the real directory is
+      preserved — it may hold user data that hasn't been migrated to
+      ``shared/`` yet.
     """
     shared_root = os.path.join(app_root, 'shared')
 
@@ -605,11 +634,17 @@ def link_shared_dirs(app_root: str, release_path: str) -> None:
                 pass
             os.unlink(link)
         elif os.path.isdir(link):
-            log.error(
-                f'Refusing to replace real directory at {link} with symlink '
-                f'to {target}. Move or remove it manually before retrying.'
+            # Real directory at link path while shared/ target exists.
+            # This happens when git tracks a directory that is also a
+            # shared item (e.g. plugins/) — git worktree add checks it
+            # out as a real directory, blocking the symlink.  Since the
+            # shared/ target exists (checked above), the real directory
+            # is stale git content, not user data.  Remove it.
+            log.info(
+                f'Removing git-tracked directory {link} '
+                f'to create shared symlink to {target}'
             )
-            continue
+            shutil.rmtree(link)
         elif os.path.exists(link):
             os.unlink(link)
 
@@ -818,6 +853,11 @@ def rollback(app_root: str, cfg: dict, notifier: Optional[TelegramNotifier]) -> 
     try:
         stop_daemon(app_root)
         atomic_swap(app_root, old_path)
+        # Sync app-root/VERSION so next restart picks up the rollback release
+        with open(os.path.join(old_path, 'VERSION')) as f:
+            rollback_version = f.read().strip()
+        with open(os.path.join(app_root, 'VERSION'), 'w') as f:
+            f.write(rollback_version)
         ok, _ = start_daemon(old_path, app_root)
         if ok:
             log.info(f'Rollback to {old_tag} successful')
@@ -1085,6 +1125,14 @@ def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
         if current_tag:
             write_rollback_slot(app_root, current_tag)
         atomic_swap(app_root, release_path)
+
+        # Sync app-root/VERSION so the fallback on next restart is fresh.
+        # Without this, get_current_release() may prefer the stale
+        # app-root/VERSION over the correct symlink (see _check_symlink_tag).
+        with open(os.path.join(release_path, 'VERSION')) as f:
+            release_version = f.read().strip()
+        with open(os.path.join(app_root, 'VERSION'), 'w') as f:
+            f.write(release_version)
 
         # Step 6: Restart + monitor
         step = 6

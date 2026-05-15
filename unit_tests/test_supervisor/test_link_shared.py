@@ -83,26 +83,52 @@ class TestLinkSharedDirs(unittest.TestCase):
             os.path.realpath(os.path.join(self.shared, 'db')),
         )
 
-    def test_refuses_to_replace_real_directory(self):
-        # Simulate a real directory holding user data at the link path
-        # (e.g. someone manually copied recovery data into releases/<tag>/agents/).
+    def test_replaces_real_directory_when_shared_target_exists(self):
+        # Simulate a git-tracked directory (e.g. plugins/) checked out by
+        # git worktree add.  Since shared/<name> exists, the real directory
+        # is stale git content — link_shared_dirs must replace it with a
+        # symlink.
         real_dir = os.path.join(self.release, 'agents')
+        os.makedirs(real_dir)
+        sentinel = os.path.join(real_dir, 'stale_git_file.txt')
+        with open(sentinel, 'w') as f:
+            f.write('git-tracked content')
+
+        sup.link_shared_dirs(self.tmp, self.release)
+
+        # The real directory must be replaced by a symlink to shared/agents.
+        self.assertTrue(os.path.islink(real_dir))
+        self.assertEqual(
+            os.path.realpath(real_dir),
+            os.path.realpath(os.path.join(self.shared, 'agents')),
+        )
+        # The stale git-tracked content is gone.
+        self.assertFalse(os.path.exists(sentinel))
+
+    def test_preserves_real_directory_when_shared_target_missing(self):
+        # When the shared target does not exist, the real directory at the
+        # link path may hold user data — it must be preserved.
+        real_dir = os.path.join(self.release, 'logs')
         os.makedirs(real_dir)
         sentinel = os.path.join(real_dir, 'user_data.txt')
         with open(sentinel, 'w') as f:
             f.write('preserve me')
 
+        # Remove shared/logs so the shared target is missing
+        shutil.rmtree(os.path.join(self.shared, 'logs'))
+
         sup.link_shared_dirs(self.tmp, self.release)
 
-        # The directory must not be replaced, the file must survive.
+        # Directory must NOT be replaced — it holds user data.
         self.assertFalse(os.path.islink(real_dir))
         self.assertTrue(os.path.isdir(real_dir))
         self.assertTrue(os.path.exists(sentinel))
         with open(sentinel) as f:
             self.assertEqual(f.read(), 'preserve me')
 
-    def test_refusal_does_not_block_other_links(self):
-        # When one link path holds a real dir, other items should still link.
+    def test_replacing_one_dir_does_not_block_other_links(self):
+        # When one link path holds a real dir (shared target exists), it is
+        # replaced with a symlink.  Other items should still link correctly.
         real_dir = os.path.join(self.release, 'agents')
         os.makedirs(real_dir)
 
@@ -111,6 +137,8 @@ class TestLinkSharedDirs(unittest.TestCase):
         # `db` is unrelated to `agents` and must still get linked.
         db_link = os.path.join(self.release, 'db')
         self.assertTrue(os.path.islink(db_link))
+        # `agents` should now be a symlink (shared target exists).
+        self.assertTrue(os.path.islink(real_dir))
 
     def test_skips_when_shared_target_missing(self):
         # Remove one shared item entirely — link_shared_dirs should skip it
