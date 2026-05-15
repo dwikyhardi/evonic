@@ -146,8 +146,6 @@ html.dark .bot-bubble .chat-prose th { background: rgba(255,255,255,0.08); }
 }
 
 * {
-    margin: 0;
-    padding: 0;
     box-sizing: border-box;
 }
 
