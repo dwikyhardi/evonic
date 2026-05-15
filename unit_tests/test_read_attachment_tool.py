@@ -132,3 +132,39 @@ def test_pdf_no_pypdf_returns_unavailable(tmp_path, monkeypatch):
     assert 'result' in result
     out = result['result']
     assert 'PDF text extraction unavailable' in out or 'install' in out
+
+
+def test_mock_shape_matches_execute(tmp_path, monkeypatch):
+    """Contract test: the mock_response in tools/read_attachment.json must have
+    the same top-level key set as a real `execute()` call (either {'result'}
+    or {'error'}). This prevents evaluator paths that swap the real backend
+    for the mock from silently producing a different shape than tests assert.
+    """
+    # Find the tool definition relative to the repository root, not tmp_path.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tool_path = os.path.join(repo_root, 'tools', 'read_attachment.json')
+    with open(tool_path, 'r', encoding='utf-8') as f:
+        spec = json.load(f)
+
+    mock = spec['mock_response']
+    # `mock_response_type` should be `json`, mirroring sibling tools.
+    assert spec.get('mock_response_type') == 'json'
+    # If stored as a JSON-encoded string, parse it; otherwise expect a dict.
+    if isinstance(mock, str):
+        mock = json.loads(mock)
+    assert isinstance(mock, dict)
+    mock_keys = set(mock.keys())
+    assert mock_keys in ({'result'}, {'error'}), (
+        f"Mock response shape {mock_keys!r} does not match execute() "
+        "contract ({'result'} or {'error'})."
+    )
+
+    # Now confirm a real execute() call exposes the same key set.
+    monkeypatch.chdir(tmp_path)
+    _make_agent('agent_mock_shape')
+    aid, _ = _store('agent_mock_shape', b'hello\n', tmp_path=tmp_path)
+    real = ra.execute({'id': 'agent_mock_shape'}, {'attachment_id': aid})
+    real_keys = set(real.keys())
+    assert real_keys in ({'result'}, {'error'})
+    # Same contract: both result-shaped (or both error-shaped) in the happy path.
+    assert real_keys == mock_keys

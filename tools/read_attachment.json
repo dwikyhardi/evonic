@@ -24,8 +24,10 @@
       "type": "object"
     }
   },
-  "mock_response": "[Attachment: example.pdf (application/pdf, 240KB)]\n\nMock content for read_attachment.",
-  "mock_response_type": "text",
+  "mock_response": {
+    "result": "[Attachment: example.pdf (application/pdf, 240KB)]\n\nMock content for read_attachment."
+  },
+  "mock_response_type": "json",
   "created_at": "2026-05-14T11:50:00.000000",
-  "updated_at": "2026-05-14T11:50:00.000000"
+  "updated_at": "2026-05-15T10:07:00.000000"
 }
