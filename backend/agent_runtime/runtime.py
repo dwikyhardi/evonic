@@ -1262,67 +1262,84 @@ class AgentRuntime:
         summary_record = db.get_summary(ctx.session_id, agent_id=db_agent_id)
         chatlog = chatlog_manager.get(db_agent_id, ctx.session_id)
 
-        # Prefer JSONL-based context if the log has entries for this session
-        _jsonl_entries = chatlog.get_entries_for_llm(
-            after_ts=summary_record.get('last_message_ts') if summary_record else None,
-        )
-        # NOTE: The second condition handles an edge case where _jsonl_entries is empty
-        # but the chatlog still has entries for this session. This happens when ALL
-        # messages after the summary are themselves covered by the summary (after_ts
-        # filter returns nothing). In this scenario, conv_msgs will be [] which is
-        # intentional — sufficient context is already provided by the summary + the
-        # current user message. This is NOT a bug; we still take the JSONL path
-        # (instead of falling back to SQLite) because the session has been migrated.
-        _use_jsonl = bool(_jsonl_entries) or chatlog.get_last_entry() is not None
-
-        if summary_record:
-            messages.append({
-                "role": "system",
-                "content": f"## Prior conversation summary\n{summary_record['summary']}"
-            })
-
-        if _use_jsonl:
-            # Use JSONL-based context (new path)
-            conv_msgs = _jsonl_entries
-            # When no summary exists, skip leading non-user messages so the
-            # conversation starts with a user turn.  When a summary IS present,
-            # keep leading assistant messages (unsummarized continuation) but
-            # still skip orphaned tool responses (no preceding tool_calls).
-            tail_start = 0
-            if not summary_record:
-                while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
-                    tail_start += 1
-            else:
-                while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') == 'tool':
-                    tail_start += 1
-            for msg in conv_msgs[tail_start:]:
-                # Skip slash command messages — they are handled directly by the
-                # command executor and must never enter LLM context. Both the user
-                # command echo and the assistant response carry metadata.slash_command.
-                role = msg.get('role', '')
-                if role == 'user' and (msg.get('content') or '').startswith('/'):
-                    continue
-                if (msg.get('metadata') or {}).get('slash_command'):
-                    continue
-                messages.append(_apply_vision(msg))
+        if _used_prefetch:
+            # Prefetch already contains the full conversation history (system prompt +
+            # all prior turns). Appending the full JSONL tail again would duplicate
+            # every tool_call_id, causing the API to reject with "tool must follow
+            # tool_calls". Only append the current (new) user message.
+            _cur_user = chatlog.get_last_entry(types=frozenset({'user'}))
+            if _cur_user and not (_cur_user.get('metadata') or {}).get('slash_command'):
+                _cur_content = _cur_user.get('content', '')
+                # Guard against the rare race where prefetch ran after the user message
+                # was saved and already includes it as the last message.
+                if not messages or messages[-1].get('role') != 'user' or messages[-1].get('content') != _cur_content:
+                    _cur_msg: Dict[str, Any] = {'role': 'user', 'content': _cur_content}
+                    _img = (_cur_user.get('metadata') or {}).get('image_url')
+                    if _img:
+                        _cur_msg['_image_url'] = _img
+                    messages.append(_apply_vision(_cur_msg))
         else:
-            # Fall back to SQLite (pre-migration sessions with no JSONL data)
+            # Prefer JSONL-based context if the log has entries for this session
+            _jsonl_entries = chatlog.get_entries_for_llm(
+                after_ts=summary_record.get('last_message_ts') if summary_record else None,
+            )
+            # NOTE: The second condition handles an edge case where _jsonl_entries is empty
+            # but the chatlog still has entries for this session. This happens when ALL
+            # messages after the summary are themselves covered by the summary (after_ts
+            # filter returns nothing). In this scenario, conv_msgs will be [] which is
+            # intentional — sufficient context is already provided by the summary + the
+            # current user message. This is NOT a bug; we still take the JSONL path
+            # (instead of falling back to SQLite) because the session has been migrated.
+            _use_jsonl = bool(_jsonl_entries) or chatlog.get_last_entry() is not None
+
             if summary_record:
-                raw_tail = db.get_messages_after(ctx.session_id, summary_record['last_message_id'],
-                                                  agent_id=db_agent_id)
-                # Keep unsummarized continuation but skip orphaned tool
-                # responses that lack a preceding assistant tool_calls message.
+                messages.append({
+                    "role": "system",
+                    "content": f"## Prior conversation summary\n{summary_record['summary']}"
+                })
+
+            if _use_jsonl:
+                # Use JSONL-based context (new path)
+                conv_msgs = _jsonl_entries
+                # When no summary exists, skip leading non-user messages so the
+                # conversation starts with a user turn.  When a summary IS present,
+                # keep leading assistant messages (unsummarized continuation) but
+                # still skip orphaned tool responses (no preceding tool_calls).
                 tail_start = 0
-                while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') == 'tool':
-                    tail_start += 1
-                for msg in raw_tail[tail_start:]:
-                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
-                        messages.append(_ctx.build_message_entry(msg, agent))
+                if not summary_record:
+                    while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
+                        tail_start += 1
+                else:
+                    while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') == 'tool':
+                        tail_start += 1
+                for msg in conv_msgs[tail_start:]:
+                    # Skip slash command messages — they are handled directly by the
+                    # command executor and must never enter LLM context. Both the user
+                    # command echo and the assistant response carry metadata.slash_command.
+                    role = msg.get('role', '')
+                    if role == 'user' and (msg.get('content') or '').startswith('/'):
+                        continue
+                    if (msg.get('metadata') or {}).get('slash_command'):
+                        continue
+                    messages.append(_apply_vision(msg))
             else:
-                history = db.get_session_messages(ctx.session_id, limit=50, agent_id=db_agent_id)
-                for msg in history:
-                    if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
-                        messages.append(_ctx.build_message_entry(msg, agent))
+                # Fall back to SQLite (pre-migration sessions with no JSONL data)
+                if summary_record:
+                    raw_tail = db.get_messages_after(ctx.session_id, summary_record['last_message_id'],
+                                                      agent_id=db_agent_id)
+                    # Keep unsummarized continuation but skip orphaned tool
+                    # responses that lack a preceding assistant tool_calls message.
+                    tail_start = 0
+                    while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') == 'tool':
+                        tail_start += 1
+                    for msg in raw_tail[tail_start:]:
+                        if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
+                            messages.append(_ctx.build_message_entry(msg, agent))
+                else:
+                    history = db.get_session_messages(ctx.session_id, limit=50, agent_id=db_agent_id)
+                    for msg in history:
+                        if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
+                            messages.append(_ctx.build_message_entry(msg, agent))
 
         # Ensure messages don't end with assistant role (causes prefill error with some APIs)
         while len(messages) > 1 and messages[-1].get('role') == 'assistant':
