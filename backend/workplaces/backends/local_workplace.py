@@ -45,6 +45,25 @@ class LocalWorkplaceBackend(ExecutionBackend):
             return self._inner.destroy()
         return {'result': 'ok', 'detail': 'No backend to destroy.'}
 
+    # ------------------------------------------------------------------
+    # File I/O — delegate to the inner backend
+    # ------------------------------------------------------------------
+
+    def file_exists(self, path: str) -> bool:
+        return self._get_inner().file_exists(path)
+
+    def file_stat(self, path: str) -> dict:
+        return self._get_inner().file_stat(path)
+
+    def read_file(self, path: str) -> dict:
+        return self._get_inner().read_file(path)
+
+    def write_file(self, path: str, content: str, create_dirs: bool = True) -> dict:
+        return self._get_inner().write_file(path, content, create_dirs)
+
+    def make_dirs(self, path: str) -> dict:
+        return self._get_inner().make_dirs(path)
+
     def status(self) -> dict:
         if self._inner is not None:
             return self._inner.status()
