@@ -429,6 +429,17 @@ def _fix_interleaved_user_messages(msgs: List[Dict[str, Any]]) -> List[Dict[str,
                     break
                 if found_ids == tc_ids:
                     break  # All expected tool responses collected
+            # If some tool responses are missing (agent interrupted before recording
+            # outputs, or history limit cut them off), inject synthetic error
+            # responses so the API contract is satisfied: every tool_call_id in the
+            # assistant message must have a corresponding tool response.
+            missing_ids = tc_ids - found_ids
+            for mid in missing_ids:
+                tool_responses.append({
+                    'role': 'tool',
+                    'tool_call_id': mid,
+                    'content': '{"error": "Tool execution was interrupted before completion."}',
+                })
             result.append(msg)
             result.extend(tool_responses)
             result.extend(deferred)
