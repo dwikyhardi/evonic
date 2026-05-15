@@ -157,6 +157,16 @@ def run_tool_loop(agent: Dict[str, Any],
                 tools.append(td)
                 _existing_fns.add(fn)
 
+    # Add restored skill tool IDs to assigned_tool_ids for authorization guard
+    _assigned = agent_context.get('assigned_tool_ids')
+    if _assigned is not None:
+        for sk_id, fns in _loaded_lazy_skills.items():
+            for fn in fns:
+                if fn:
+                    _tid = f'skill:{sk_id}:{fn}'
+                    if _tid not in _assigned:
+                        _assigned.append(_tid)
+
     # Resolve agent's default model for LLM calls
     agent_model_config = None
     try:
@@ -1032,6 +1042,13 @@ def run_tool_loop(agent: Dict[str, Any],
                     session_skill_tools.setdefault(session_id, {})[loaded_sid] = [
                         t for t in tools if t.get('function', {}).get('name', '') in set(injected_fns)
                     ]
+                # Add injected tool IDs to assigned_tool_ids for authorization guard
+                _assigned = agent_context.get('assigned_tool_ids')
+                if _assigned is not None and loaded_sid:
+                    for fn in injected_fns:
+                        _tid = f'skill:{loaded_sid}:{fn}'
+                        if _tid not in _assigned:
+                            _assigned.append(_tid)
 
             # Persistent skill context: capture system_md for re-injection each iteration
             if fn_name == 'use_skill' and isinstance(tool_result, dict) and tool_result.get('system_md'):
@@ -1047,6 +1064,13 @@ def run_tool_loop(agent: Dict[str, Any],
                     fns_to_remove = set(_loaded_lazy_skills.pop(unload_sid))
                     tools[:] = [t for t in tools if t.get('function', {}).get('name', '') not in fns_to_remove]
                     session_skill_tools.get(session_id, {}).pop(unload_sid, None)
+                # Remove unloaded tool IDs from assigned_tool_ids
+                _assigned = agent_context.get('assigned_tool_ids')
+                if _assigned is not None and unload_sid:
+                    for fn in fns_to_remove:
+                        _tid = f'skill:{unload_sid}:{fn}'
+                        if _tid in _assigned:
+                            _assigned.remove(_tid)
 
             # Persistent skill context: clear system_md when skill is unloaded
             if fn_name == 'unload_skill' and isinstance(tool_result, dict):

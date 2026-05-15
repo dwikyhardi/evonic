@@ -145,3 +145,74 @@ class TestToolAuthorization:
         # attempt execution. If blocked, result will be a dict with 'blocked_by'.
         if isinstance(result, dict):
             assert result.get("blocked_by") != "authorization"
+
+    # ------------------------------------------------------------------
+    # Lazy skill authorization tests
+    # ------------------------------------------------------------------
+
+    def test_lazy_skill_blocked_without_namespaced_id(self, registry):
+        """A lazy skill tool is blocked when its namespaced ID (skill:*:fn) is
+        NOT in assigned_tool_ids, even if the bare function name is present."""
+        ctx = self._context(["bash", "read_file"])
+        executor = registry.get_real_executor(ctx)
+        result = executor("kanban_search", {})
+        assert result.get("blocked_by") == "authorization"
+
+    def test_lazy_skill_allowed_after_assignment(self, registry):
+        """After adding the namespaced skill ID (simulating use_skill),
+        the tool becomes authorized."""
+        ctx = self._context(["bash", "skill:kanban:kanban_search"])
+        executor = registry.get_real_executor(ctx)
+        result = executor("kanban_search", {})
+        # Should pass authorization (matched via endswith check)
+        if isinstance(result, dict):
+            assert result.get("blocked_by") != "authorization", (
+                f"Tool was blocked: {result.get('error')}"
+            )
+
+    def test_lazy_skill_allowed_with_multiple_fns(self, registry):
+        """Multiple tool functions from the same skill are all authorized
+        when their namespaced IDs are in assigned_tool_ids."""
+        ctx = self._context([
+            "bash",
+            "skill:kanban:kanban_search",
+            "skill:kanban:kanban_create",
+            "skill:kanban:kanban_update",
+        ])
+        executor = registry.get_real_executor(ctx)
+        for fn in ("kanban_search", "kanban_create", "kanban_update"):
+            result = executor(fn, {})
+            if isinstance(result, dict):
+                assert result.get("blocked_by") != "authorization", (
+                    f"Tool '{fn}' was blocked but should be allowed"
+                )
+
+    def test_lazy_skill_blocked_after_removal(self, registry):
+        """After removing the namespaced ID (simulating unload_skill),
+        the tool becomes blocked again."""
+        ctx = self._context(["bash", "skill:kanban:kanban_search"])
+        executor = registry.get_real_executor(ctx)
+        # First confirm it works
+        result = executor("kanban_search", {})
+        if isinstance(result, dict):
+            assert result.get("blocked_by") != "authorization"
+        # Now simulate unload by modifying assigned_tool_ids (as llm_loop does)
+        ctx["assigned_tool_ids"].remove("skill:kanban:kanban_search")
+        result2 = executor("kanban_search", {})
+        assert result2.get("blocked_by") == "authorization"
+
+    def test_persisted_skill_allowed_on_restore(self, registry):
+        """Persisted skill tools (restored across turns) with namespaced IDs
+        in assigned_tool_ids are authorized."""
+        ctx = self._context([
+            "bash",
+            "skill:claimguard:icd10_search",
+            "skill:claimguard:parse_claim",
+        ])
+        executor = registry.get_real_executor(ctx)
+        for fn in ("icd10_search", "parse_claim"):
+            result = executor(fn, {})
+            if isinstance(result, dict):
+                assert result.get("blocked_by") != "authorization", (
+                    f"Persisted skill tool '{fn}' was blocked but should be allowed"
+                )
