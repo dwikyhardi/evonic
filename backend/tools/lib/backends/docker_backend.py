@@ -212,10 +212,7 @@ def _cleanup_all() -> None:
 
 
 def _container_name(session_id: str, agent_id: str = '') -> str:
-    safe_agent = re.sub(r'[^a-zA-Z0-9_.-]', '-', agent_id or '')[:20].strip('-')
-    safe_session = re.sub(r'[^a-zA-Z0-9_.-]', '-', session_id)[:20]
-    if safe_agent:
-        return f'{_CONTAINER_PREFIX}{safe_agent}-{safe_session}'
+    safe_session = re.sub(r'[^a-zA-Z0-9_.-]', '-', session_id)
     return f'{_CONTAINER_PREFIX}{safe_session}'
 
 
