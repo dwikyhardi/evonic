@@ -3187,7 +3187,7 @@ async function refreshSessionState() {
                 const icon = icons[t.status] || '\u2610';
                 const color = iconColors[t.status] || 'text-gray-400';
                 const textClass = t.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200';
-                headerHtml += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${esc(t.text)}</span></li>`;
+                headerHtml += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${marked.parseInline(t.text)}</span></li>`;
             }
             headerHtml += '</ul></div>';
         }
