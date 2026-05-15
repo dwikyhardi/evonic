@@ -8,9 +8,9 @@ The plugin requires a single config variable: **MODEL_AGENT_MAP**, a JSON object
 
 ```json
 {
-  "gpt-4-assistant": "linus",
-  "gpt-4-researcher": "aisyah",
-  "gpt-3.5-support": "angga"
+  "gpt-4-assistant": "my-assistant",
+  "gpt-4-researcher": "my-researcher",
+  "gpt-3.5-support": "my-support"
 }
 ```
 
@@ -130,7 +130,8 @@ curl http://localhost:8080/plugin/agentapi/v1/models \
   "object": "list",
   "data": [
     {"id": "gpt-4-assistant", "object": "model", "created": 0, "owned_by": "evonic"},
-    {"id": "gpt-4-researcher", "object": "model", "created": 0, "owned_by": "evonic"}
+    {"id": "gpt-4-researcher", "object": "model", "created": 0, "owned_by": "evonic"},
+    {"id": "gpt-3.5-support", "object": "model", "created": 0, "owned_by": "evonic"}
   ]
 }
 ```
@@ -323,9 +324,9 @@ curl -b cookies.txt http://localhost:8080/api/agentapi/admin/tokens/1/stats
     "created_at": "2025-01-01T00:00:00+00:00",
     "usage_log": [
       {
-        "agent_id": "linus",
+        "agent_id": "my-assistant",
         "model": "gpt-4-assistant",
-        "session_id": "api:abc12345:linus",
+        "session_id": "api:abc12345:my-assistant",
         "prompt_tokens": 150,
         "completion_tokens": 420,
         "duration_ms": 3800,
@@ -397,9 +398,9 @@ curl -b cookies.txt http://localhost:8080/api/agentapi/admin/model-agent-map
 ```json
 {
   "map": {
-    "gpt-4-assistant": "linus",
-    "gpt-4-researcher": "aisyah",
-    "gpt-3.5-support": "angga"
+    "gpt-4-assistant": "my-assistant",
+    "gpt-4-researcher": "my-researcher",
+    "gpt-3.5-support": "my-support"
   }
 }
 ```
