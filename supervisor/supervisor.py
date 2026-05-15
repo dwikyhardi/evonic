@@ -385,6 +385,7 @@ def start_daemon_from_current(app_root: str) -> tuple:
         return False, 0
     release_path = os.path.join(app_root, 'releases', tag)
     try:
+        _migrate_legacy_env(app_root)
         link_shared_dirs(app_root, release_path)
     except Exception as e:
         log.warning(f'link_shared_dirs failed before start: {e}')
@@ -554,6 +555,27 @@ def create_venv_and_install(release_path: str, python_bin: str,
 # ---------------------------------------------------------------------------
 # Shared directory symlinking
 # ---------------------------------------------------------------------------
+
+def _migrate_legacy_env(app_root: str) -> None:
+    """Copy legacy ~/.evonic/.env (v0.2.x) to shared/.env if it's missing.
+
+    On v0.2.x the .env file lived at the app root (~/.evonic/.env).  v0.3.x
+    moved it to shared/.env which is symlinked into each release directory by
+    ``link_shared_dirs``.  If a legacy .env exists but shared/.env does not,
+    the symlink is never created and the daemon starts with no configuration
+    (admin login breaks).  This function bridges that gap by copying the
+    legacy file into shared/ so the existing symlink machinery picks it up.
+
+    The legacy file is *preserved* — only copied, never deleted.
+    On clean installs there is no legacy .env so this is a no-op.
+    """
+    legacy_env = os.path.join(app_root, '.env')
+    shared_env = os.path.join(app_root, 'shared', '.env')
+
+    if os.path.isfile(legacy_env) and not os.path.exists(shared_env):
+        log.info('Migrating legacy .env to shared/.env')
+        os.makedirs(os.path.dirname(shared_env), exist_ok=True)
+        shutil.copy2(legacy_env, shared_env)
 
 def link_shared_dirs(app_root: str, release_path: str) -> None:
     """Symlink shared/ items into the release directory.
@@ -1041,6 +1063,7 @@ def run_update(tag: str, cfg: dict, notifier: Optional[TelegramNotifier],
         if not ok:
             raise UpdateError(f'Dependency installation failed: {err}')
 
+        _migrate_legacy_env(app_root)
         link_shared_dirs(app_root, release_path)
 
         # Step 4: Health check on temp port
