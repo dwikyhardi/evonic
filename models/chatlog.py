@@ -343,7 +343,9 @@ class ChatLog:
         - Each subsequent tool_output becomes a {role: "tool"} message.
 
         after_ts: if set, only include entries with ts > after_ts (for summary tail).
-        limit: max number of entries to consider (applied before grouping).
+        limit: max number of semantic messages (user/final/intermediate) to consider.
+              Mechanical entries (thinking/tool_call/tool_output) between them are
+              always included so tool-heavy turns don't inflate the count.
         """
         raw_entries: List[dict] = []
 
@@ -358,16 +360,23 @@ class ChatLog:
                 if entry.get('type') in _LLM_CONTEXT_TYPES:
                     raw_entries.append(entry)
         else:
-            # Read last `limit` conversation entries (tail scan)
+            # Read last `limit` semantic messages (tail scan).
+            # Count only semantic entries (user, final, intermediate) toward
+            # the limit — these represent actual conversation turns.  Mechanical
+            # entries (thinking, tool_call, tool_output) between them are always
+            # collected so tool-heavy turns don't inflate the count.
             collected = []
+            semantic_count = 0
             for raw in self._iter_lines_reverse():
                 entry = self._parse(raw)
                 if entry is None:
                     continue
                 if entry.get('type') in _LLM_CONTEXT_TYPES:
                     collected.append(entry)
-                    if len(collected) >= limit:
-                        break
+                    if entry.get('type') in _SUMMARY_COUNT_TYPES:
+                        semantic_count += 1
+                        if semantic_count >= limit:
+                            break
             collected.reverse()
             raw_entries = collected
 
