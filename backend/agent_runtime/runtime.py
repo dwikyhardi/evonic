@@ -759,6 +759,11 @@ class AgentRuntime:
         if external_user_id is None:
             external_user_id = '__system__'
 
+        _logger.info(
+            "[handle_message] agent=%s sender=%s msg_preview=%.80r",
+            agent_id, external_user_id, message,
+        )
+
         agent = db.get_agent(agent_id)
         db_agent_id = agent_id  # Default: agent's own per-agent chat DB
         if not agent:
@@ -921,6 +926,10 @@ class AgentRuntime:
         # into the active loop instead of blocking/queuing a new task.
         # Message is already saved to DB above, so DB order is preserved.
         if self._is_busy(session_id):
+            _logger.info(
+                "[handle_message] agent=%s session=%s — session busy, injecting into active loop.",
+                agent_id, session_id,
+            )
             self._get_inject_queue(session_id).put({
                 'role': 'user',
                 'content': message or '[Image]',
@@ -938,6 +947,10 @@ class AgentRuntime:
         # Message buffering: debounce rapid messages, then queue
         buffer_seconds = agent.get('message_buffer_seconds', DEFAULT_BUFFER_SECONDS) or 0
         if buffer_seconds > 0:
+            _logger.info(
+                "[handle_message] agent=%s session=%s — buffering for %ss.",
+                agent_id, session_id, buffer_seconds,
+            )
             task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
                                                     session_db_agent_id=db_agent_id if is_subagent else None),
                               send_via_channel=True)
@@ -960,6 +973,10 @@ class AgentRuntime:
         # The sub-agent/target processes asynchronously and results are delivered via
         # _on_final_answer auto-forward, not via the return value.
         if external_user_id and external_user_id.startswith('__agent__'):
+            _logger.info(
+                "[handle_message] agent=%s session=%s — inter-agent message from %s, queued async (fire-and-forget).",
+                agent_id, session_id, external_user_id,
+            )
             task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
                                                     session_db_agent_id=db_agent_id if is_subagent else None),
                               send_via_channel=False)
