@@ -4,6 +4,7 @@ import base64
 import logging
 import os
 import re
+import secrets
 import subprocess
 import time
 import threading
@@ -53,6 +54,8 @@ class WhatsAppChannel(BaseChannel):
         self._approval_required_handler = None
         self._approval_resolved_handler = None
         self._llm_thinking_handler = None
+        # Per-channel secret for authenticating sidecar → server callbacks
+        self._callback_secret: str = secrets.token_urlsafe(32)
         # Maps external_user_id (bare number) → full WhatsApp JID for reliable replies
         self._jid_map: Dict[str, str] = {}
         # Debounce state for llm_thinking typing indicator
@@ -189,6 +192,7 @@ class WhatsAppChannel(BaseChannel):
                 **os.environ,
                 'PORT': str(self._bridge_port),
                 'CALLBACK_URL': callback_url,
+                'CALLBACK_SECRET': self._callback_secret,
                 'AUTH_DIR': os.path.abspath(session_dir),
             }
 

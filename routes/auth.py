@@ -2,11 +2,45 @@
 Authentication Blueprint — admin login with Cloudflare Turnstile captcha.
 """
 
+import time
+import threading
+from typing import Dict, List
+
 import requests
 from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify
 import config
 
 auth_bp = Blueprint('auth', __name__)
+
+# ---------------------------------------------------------------------------
+# In-memory login rate limiter (per IP, failed attempts only)
+# ---------------------------------------------------------------------------
+_MAX_ATTEMPTS = 5
+_WINDOW_SECONDS = 15 * 60  # 15 minutes
+
+_login_attempts: Dict[str, List[float]] = {}
+_login_attempts_lock = threading.Lock()
+
+
+def _is_rate_limited(ip: str) -> bool:
+    """Return True if the IP has exceeded the failed login attempt limit."""
+    now = time.monotonic()
+    with _login_attempts_lock:
+        # Purge expired entries for this IP
+        timestamps = [t for t in _login_attempts.get(ip, []) if now - t < _WINDOW_SECONDS]
+        _login_attempts[ip] = timestamps
+        return len(timestamps) >= _MAX_ATTEMPTS
+
+
+def _record_failed_attempt(ip: str) -> None:
+    now = time.monotonic()
+    with _login_attempts_lock:
+        _login_attempts.setdefault(ip, []).append(now)
+
+
+def _clear_attempts(ip: str) -> None:
+    with _login_attempts_lock:
+        _login_attempts.pop(ip, None)
 
 
 
@@ -42,6 +76,13 @@ def login_page():
 
 @auth_bp.route('/login', methods=['POST'])
 def login_submit():
+    ip = request.remote_addr or '0.0.0.0'
+
+    if _is_rate_limited(ip):
+        return render_template('login.html',
+                               turnstile_site_key=config.TURNSTILE_SITE_KEY,
+                               error='Too many login attempts. Please wait 15 minutes.'), 429
+
     password = request.form.get('password', '')
     turnstile_token = request.form.get('cf-turnstile-response', '')
     next_url = request.form.get('next', '/')
@@ -75,10 +116,12 @@ def login_submit():
 
     from werkzeug.security import check_password_hash
     if not check_password_hash(config.ADMIN_PASSWORD_HASH, password):
+        _record_failed_attempt(ip)
         return render_template('login.html',
                                turnstile_site_key=config.TURNSTILE_SITE_KEY,
                                error='Invalid password.')
 
+    _clear_attempts(ip)
     session['authenticated'] = True
     session.permanent = True  # Persist cookie for 7 days (configured in app.py)
     if not _is_safe_redirect_url(next_url):

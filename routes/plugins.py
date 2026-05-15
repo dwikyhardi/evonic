@@ -120,7 +120,7 @@ def api_set_plugin_config(plugin_id):
 @plugins_bp.route('/api/plugins/<plugin_id>/logs')
 def api_get_plugin_logs(plugin_id):
     """Get plugin log entries."""
-    limit = request.args.get('limit', 200, type=int)
+    limit = min(request.args.get('limit', 200, type=int), 1000)
     since = request.args.get('since', None)
     logs = plugin_manager.get_logs(plugin_id, limit=limit, since=since)
     return jsonify({'logs': logs})

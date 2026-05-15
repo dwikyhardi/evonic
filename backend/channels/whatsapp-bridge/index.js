@@ -6,6 +6,7 @@ const QRCode = require('qrcode');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const CALLBACK_URL = process.env.CALLBACK_URL || '';
+const CALLBACK_SECRET = process.env.CALLBACK_SECRET || '';
 const AUTH_DIR = process.env.AUTH_DIR || './auth_info';
 
 const logger = pino({ level: 'warn' });
@@ -150,6 +151,7 @@ function postCallback(payload) {
         headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(body),
+            'Authorization': `Bearer ${CALLBACK_SECRET}`,
         },
     }, (res) => {
         res.resume(); // drain
