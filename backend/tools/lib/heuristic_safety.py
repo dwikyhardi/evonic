@@ -117,8 +117,8 @@ DANGEROUS_PATTERNS: list[dict[str, Any]] = [
     {"pattern": r"\bid_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?\b", "weight": 12, "category": "ssh_key", "description": "Reference to SSH private/public key file"},
     {"pattern": r"\bauthorized_keys2?\b", "weight": 10, "category": "ssh_key", "description": "Reference to authorized_keys file"},
     {"pattern": r"\bknown_hosts\b", "weight": 8, "category": "ssh_key", "description": "Reference to known_hosts file"},
-    # Docker escape
-    {"pattern": r"\bdocker\s+", "weight": 15, "category": "sandbox_escape", "description": "Docker command (sandbox escape risk)"},
+    # Docker reference (allowed — sandbox is already Docker-isolated)
+    {"pattern": r"\bdocker\s+", "weight": 4, "category": "sandbox_escape", "description": "Docker reference (not blocked, sandbox is already isolated)"},
     # Network exploit
     {"pattern": r"(?:^|\s)nc\s+", "weight": 12, "category": "network_exploit", "description": "Netcat command (network exploit)"},
     {"pattern": r"\bnetcat\b", "weight": 12, "category": "network_exploit", "description": "Netcat command (network exploit)"},
@@ -152,7 +152,7 @@ SENSITIVE_FILE_PATTERNS: list[dict[str, Any]] = [
 # E. Bash-specific dangerous patterns
 BASH_DANGEROUS_PATTERNS: list[dict[str, Any]] = [
     {"pattern": r"\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*|-[rf][a-zA-Z]*)\s+(?!/tmp/)", "weight": 10, "category": "file_destruction", "description": "Destructive file removal command (rm -rf, except /tmp)"},
-    {"pattern": r"\bdocker\s+", "weight": 15, "category": "sandbox_escape", "description": "Docker command (sandbox escape risk)"},
+    {"pattern": r"\bdocker\s+", "weight": 4, "category": "sandbox_escape", "description": "Docker reference (not blocked, sandbox is already isolated)"},
     {"pattern": r"(?:^|\s)nc\s+", "weight": 12, "category": "network_exploit", "description": "Netcat command (network exploit)"},
     {"pattern": r"\bnetcat\b", "weight": 12, "category": "network_exploit", "description": "Netcat command (network exploit)"},
     {"pattern": r"reverse\s*shell", "weight": 15, "category": "network_exploit", "description": "Reverse shell pattern"},
