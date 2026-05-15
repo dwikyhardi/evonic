@@ -163,14 +163,11 @@ export class Turn {
             $inner.find('.tool-trace-chevron').toggleClass('rotated');
         });
 
-        // Insert: bubble then panel, after the anchor user message
-        if (this.$anchor && this.$anchor.length && this.$anchor[0].parentNode === this._$container[0]) {
-            this.$anchor.after(this.$panel);
-            this.$anchor.after(this.$bubble);
-        } else {
-            this._$container.append(this.$bubble);
-            this.$bubble.after(this.$panel);
-        }
+        // Always append at the end of the container. Inserting after $anchor would
+        // place the bubble in the middle of the conversation when there are already
+        // agent messages rendered after the user message (e.g. turn_split, replay).
+        this._$container.append(this.$bubble);
+        this.$bubble.after(this.$panel);
     }
 
     _startTimer() {
