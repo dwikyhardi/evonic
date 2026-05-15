@@ -8,16 +8,19 @@ function esc(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function renderAgentState(agentId, userId, containerIds) {
+async function renderAgentState(agentId, userId, containerIds, sessionId) {
     if (!agentId) return;
     try {
-        const res = await fetch(`/api/agents/${agentId}/chat/state?user_id=${encodeURIComponent(userId || 'web_test')}`);
+        let url = `/api/agents/${agentId}/chat/state?user_id=${encodeURIComponent(userId || 'web_test')}`;
+        if (sessionId) url += `&session_id=${encodeURIComponent(sessionId)}`;
+        const res = await fetch(url);
         if (!res.ok) { console.warn('[AgentState] API error:', res.status, res.statusText); return; }
         const data = await res.json();
 
         const empty = '<p class="text-sm text-gray-400 dark:text-gray-500 italic">No state yet.</p>';
         const hasAnyState = data.mode || data.focus || data.plan_file ||
-            (data.states && Object.keys(data.states).length > 0);
+            (data.states && Object.keys(data.states).length > 0) ||
+            (data.tasks && data.tasks.length > 0);
         if (!hasAnyState) {
             (Array.isArray(containerIds) ? containerIds : [containerIds]).forEach(id => {
                 const el = document.getElementById(id);
@@ -59,6 +62,20 @@ async function renderAgentState(agentId, userId, containerIds) {
                     html += `<div class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 font-mono break-all">${esc(dataStr)}</div>`;
                 }
                 html += `</li>`;
+            }
+            html += `</ul></div>`;
+        }
+
+        // Task list section (from session state)
+        if (data.tasks && data.tasks.length > 0) {
+            const icons = {pending: '\u2610', in_progress: '\u27f3', done: '\u2713'};
+            const iconColors = {pending: 'text-gray-400', in_progress: 'text-amber-500', done: 'text-green-500'};
+            html += `<div class="border-t border-gray-100 dark:border-gray-700 pt-2"><div class="text-gray-500 dark:text-gray-400 font-medium mb-1 text-xs uppercase tracking-wide">Tasks</div><ul class="space-y-0.5">`;
+            for (const t of data.tasks) {
+                const icon = icons[t.status] || '\u2610';
+                const color = iconColors[t.status] || 'text-gray-400';
+                const textClass = t.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200';
+                html += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${esc(t.text)}</span></li>`;
             }
             html += `</ul></div>`;
         }

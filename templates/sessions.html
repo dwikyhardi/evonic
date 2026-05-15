@@ -1192,7 +1192,7 @@ function clearSummaryPanel() {
 async function loadAgentState() {
     if (!currentAgentId) return;
     const userId = document.getElementById('hdr-user')?.textContent || 'web_test';
-    renderAgentState(currentAgentId, userId, ['agent-state-content', 'mobile-agent-state-content']);
+    renderAgentState(currentAgentId, userId, ['agent-state-content', 'mobile-agent-state-content'], currentSessionId);
 }
 
 function clearAgentStatePanel() {
