@@ -301,45 +301,18 @@ def _exec_send_agent_message(args: dict, agent_context: dict) -> dict:
     # Build the tagged message content and metadata
     tagged_message = f"[AGENT/{sender_name}] {message}"
 
-    reply_to_id = str(uuid.uuid4())
-    report_to_id = agent_context.get('user_id', '')
-    report_to_channel_id = agent_context.get('channel_id', '') or ''
+    from backend.agent_report_to import resolve_report_to_from_context
 
-    # If the sender is currently in an inter-agent session (external_user_id starts with
-    # __agent__), using that as report_to_id causes the auto-forward chain to bounce
-    # messages back into inter-agent sessions — eventually creating self-sessions
-    # (e.g. siwa/sessions/... with external_user_id = __agent__siwa).
-    # Fix: fall back to the sender's most recent human session so the reply chain
-    # always terminates in a human-visible session.
-    if report_to_id.startswith(_AGENT_MSG_PREFIX):
-        # Sub-agents are ephemeral / in-memory only — they have no row in `agents`
-        # and no human session in `chat_sessions`. Resolve to the parent agent first
-        # so the human-session lookup actually finds something.
-        lookup_id = sender_id
-        if agent_context.get('is_subagent'):
-            parent_id_for_lookup = agent_context.get('parent_id', '')
-            if parent_id_for_lookup:
-                lookup_id = parent_id_for_lookup
-                _logger.debug(
-                    "sender '%s' is a sub-agent — using parent '%s' for human-session lookup.",
-                    sender_id, parent_id_for_lookup,
-                )
-        _logger.debug(
-            "sender '%s' is in inter-agent session ('%s') — looking up human session for report_to_id (lookup_id=%s).",
-            sender_id, report_to_id, lookup_id,
+    reply_to_id = str(uuid.uuid4())
+    report_to_id, report_to_channel_id = resolve_report_to_from_context(
+        agent_context, sender_id,
+    )
+    if (agent_context.get('user_id', '') or '').startswith(_AGENT_MSG_PREFIX) and not report_to_id:
+        _logger.warning(
+            "send_agent_message: no human session found for sender '%s'. "
+            "Reply auto-forward will be skipped.",
+            sender_id,
         )
-        human_sess = db.get_latest_human_session(lookup_id)
-        if human_sess:
-            report_to_id = human_sess.get('external_user_id', '')
-            report_to_channel_id = human_sess.get('channel_id') or ''
-        else:
-            _logger.warning(
-                "send_agent_message: no human session found for sender '%s' (lookup_id=%s). "
-                "Reply auto-forward will be skipped.",
-                sender_id, lookup_id,
-            )
-            report_to_id = ''
-            report_to_channel_id = ''
 
     metadata = {
         'agent_message': True,
