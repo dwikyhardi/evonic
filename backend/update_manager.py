@@ -3,6 +3,8 @@ Server-side update state manager.
 
 Provides daily-cached update checks, background update execution with log
 capture, and SSE listener management for real-time web UI notifications.
+
+Progress state is persisted to disk to survive crashes and restarts.
 """
 
 import json
@@ -16,16 +18,132 @@ import threading
 import time
 from datetime import datetime
 
+try:
+    from packaging import version as pkg_version
+    HAS_PACKAGING = True
+except ImportError:
+    HAS_PACKAGING = False
+
 log = logging.getLogger(__name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+class _VersionComparable:
+    """
+    Wrapper for version comparison that works with both packaging.version
+    and tuple-based comparison for backward compatibility.
+    """
+    def __init__(self, version_obj, tuple_fallback):
+        self.version_obj = version_obj
+        self.tuple_fallback = tuple_fallback
+    
+    def __lt__(self, other):
+        if isinstance(other, _VersionComparable):
+            if self.version_obj is not None and other.version_obj is not None:
+                return self.version_obj < other.version_obj
+            return self.tuple_fallback < other.tuple_fallback
+        # Support comparison with plain tuples for tests
+        return self.tuple_fallback < other
+    
+    def __le__(self, other):
+        return self < other or self == other
+    
+    def __gt__(self, other):
+        if isinstance(other, _VersionComparable):
+            if self.version_obj is not None and other.version_obj is not None:
+                return self.version_obj > other.version_obj
+            return self.tuple_fallback > other.tuple_fallback
+        return self.tuple_fallback > other
+    
+    def __ge__(self, other):
+        return self > other or self == other
+    
+    def __eq__(self, other):
+        if isinstance(other, _VersionComparable):
+            if self.version_obj is not None and other.version_obj is not None:
+                return self.version_obj == other.version_obj
+            return self.tuple_fallback == other.tuple_fallback
+        return self.tuple_fallback == other
+    
+    def __ne__(self, other):
+        return not self == other
+    
+    def __repr__(self):
+        if self.version_obj is not None:
+            return f"_VersionComparable({self.version_obj})"
+        return f"_VersionComparable({self.tuple_fallback})"
+
+
 def _version_tuple(tag: str):
+    """
+    Parse version string into comparable version object.
+    
+    Security: Uses packaging.version when available for proper semver handling,
+    including pre-release versions. Falls back to regex for basic parsing.
+    
+    Returns a comparable object that works with both packaging.version and
+    tuple-based comparison for backward compatibility.
+    """
+    # Fallback tuple parsing
     m = re.match(r'v?(\d+)(?:\.(\d+))?(?:\.(\d+))?', tag or '')
     if not m:
-        return (0, 0, 0)
-    return tuple(int(x or '0') for x in m.groups())
+        tuple_version = (0, 0, 0)
+    else:
+        tuple_version = tuple(int(x or '0') for x in m.groups())
+    
+    # Try packaging.version if available
+    version_obj = None
+    if HAS_PACKAGING and tag:
+        try:
+            # Remove 'v' prefix if present
+            clean_tag = tag.removeprefix('v')
+            version_obj = pkg_version.parse(clean_tag)
+        except (ValueError, TypeError):
+            # Fall back to tuple only if parsing fails
+            pass
+    
+    return _VersionComparable(version_obj, tuple_version)
+
+
+def _get_state_file_path() -> str:
+    """Return path to persistent state file in shared directory."""
+    import config
+    shared_dir = os.path.join(config.APP_ROOT, 'shared', 'update')
+    os.makedirs(shared_dir, exist_ok=True)
+    return os.path.join(shared_dir, 'update_state.json')
+
+
+def _load_persisted_state() -> dict:
+    """Load update state from disk if it exists."""
+    state_file = _get_state_file_path()
+    if not os.path.exists(state_file):
+        return {}
+    
+    try:
+        with open(state_file, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        log.warning(f'Failed to load persisted state: {e}')
+        return {}
+
+
+def _persist_state(state: dict) -> None:
+    """Save update state to disk atomically."""
+    state_file = _get_state_file_path()
+    temp_file = state_file + '.tmp'
+    
+    try:
+        with open(temp_file, 'w') as f:
+            json.dump(state, f, indent=2)
+        os.replace(temp_file, state_file)
+    except (IOError, OSError) as e:
+        log.error(f'Failed to persist state: {e}')
+        if os.path.exists(temp_file):
+            try:
+                os.unlink(temp_file)
+            except OSError:
+                pass
 
 # ---------------------------------------------------------------------------
 # State
@@ -34,17 +152,41 @@ def _version_tuple(tag: str):
 _lock = threading.Lock()
 _listeners: list = []  # list of queue.Queue, one per SSE client
 
+# Total steps in update process (from supervisor.py STEPS)
+TOTAL_STEPS = 6
+
+# Load persisted state on module import (survives crashes/restarts)
+_persisted = _load_persisted_state()
+
 _state = {
-    'status': 'idle',           # idle | checking | available | updating | success | failed
-    'current_version': None,
-    'latest_version': None,
-    'progress': 0,              # 0-100
-    'step': 0,
-    'step_label': '',
-    'logs': [],                 # [{ts, level, message}, ...]
-    'error': None,
-    'last_check': 0,            # unix timestamp of last successful check
+    'status': _persisted.get('status', 'idle'),
+    'current_version': _persisted.get('current_version'),
+    'latest_version': _persisted.get('latest_version'),
+    'progress': _persisted.get('progress', 0),
+    'step': _persisted.get('step', 0),
+    'step_label': _persisted.get('step_label', ''),
+    'logs': _persisted.get('logs', []),
+    'error': _persisted.get('error'),
+    'last_check': _persisted.get('last_check', 0),
+    'last_update_attempt': _persisted.get('last_update_attempt', 0),
+    'crashed': _persisted.get('status') == 'updating',  # Detect crash during update
 }
+
+# If we crashed during update, log it and reset to failed state
+if _state['crashed']:
+    log.warning(
+        f'Detected incomplete update to {_state.get("latest_version")} '
+        f'(was at step {_state.get("step")}/{TOTAL_STEPS})'
+    )
+    with _lock:
+        _state['status'] = 'failed'
+        _state['error'] = 'Update interrupted (server crash or restart)'
+        _state['logs'].append({
+            'ts': datetime.now().strftime('%H:%M:%S'),
+            'level': 'error',
+            'message': 'Update was interrupted by server crash or restart',
+        })
+        _persist_state(_state)
 
 
 def _append_log(level: str, message: str):
@@ -55,6 +197,8 @@ def _append_log(level: str, message: str):
     }
     with _lock:
         _state['logs'].append(entry)
+        # Persist state after log update
+        _persist_state(_state)
     _notify_listeners()
 
 
@@ -112,23 +256,31 @@ class WebNotifier:
     """Drop-in replacement for TelegramNotifier that updates web UI state."""
 
     def begin(self, from_tag, to_tag):
-        _state['current_version'] = from_tag
-        _state['latest_version'] = to_tag
+        with _lock:
+            _state['current_version'] = from_tag
+            _state['latest_version'] = to_tag
+            _persist_state(_state)
 
     def send_progress(self, step, total, description):
-        _state['step'] = step
-        _state['step_label'] = description
-        _state['progress'] = int(step / total * 100)
+        with _lock:
+            _state['step'] = step
+            _state['step_label'] = description
+            _state['progress'] = int(step / total * 100)
+        # _append_log already persists, no need to persist again
         _append_log('info', f'Step {step}/{total}: {description}')
 
     def send_failure(self, step, total, error):
-        _state['status'] = 'failed'
-        _state['error'] = str(error)
+        with _lock:
+            _state['status'] = 'failed'
+            _state['error'] = str(error)
+        # _append_log already persists, no need to persist again
         _append_log('error', f'FAILED at step {step}/{total}: {error}')
 
     def send_success(self, tag):
-        _state['status'] = 'success'
-        _state['progress'] = 100
+        with _lock:
+            _state['status'] = 'success'
+            _state['progress'] = 100
+        # _append_log already persists, no need to persist again
         _append_log('info', f'Update to {tag} successful')
 
 
@@ -151,7 +303,7 @@ class _UpdateLogHandler(logging.Handler):
 
 def get_status() -> dict:
     with _lock:
-        return {
+        status = {
             'status': _state['status'],
             'current_version': _state['current_version'],
             'latest_version': _state['latest_version'],
@@ -160,26 +312,36 @@ def get_status() -> dict:
             'step_label': _state['step_label'],
             'logs': list(_state['logs']),
             'error': _state['error'],
+            'crashed': _state.get('crashed', False),
+            'last_update_attempt': _state.get('last_update_attempt', 0),
         }
+        # Clear crashed flag after first status read
+        if _state.get('crashed'):
+            _state['crashed'] = False
+        return status
 
 
 def check_for_update(force=False) -> dict:
     now = time.time()
-    if not force and _state['status'] == 'available':
-        return {
-            'available': True,
-            'current': _state['current_version'],
-            'latest': _state['latest_version'],
-        }
+    
+    with _lock:
+        if not force and _state['status'] == 'available':
+            return {
+                'available': True,
+                'current': _state['current_version'],
+                'latest': _state['latest_version'],
+            }
 
-    if not force and (now - _state['last_check']) < 86400:
-        return {
-            'available': _state['status'] == 'available',
-            'current': _state['current_version'],
-            'latest': _state['latest_version'],
-        }
+        if not force and (now - _state['last_check']) < 86400:
+            return {
+                'available': _state['status'] == 'available',
+                'current': _state['current_version'],
+                'latest': _state['latest_version'],
+            }
 
-    _state['status'] = 'checking'
+        _state['status'] = 'checking'
+        _persist_state(_state)
+    
     try:
         sup = _load_supervisor()
         cfg = _load_config()
@@ -193,39 +355,48 @@ def check_for_update(force=False) -> dict:
         current = sup.get_current_release(git_root)
         latest = sup.get_latest_tag(git_root)
 
-        _state['current_version'] = current
-        _state['latest_version'] = latest
-        _state['last_check'] = time.time()
+        with _lock:
+            _state['current_version'] = current
+            _state['latest_version'] = latest
+            _state['last_check'] = time.time()
 
-        if latest and _version_tuple(latest) > _version_tuple(current):
-            _state['status'] = 'available'
-            return {'available': True, 'current': current, 'latest': latest}
-        else:
-            _state['status'] = 'idle'
-            return {'available': False, 'current': current, 'latest': latest}
+            if latest and _version_tuple(latest) > _version_tuple(current):
+                _state['status'] = 'available'
+                _persist_state(_state)
+                return {'available': True, 'current': current, 'latest': latest}
+            else:
+                _state['status'] = 'idle'
+                _persist_state(_state)
+                return {'available': False, 'current': current, 'latest': latest}
     except Exception as e:
         log.error(f'Update check failed: {e}')
-        _state['status'] = 'idle'
+        with _lock:
+            _state['status'] = 'idle'
+            _persist_state(_state)
         return {'available': False, 'current': None, 'latest': None, 'error': str(e)}
 
 
 def start_update(tag=None) -> dict:
-    if _state['status'] == 'updating':
-        return {'error': 'Update already in progress'}
-
-    _state['status'] = 'updating'
-    _state['progress'] = 0
-    _state['step'] = 0
-    _state['step_label'] = ''
-    _state['error'] = None
     with _lock:
-        _state['logs'] = []
+        if _state['status'] == 'updating':
+            return {'error': 'Update already in progress'}
 
-    target = tag or _state['latest_version']
-    if not target:
-        _state['status'] = 'failed'
-        _state['error'] = 'No target version specified'
-        return {'error': 'No target version specified'}
+        _state['status'] = 'updating'
+        _state['progress'] = 0
+        _state['step'] = 0
+        _state['step_label'] = ''
+        _state['error'] = None
+        _state['last_update_attempt'] = time.time()
+        _state['logs'] = []
+        
+        target = tag or _state['latest_version']
+        if not target:
+            _state['status'] = 'failed'
+            _state['error'] = 'No target version specified'
+            _persist_state(_state)
+            return {'error': 'No target version specified'}
+        
+        _persist_state(_state)
 
     _append_log('info', f'Starting update to {target}...')
     _notify_listeners()
@@ -249,19 +420,22 @@ def _run_update_thread(target):
     try:
         ok = sup.run_update(target, cfg, notifier=notifier)
         if ok:
-            if _state['status'] != 'success':
-                _state['status'] = 'success'
-                _state['progress'] = 100
-                _append_log('info', 'Update completed successfully')
+            with _lock:
+                if _state['status'] != 'success':
+                    _state['status'] = 'success'
+                    _state['progress'] = 100
+            _append_log('info', 'Update completed successfully')
         else:
-            if _state['status'] != 'failed':
-                _state['status'] = 'failed'
-                if not _state['error']:
-                    _state['error'] = 'Update failed (see logs for details)'
-                _append_log('error', 'Update failed')
+            with _lock:
+                if _state['status'] != 'failed':
+                    _state['status'] = 'failed'
+                    if not _state['error']:
+                        _state['error'] = 'Update failed (see logs for details)'
+            _append_log('error', 'Update failed')
     except Exception as e:
-        _state['status'] = 'failed'
-        _state['error'] = str(e)
+        with _lock:
+            _state['status'] = 'failed'
+            _state['error'] = str(e)
         _append_log('error', f'Unexpected error: {e}')
     finally:
         sup_logger.removeHandler(handler)
@@ -269,12 +443,15 @@ def _run_update_thread(target):
 
 
 def trigger_rollback() -> dict:
-    if _state['status'] == 'updating':
-        return {'error': 'Cannot rollback while update is in progress'}
+    with _lock:
+        if _state['status'] == 'updating':
+            return {'error': 'Cannot rollback while update is in progress'}
 
+        _state['status'] = 'updating'
+        _state['step_label'] = 'Rolling back...'
+        _persist_state(_state)
+    
     _append_log('info', 'Starting rollback...')
-    _state['status'] = 'updating'
-    _state['step_label'] = 'Rolling back...'
     _notify_listeners()
 
     def _do_rollback():
@@ -283,16 +460,19 @@ def trigger_rollback() -> dict:
         try:
             ok = sup.rollback(cfg['app_root'], cfg, None)
             if ok:
-                _state['status'] = 'success'
-                _state['step_label'] = 'Rollback complete'
+                with _lock:
+                    _state['status'] = 'success'
+                    _state['step_label'] = 'Rollback complete'
                 _append_log('info', 'Rollback successful')
             else:
-                _state['status'] = 'failed'
-                _state['error'] = 'Rollback failed'
+                with _lock:
+                    _state['status'] = 'failed'
+                    _state['error'] = 'Rollback failed'
                 _append_log('error', 'Rollback failed')
         except Exception as e:
-            _state['status'] = 'failed'
-            _state['error'] = str(e)
+            with _lock:
+                _state['status'] = 'failed'
+                _state['error'] = str(e)
             _append_log('error', f'Rollback error: {e}')
         _notify_listeners()
 

@@ -35,6 +35,15 @@
       "description": "Prompt template sent to the agent. Variables: {{tag_name}}, {{name}}, {{body}}, {{html_url}}, {{repository}}, {{action}}."
     },
     {
+      "name": "RELEASE_FILTERS",
+      "label": "Filters (JSON)",
+      "type": "textarea",
+      "default": "",
+      "group": "release",
+      "groupLabel": "📦 Release Events",
+      "description": "JSON array of filters to apply before notifying. E.g. [{\"field\": \"release.prerelease\", \"match\": \"equals\", \"value\": \"false\"}]. Empty = fire always."
+    },
+    {
       "name": "PR_AGENT_ID",
       "label": "Agent ID",
       "type": "string",
@@ -51,6 +60,15 @@
       "group": "pull_request",
       "groupLabel": "🔀 Pull Request Events",
       "description": "Prompt template for PR events. Variables: {{title}}, {{action}}, {{html_url}}, {{body}}, {{repository}}, {{state}}."
+    },
+    {
+      "name": "PR_FILTERS",
+      "label": "Filters (JSON)",
+      "type": "textarea",
+      "default": "",
+      "group": "pull_request",
+      "groupLabel": "🔀 Pull Request Events",
+      "description": "JSON array of filters to apply before notifying. E.g. [{\"field\": \"action\", \"match\": \"equals\", \"value\": \"opened\"}]. Empty = fire always."
     },
     {
       "name": "ISSUES_AGENT_ID",
@@ -71,6 +89,15 @@
       "description": "Prompt template for issues events. Variables: {{title}}, {{action}}, {{html_url}}, {{body}}, {{repository}}, {{state}}."
     },
     {
+      "name": "ISSUES_FILTERS",
+      "label": "Filters (JSON)",
+      "type": "textarea",
+      "default": "",
+      "group": "issues",
+      "groupLabel": "🐛 Issues Events",
+      "description": "JSON array of filters to apply before notifying. E.g. [{\"field\": \"issue.state\", \"match\": \"equals\", \"value\": \"open\"}]. Empty = fire always."
+    },
+    {
       "name": "PUSH_AGENT_ID",
       "label": "Agent ID",
       "type": "string",
@@ -87,6 +114,15 @@
       "group": "push",
       "groupLabel": "🔶 Push Events",
       "description": "Prompt template for push events. Variables: {{ref}}, {{commits_count}}, {{repository}}, {{compare}}."
+    },
+    {
+      "name": "PUSH_FILTERS",
+      "label": "Filters (JSON)",
+      "type": "textarea",
+      "default": "",
+      "group": "push",
+      "groupLabel": "🔶 Push Events",
+      "description": "JSON array of filters to apply before notifying. E.g. [{\"field\": \"ref\", \"match\": \"regex\", \"value\": \"^refs/heads/main$\"}]. Empty = fire always."
     }
   ]
 }

@@ -123,8 +123,12 @@ clone_repo() {
         fi
         ok "Repository cloned"
     fi
-}
 
+    # Ensure we're on the main branch so users can git pull manually
+    git -C "$EVONIC_HOME" checkout main 2>/dev/null || \
+        git -C "$EVONIC_HOME" checkout -b main origin/main 2>/dev/null || \
+        warn "Could not switch to main branch."
+}
 # ── Step 3: Create Python virtual environment ────────────────────────────────
 create_venv() {
     step "Step 3/6: Creating Python virtual environment"
