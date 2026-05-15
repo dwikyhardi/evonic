@@ -30,7 +30,7 @@ def _current_datetime_str() -> str:
 
 DEFAULT_SUMMARIZE_PROMPT = """You are a conversation summarizer. Create a factual summary of a conversation between a user and an AI assistant.
 
-Current date/time: {{current_datetime}}
+Current date/time: {current_datetime}
 
 Rules:
 - Write in English only, regardless of the conversation language
