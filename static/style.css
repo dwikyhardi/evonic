@@ -1,7 +1,12 @@
 /* Evonic LLM Evaluator Styles */
 
 /* Disable zoom on mobile */
-html { touch-action: manipulation; }
+html {
+    touch-action: manipulation;
+    /* !important so CSS takes priority over the inline style set by anti-flash script,
+       allowing var(--bg-page) to respond to html.dark class toggling at runtime. */
+    background-color: var(--bg-page) !important;
+}
 
 /* ==================== Theme Variables ==================== */
 :root {

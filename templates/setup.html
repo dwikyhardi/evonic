@@ -5,15 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Setup — Evonic</title>
     <script>
-    // Anti-flash: apply theme before first paint
+    // Anti-flash: apply theme + page background before first paint (synchronous, render-blocking)
     (function() {
         var t = localStorage.getItem('evonic-theme') || 'system';
-        if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        var isDark = t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
             document.documentElement.classList.add('dark');
         }
+        // Set html background inline so it paints instantly — eliminates flash between navigations
+        document.documentElement.style.backgroundColor = isDark ? '#0f172a' : '#eef2ff';
     })();
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}?v=3">
     <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
 </head>
 <body class="bg-gradient-to-br from-indigo-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 min-h-screen flex items-center justify-center p-4">

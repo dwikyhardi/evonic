@@ -5,15 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Login - Evonic</title>
     <script>
-    // Anti-flash: apply theme before first paint
+    // Anti-flash: apply theme + page background before first paint (synchronous, render-blocking)
     (function() {
         var t = localStorage.getItem('evonic-theme') || 'system';
-        if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        var isDark = t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
             document.documentElement.classList.add('dark');
         }
+        // Set html background inline so it paints instantly — eliminates flash between navigations
+        document.documentElement.style.backgroundColor = isDark ? '#111827' : '#f3f4f6';
     })();
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}?v=3">
     {% if turnstile_site_key %}
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     {% endif %}

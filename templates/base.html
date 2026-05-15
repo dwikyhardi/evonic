@@ -5,21 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Evonic</title>
     <script>
-    // Anti-flash: apply theme before first paint
+    // Anti-flash: apply theme + page background before first paint (synchronous, render-blocking)
     (function() {
         var t = localStorage.getItem('evonic-theme') || 'system';
-        if (t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        var isDark = t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
             document.documentElement.classList.add('dark');
         }
+        // Set html background color inline so it paints instantly — prevents black/white flash
+        // between page navigations. style.css provides a fallback for dynamic theme toggling.
+        document.documentElement.style.backgroundColor = isDark ? '#0f172a' : '#f5f5f5';
         // Listen for system color scheme changes when theme is 'system'
         if (t === 'system' && window.matchMedia) {
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
                 document.documentElement.classList.toggle('dark', e.matches);
+                document.documentElement.style.backgroundColor = e.matches ? '#0f172a' : '#f5f5f5';
             });
         }
     })();
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}?v=3">
     <script src="{{ url_for('static', filename='js/ui-toggle.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='js/lucide.min.js') }}?v=1"></script>
@@ -36,7 +41,7 @@
     <script src="{{ url_for('static', filename='js/marked.min.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='js/ui-utils.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='js/approval-modal.js') }}?v=1"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=16">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=17">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/recap-prose.css') }}?v=1">
 </head>
 <body>
