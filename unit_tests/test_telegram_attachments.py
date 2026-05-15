@@ -14,9 +14,52 @@ import pytest
 from backend.channels.telegram import (
     _detect_non_photo_attachment,
     _human_size,
+    _ingest_photo,
     _sanitize_filename,
+    _TG_FILE_TYPE_DEFAULT_MIME,
 )
 from models.db import db
+
+
+def _set_agent_vision(agent_id: str, enabled: int = 1) -> None:
+    """Flip the agent's vision_enabled flag directly in SQLite."""
+    with db._connect() as conn:
+        conn.execute(
+            "UPDATE agents SET vision_enabled = ? WHERE id = ?",
+            (enabled, agent_id),
+        )
+
+
+def _make_jpeg_bytes(size=(4, 4), color=(255, 0, 0)) -> bytes:
+    """Produce a tiny but valid JPEG payload PIL can decode."""
+    from io import BytesIO
+    from PIL import Image
+    buf = BytesIO()
+    Image.new('RGB', size, color).save(buf, format='JPEG')
+    return buf.getvalue()
+
+
+class _FakePhotoTgFile:
+    """Mimics the subset of Telegram's File used by `_ingest_photo`."""
+
+    def __init__(self, body: bytes):
+        self._body = body
+
+    async def download_as_bytearray(self):
+        return bytearray(self._body)
+
+    async def download_to_drive(self, path):
+        with open(path, 'wb') as f:
+            f.write(self._body)
+
+
+def _msg_with_photo(file_id='tg_photo_1', file_size=2048):
+    photo_size = SimpleNamespace(file_id=file_id, file_size=file_size)
+    return SimpleNamespace(
+        document=None, audio=None, voice=None, video=None,
+        video_note=None, animation=None, sticker=None,
+        photo=[photo_size],
+    )
 
 
 def _make_agent(agent_id='tg_agent', enabled=1, max_mb=20, supported=1):
@@ -79,33 +122,24 @@ def test_sanitize_filename_caps_length():
 
 
 def test_human_size_formats():
-    # Both ``None`` and a negative size fall back to "0B", but a legitimate
-    # zero-byte file MUST render as "0B" too (not be silently coerced via a
-    # truthiness check that conflates None and 0).
+    assert _human_size(0) == '0B'
     assert _human_size(None) == '0B'
     assert _human_size(-1) == '0B'
-    assert _human_size(0) == '0B'
     assert _human_size(500) == '500B'
     assert _human_size(2048) == '2.0KB'
     assert _human_size(5 * 1024 * 1024) == '5.0MB'
 
 
 def test_telegram_default_mime_keys_match_candidates():
-    """``_TG_FILE_TYPE_DEFAULT_MIME`` must only contain keys that the
-    non-photo candidate gate in ``_detect_non_photo_attachment`` actually
-    consults; otherwise the mapping has a dead branch (e.g. an old 'photo'
-    key that the photo path never reads).
-    """
-    from backend.channels.telegram import _TG_FILE_TYPE_DEFAULT_MIME
-    # Non-photo candidate types as enumerated inside _detect_non_photo_attachment.
-    candidate_types = {
-        'document', 'audio', 'voice', 'video',
-        'video_note', 'animation', 'sticker',
+    """The default-mime dict must only contain keys reachable via
+    `_detect_non_photo_attachment`'s candidate list. In particular, 'photo'
+    must not be present — photos have a dedicated branch."""
+    non_photo_candidates = {
+        'document', 'audio', 'voice', 'video', 'video_note',
+        'animation', 'sticker',
     }
-    assert set(_TG_FILE_TYPE_DEFAULT_MIME.keys()).issubset(candidate_types)
-    # 'photo' is owned by the dedicated photo / vision branch and must not
-    # appear here — it would be unreachable through the non-photo gate.
     assert 'photo' not in _TG_FILE_TYPE_DEFAULT_MIME
+    assert set(_TG_FILE_TYPE_DEFAULT_MIME.keys()).issubset(non_photo_candidates)
 
 
 def test_detect_non_photo_attachment_document():
@@ -284,4 +318,120 @@ def test_handler_branch_rejects_when_model_unsupported(tmp_path, monkeypatch):
         user_id='1', channel_id='tg', context=ctx, text='',
     ))
     assert out.get('rejected') == 'gated'
+    ctx.bot.get_file.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Photo dual-handling: single `[Attached: …]` emission contract
+# ---------------------------------------------------------------------------
+
+
+def _make_photo_context(body: bytes):
+    bot = MagicMock()
+    bot.get_file = AsyncMock(return_value=_FakePhotoTgFile(body))
+    return SimpleNamespace(bot=bot)
+
+
+def test_photo_with_vision_and_attachments_emits_single_attached_line(
+        tmp_path, monkeypatch):
+    """Photo + vision_enabled + attachments_enabled+supported must produce
+    exactly one `[Attached:` substring when the handler composes the final
+    text — never two (the old dual-handling bug)."""
+    monkeypatch.chdir(tmp_path)
+    _make_agent('tg_photo_dual', enabled=1, supported=1, max_mb=5)
+    _set_agent_vision('tg_photo_dual', 1)
+    body = _make_jpeg_bytes()
+    msg = _msg_with_photo(file_size=len(body))
+    ctx = _make_photo_context(body)
+
+    image_url, info_line = _aio_run(_ingest_photo(
+        msg, ctx, agent_id='tg_photo_dual', session_id='sP',
+        user_id='42', channel_id='tg_ch', db=db,
+    ))
+    # Vision branch produced an `image_url` AND attachment branch produced
+    # exactly one info_line.
+    assert image_url is not None
+    assert image_url.startswith('data:image/jpeg;base64,')
+    assert info_line is not None
+    assert info_line.count('[Attached:') == 1
+
+    # When the handler composes the final text, the result must contain the
+    # `[Attached:` substring exactly once — never twice.
+    composed_text = info_line + "\ncaption text"
+    assert composed_text.count('[Attached:') == 1
+    assert composed_text.endswith('caption text')
+    # An attachment row was persisted.
+    rows = db.list_session_attachments('sP', 'tg_photo_dual')
+    assert len(rows) == 1
+    assert rows[0]['file_type'] == 'photo'
+
+
+def test_photo_with_vision_only_emits_no_attached_line(tmp_path, monkeypatch):
+    """Regression guard: photo + vision_enabled + attachments DISABLED must
+    produce an `image_url` but zero `[Attached:` lines (the old block would
+    accidentally synthesize an extra one)."""
+    monkeypatch.chdir(tmp_path)
+    _make_agent('tg_photo_vision_only', enabled=0, supported=1)
+    _set_agent_vision('tg_photo_vision_only', 1)
+    body = _make_jpeg_bytes()
+    msg = _msg_with_photo(file_size=len(body))
+    ctx = _make_photo_context(body)
+
+    image_url, info_line = _aio_run(_ingest_photo(
+        msg, ctx, agent_id='tg_photo_vision_only', session_id='sV',
+        user_id='1', channel_id='tg_ch', db=db,
+    ))
+    assert image_url is not None
+    # Crucial: no `info_line` when attachments are disabled.
+    assert info_line is None
+    # Composed text would carry exactly zero `[Attached:` substrings.
+    composed_text = (info_line or '') + 'caption'
+    assert '[Attached:' not in composed_text
+    # And nothing was persisted to the attachments table.
+    assert db.list_session_attachments('sV', 'tg_photo_vision_only') == []
+
+
+def test_photo_with_attachments_only_emits_single_attached_line(
+        tmp_path, monkeypatch):
+    """Photo + vision DISABLED + attachments enabled must persist the photo
+    via the fallback download path and emit exactly one `[Attached:` line."""
+    monkeypatch.chdir(tmp_path)
+    _make_agent('tg_photo_att_only', enabled=1, supported=1, max_mb=5)
+    _set_agent_vision('tg_photo_att_only', 0)
+    body = _make_jpeg_bytes()
+    msg = _msg_with_photo(file_size=len(body))
+    ctx = _make_photo_context(body)
+
+    image_url, info_line = _aio_run(_ingest_photo(
+        msg, ctx, agent_id='tg_photo_att_only', session_id='sA',
+        user_id='1', channel_id='tg_ch', db=db,
+    ))
+    # No vision conversion happened, but the attachment row was written.
+    assert image_url is None
+    assert info_line is not None
+    assert info_line.count('[Attached:') == 1
+    rows = db.list_session_attachments('sA', 'tg_photo_att_only')
+    assert len(rows) == 1
+
+
+def test_ingest_photo_short_circuits_for_text_only_message(monkeypatch, tmp_path):
+    """`_ingest_photo` must be a no-op when the message has neither photo nor
+    image-document — the handler still calls it unconditionally in the new
+    linear pipeline, and we lock in `(None, None)` as the contract."""
+    monkeypatch.chdir(tmp_path)
+    _make_agent('tg_text_only', enabled=1, supported=1)
+    _set_agent_vision('tg_text_only', 1)
+    text_only_msg = SimpleNamespace(
+        document=None, audio=None, voice=None, video=None,
+        video_note=None, animation=None, sticker=None, photo=[],
+    )
+    ctx = _make_photo_context(b'')
+
+    image_url, info_line = _aio_run(_ingest_photo(
+        text_only_msg, ctx, agent_id='tg_text_only', session_id='sT',
+        user_id='1', channel_id='tg_ch', db=db,
+    ))
+    assert image_url is None
+    assert info_line is None
+    # No download or save happened.
     ctx.bot.get_file.assert_not_awaited()

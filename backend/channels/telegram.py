@@ -43,6 +43,22 @@ _TG_FILE_TYPE_DEFAULT_MIME = {
 }
 
 
+_IMAGE_DOC_MIMES = frozenset({'image/jpeg', 'image/png', 'image/webp'})
+
+
+def _has_image_document(message) -> bool:
+    """Return True when the Telegram message carries an image-mime document.
+
+    Image-mime documents are routed exclusively through the photo / vision
+    pipeline; this helper lets the non-photo path skip them cleanly without
+    relying on side-effects from a sibling branch.
+    """
+    doc = getattr(message, 'document', None)
+    if not doc:
+        return False
+    return getattr(doc, 'mime_type', None) in _IMAGE_DOC_MIMES
+
+
 def _detect_non_photo_attachment(message) -> Optional[Tuple[str, Optional[str], str, Optional[int], str]]:
     """Inspect a Telegram message for a non-photo attachment.
 
@@ -75,6 +91,202 @@ def _detect_non_photo_attachment(message) -> Optional[Tuple[str, Optional[str], 
             original_filename = f"{file_type}.{ext}"
         return file_id, original_filename, mime_type, size_bytes, file_type
     return None
+
+
+async def _ingest_non_photo_attachment(message, context, agent_id, session_id,
+                                       user_id, channel_id, db):
+    """Detect, gate, download and persist a non-photo Telegram attachment.
+
+    The helper is the single owner of the non-photo branch: it inspects the
+    message exactly once, resolves the agent attachment config exactly once,
+    and on rejection it sends its own reply (mirroring legacy behaviour).
+
+    Returns a tuple ``(info_line, rejected)`` where:
+      * ``(None, False)``  — no non-photo attachment present (or it is an
+                              image-mime document routed to the photo branch);
+                              the caller continues with the photo / text flow.
+      * ``(info_line, False)`` — attachment persisted; ``info_line`` should be
+                                  prepended to the user's text.
+      * ``(None, True)`` — the message was rejected (gating, oversize, or
+                            download failure). A user-facing reply has already
+                            been sent and the caller must ``return`` early.
+    """
+    # Image-mime documents are owned by the photo / vision branch.
+    if _has_image_document(message):
+        return None, False
+    non_photo = _detect_non_photo_attachment(message)
+    if not non_photo:
+        return None, False
+
+    file_id, original_filename, mime_type, size_bytes, file_type = non_photo
+    cfg = db.get_agent_attachment_config(agent_id)
+    if not cfg['enabled'] or not cfg['supported']:
+        await message.reply_text(
+            "Attachments are not enabled for this assistant."
+        )
+        return None, True
+    max_bytes = cfg['max_size_mb'] * 1024 * 1024
+    if size_bytes and size_bytes > max_bytes:
+        await message.reply_text(
+            f"File too large (max {cfg['max_size_mb']}MB)."
+        )
+        return None, True
+    safe = _sanitize_filename(original_filename)
+    target_dir = os.path.join('data', 'attachments', agent_id, session_id)
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+        target_path = os.path.join(target_dir, f"{int(time.time())}_{safe}")
+        tg_file = await context.bot.get_file(file_id)
+        await tg_file.download_to_drive(target_path)
+    except Exception as e:
+        _logger.error(
+            "Failed to download attachment %s for agent %s: %s",
+            file_id, agent_id, e, exc_info=True,
+        )
+        try:
+            await message.reply_text(
+                "Failed to download attachment. Please try again."
+            )
+        except Exception:
+            pass
+        return None, True
+    real_size = size_bytes or (
+        os.path.getsize(target_path) if os.path.isfile(target_path) else 0
+    )
+    attachment_id = db.save_attachment(
+        agent_id=agent_id,
+        session_id=session_id,
+        filename=os.path.basename(target_path),
+        file_path=target_path,
+        external_user_id=user_id,
+        channel_id=channel_id,
+        channel_type='telegram',
+        original_filename=original_filename,
+        mime_type=mime_type,
+        file_type=file_type,
+        size_bytes=real_size,
+        telegram_file_id=file_id,
+    )
+    info_line = (
+        f"[Attached: {original_filename} "
+        f"({mime_type or 'application/octet-stream'}, "
+        f"{_human_size(real_size)}) "
+        f"id={attachment_id} path={target_path}]"
+    )
+    return info_line, False
+
+
+async def _ingest_photo(message, context, agent_id, session_id, user_id,
+                        channel_id, db):
+    """Handle photo / image-document messages: vision conversion + optional persist.
+
+    The helper is the single owner of the photo branch: it derives
+    ``photo_file_id`` / ``photo_size`` / ``photo_bytes_for_attachment`` exactly
+    once and never relies on state set by another branch.
+
+    Returns ``(image_url, info_line)``: either or both may be ``None``.
+      * ``image_url`` is a ``data:`` URL when the agent has vision enabled and
+        the photo was successfully decoded; ``None`` otherwise.
+      * ``info_line`` is the ``[Attached: …]`` line emitted exactly when the
+        photo was also persisted as an attachment row. This is the single
+        composition point for the photo info-line.
+    """
+    has_photo = bool(getattr(message, 'photo', None))
+    has_image_doc = _has_image_document(message)
+    if not (has_photo or has_image_doc):
+        return None, None
+
+    # Derive photo identifiers exactly once.
+    if has_photo:
+        photo = message.photo[-1]
+        photo_file_id = photo.file_id
+        photo_size = getattr(photo, 'file_size', None)
+        photo_mime = 'image/jpeg'
+        photo_orig_name = 'photo.jpg'
+        photo_file_type = 'photo'
+    else:
+        doc = message.document
+        photo_file_id = doc.file_id
+        photo_size = getattr(doc, 'file_size', None)
+        photo_mime = doc.mime_type or 'image/jpeg'
+        photo_orig_name = doc.file_name or 'image.jpg'
+        photo_file_type = 'document'
+
+    image_url = None
+    photo_bytes_for_attachment = None
+
+    agent = db.get_agent(agent_id)
+    if agent and agent.get('vision_enabled'):
+        file = await context.bot.get_file(photo_file_id)
+        img_bytes = await file.download_as_bytearray()
+        photo_bytes_for_attachment = bytes(img_bytes)
+        # Convert to JPEG for consistent LLM input.
+        from io import BytesIO
+        from PIL import Image
+        img = Image.open(BytesIO(photo_bytes_for_attachment))
+        if img.mode in ('RGBA', 'LA', 'P'):
+            img = img.convert('RGB')
+        buf = BytesIO()
+        img.save(buf, format='JPEG', quality=85)
+        b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        image_url = f"data:image/jpeg;base64,{b64}"
+
+    info_line = None
+    cfg = db.get_agent_attachment_config(agent_id)
+    if cfg['enabled'] and cfg['supported']:
+        try:
+            max_bytes = cfg['max_size_mb'] * 1024 * 1024
+            if photo_size and photo_size > max_bytes:
+                _logger.info(
+                    "Skipping photo attachment row for agent %s: "
+                    "size %s exceeds %s bytes",
+                    agent_id, photo_size, max_bytes,
+                )
+            else:
+                safe = _sanitize_filename(photo_orig_name)
+                target_dir = os.path.join(
+                    'data', 'attachments', agent_id, session_id
+                )
+                os.makedirs(target_dir, exist_ok=True)
+                target_path = os.path.join(
+                    target_dir, f"{int(time.time())}_{safe}"
+                )
+                if photo_bytes_for_attachment is not None:
+                    with open(target_path, 'wb') as f:
+                        f.write(photo_bytes_for_attachment)
+                else:
+                    tg_file = await context.bot.get_file(photo_file_id)
+                    await tg_file.download_to_drive(target_path)
+                real_size = (
+                    photo_size
+                    or (os.path.getsize(target_path) if os.path.isfile(target_path) else 0)
+                )
+                attachment_id = db.save_attachment(
+                    agent_id=agent_id,
+                    session_id=session_id,
+                    filename=os.path.basename(target_path),
+                    file_path=target_path,
+                    external_user_id=user_id,
+                    channel_id=channel_id,
+                    channel_type='telegram',
+                    original_filename=photo_orig_name,
+                    mime_type=photo_mime,
+                    file_type=photo_file_type,
+                    size_bytes=real_size,
+                    telegram_file_id=photo_file_id,
+                )
+                info_line = (
+                    f"[Attached: {photo_orig_name} "
+                    f"({photo_mime}, {_human_size(real_size)}) "
+                    f"id={attachment_id} path={target_path}]"
+                )
+        except Exception as e:
+            _logger.error(
+                "Failed to persist photo attachment for agent %s: %s",
+                agent_id, e, exc_info=True,
+            )
+
+    return image_url, info_line
 
 
 def _extract_name(text: str) -> str:
@@ -276,183 +488,36 @@ class TelegramChannel(BaseChannel):
                 from models.db import db
                 session_id = db.get_or_create_session(agent_id, user_id, channel_id)
 
-                # Handle non-photo attachments (documents, audio, voice, video, etc.)
-                IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp'}
+                # Detect message shape exactly once. The non-photo and photo
+                # helpers are mutually exclusive: image-mime documents are
+                # routed through `_ingest_photo` only.
                 has_photo = bool(update.message.photo)
-                has_image_doc = (
-                    update.message.document
-                    and update.message.document.mime_type in IMAGE_MIMES
+                has_image_doc = _has_image_document(update.message)
+
+                # Non-photo attachments (documents, audio, voice, video, etc.).
+                non_photo_info, rejected = await _ingest_non_photo_attachment(
+                    update.message, context, agent_id, session_id,
+                    user_id, channel_id, db,
+                )
+                if rejected:
+                    return
+
+                # Photo / image-document branch: vision conversion + optional
+                # attachment persistence. `photo_info` is the single source of
+                # the `[Attached: …]` line for photos — never composed twice.
+                image_url, photo_info = await _ingest_photo(
+                    update.message, context, agent_id, session_id,
+                    user_id, channel_id, db,
                 )
 
-                # Skip non-photo attachment handling for image-documents (handled by vision below).
-                non_photo = None
-                if not has_image_doc:
-                    non_photo = _detect_non_photo_attachment(update.message)
-
-                if non_photo:
-                    file_id, original_filename, mime_type, size_bytes, file_type = non_photo
-                    cfg = db.get_agent_attachment_config(agent_id)
-                    if not cfg['enabled'] or not cfg['supported']:
-                        await update.message.reply_text(
-                            "Attachments are not enabled for this assistant."
-                        )
-                        return
-                    max_bytes = cfg['max_size_mb'] * 1024 * 1024
-                    if size_bytes and size_bytes > max_bytes:
-                        await update.message.reply_text(
-                            f"File too large (max {cfg['max_size_mb']}MB)."
-                        )
-                        return
-                    safe = _sanitize_filename(original_filename)
-                    target_dir = os.path.join('data', 'attachments', agent_id, session_id)
-                    try:
-                        os.makedirs(target_dir, exist_ok=True)
-                        target_path = os.path.join(target_dir, f"{int(time.time())}_{safe}")
-                        tg_file = await context.bot.get_file(file_id)
-                        await tg_file.download_to_drive(target_path)
-                    except Exception as e:
-                        _logger.error(
-                            "Failed to download attachment %s for agent %s: %s",
-                            file_id, agent_id, e, exc_info=True,
-                        )
-                        try:
-                            await update.message.reply_text(
-                                "Failed to download attachment. Please try again."
-                            )
-                        except Exception:
-                            pass
-                        return
-                    real_size = size_bytes or (
-                        os.path.getsize(target_path) if os.path.isfile(target_path) else 0
-                    )
-                    attachment_id = db.save_attachment(
-                        agent_id=agent_id,
-                        session_id=session_id,
-                        filename=os.path.basename(target_path),
-                        file_path=target_path,
-                        external_user_id=user_id,
-                        channel_id=channel_id,
-                        channel_type='telegram',
-                        original_filename=original_filename,
-                        mime_type=mime_type,
-                        file_type=file_type,
-                        size_bytes=real_size,
-                        telegram_file_id=file_id,
-                    )
-                    info_line = (
-                        f"[Attached: {original_filename} "
-                        f"({mime_type or 'application/octet-stream'}, "
-                        f"{_human_size(real_size)}) "
-                        f"id={attachment_id} path={target_path}]"
-                    )
+                # Compose `info_line` once — the two helpers are mutually
+                # exclusive by message shape, so at most one is non-None.
+                info_line = non_photo_info or photo_info
+                if info_line:
                     text = info_line + (f"\n{text}" if text else '')
 
-                # Handle photo/image messages if agent has vision enabled.
+                # Drop empty updates per legacy behavior.
                 if has_photo or has_image_doc:
-                    agent = db.get_agent(agent_id)
-                    photo_bytes_for_attachment = None
-                    photo_file_id = None
-                    photo_size = None
-                    if agent and agent.get('vision_enabled'):
-                        if has_photo:
-                            photo = update.message.photo[-1]
-                            photo_file_id = photo.file_id
-                            photo_size = getattr(photo, 'file_size', None)
-                            file = await context.bot.get_file(photo.file_id)
-                        else:
-                            doc = update.message.document
-                            photo_file_id = doc.file_id
-                            photo_size = getattr(doc, 'file_size', None)
-                            file = await context.bot.get_file(doc.file_id)
-                        img_bytes = await file.download_as_bytearray()
-                        photo_bytes_for_attachment = bytes(img_bytes)
-                        # Convert to JPEG for consistent LLM input
-                        from io import BytesIO
-                        from PIL import Image
-                        img = Image.open(BytesIO(photo_bytes_for_attachment))
-                        if img.mode in ('RGBA', 'LA', 'P'):
-                            img = img.convert('RGB')
-                        buf = BytesIO()
-                        img.save(buf, format='JPEG', quality=85)
-                        b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                        image_url = f"data:image/jpeg;base64,{b64}"
-
-                    # Dual-handling: also persist the photo as an attachment row when
-                    # the agent has attachments_enabled (and the model supports it).
-                    cfg = db.get_agent_attachment_config(agent_id)
-                    if cfg['enabled'] and cfg['supported']:
-                        try:
-                            if has_photo and not photo_file_id:
-                                photo = update.message.photo[-1]
-                                photo_file_id = photo.file_id
-                                photo_size = getattr(photo, 'file_size', None)
-                            elif has_image_doc and not photo_file_id:
-                                doc = update.message.document
-                                photo_file_id = doc.file_id
-                                photo_size = getattr(doc, 'file_size', None)
-                            if has_image_doc:
-                                doc = update.message.document
-                                photo_mime = doc.mime_type or 'image/jpeg'
-                                photo_orig_name = doc.file_name or 'image.jpg'
-                                photo_file_type = 'document'
-                            else:
-                                photo_mime = 'image/jpeg'
-                                photo_orig_name = 'photo.jpg'
-                                photo_file_type = 'photo'
-                            max_bytes = cfg['max_size_mb'] * 1024 * 1024
-                            if photo_size and photo_size > max_bytes:
-                                _logger.info(
-                                    "Skipping photo attachment row for agent %s: "
-                                    "size %s exceeds %s bytes",
-                                    agent_id, photo_size, max_bytes,
-                                )
-                            else:
-                                safe = _sanitize_filename(photo_orig_name)
-                                target_dir = os.path.join(
-                                    'data', 'attachments', agent_id, session_id
-                                )
-                                os.makedirs(target_dir, exist_ok=True)
-                                target_path = os.path.join(
-                                    target_dir, f"{int(time.time())}_{safe}"
-                                )
-                                if photo_bytes_for_attachment is not None:
-                                    with open(target_path, 'wb') as f:
-                                        f.write(photo_bytes_for_attachment)
-                                else:
-                                    tg_file = await context.bot.get_file(photo_file_id)
-                                    await tg_file.download_to_drive(target_path)
-                                real_size = (
-                                    photo_size
-                                    or (os.path.getsize(target_path) if os.path.isfile(target_path) else 0)
-                                )
-                                attachment_id = db.save_attachment(
-                                    agent_id=agent_id,
-                                    session_id=session_id,
-                                    filename=os.path.basename(target_path),
-                                    file_path=target_path,
-                                    external_user_id=user_id,
-                                    channel_id=channel_id,
-                                    channel_type='telegram',
-                                    original_filename=photo_orig_name,
-                                    mime_type=photo_mime,
-                                    file_type=photo_file_type,
-                                    size_bytes=real_size,
-                                    telegram_file_id=photo_file_id,
-                                )
-                                info_line = (
-                                    f"[Attached: {photo_orig_name} "
-                                    f"({photo_mime}, {_human_size(real_size)}) "
-                                    f"id={attachment_id} path={target_path}]"
-                                )
-                                text = info_line + (f"\n{text}" if text else '')
-                        except Exception as e:
-                            _logger.error(
-                                "Failed to persist photo attachment for agent %s: %s",
-                                agent_id, e, exc_info=True,
-                            )
-
-                    # If neither vision nor attachments captured the photo and there is
-                    # no caption text, drop the update to mirror legacy behavior.
                     if image_url is None and not text:
                         return
                 elif not text:
