@@ -81,18 +81,28 @@ export class ChatUI {
      * @returns {jQuery}  the wrapper div (anchor for Turn)
      */
     appendMessage(role, content, opts = {}) {
-        if (role !== 'error' && (!content || !content.trim())) return $();
+        if (role !== 'error' && (!content || !content.trim())) {
+            this._log.warn('appendMessage SKIPPED empty/whitespace content', role);
+            return $();
+        }
 
         // Remove empty-state placeholder
         this.$container.find('[data-empty-state]').remove();
 
         // For assistant with timeline metadata, render a finalized thinking bubble first
         if (role === 'assistant' && opts.metadata && opts.metadata.timeline && opts.metadata.timeline.length > 0) {
+            this._log.info('appendMessage rendering finalized bubble for assistant, timeline_len=', opts.metadata.timeline.length);
             this._renderFinalizedBubble(opts.metadata.timeline, opts.metadata.thinking_duration);
         }
 
         const $wrapper = this._renderers.buildMessageBubble(role, content, opts, this._cfg);
+        if (!$wrapper || !$wrapper.length) {
+            this._log.warn('appendMessage buildMessageBubble returned empty', role);
+            return $();
+        }
         this.$container.append($wrapper);
+        const totalKids = this.$container.children().length;
+        this._log.info('appendMessage appended', role, 'totalChildren=', totalKids, 'contentPreview=', String(content||'').slice(0,60));
         this._smartScroll();
         return $wrapper;
     }
