@@ -908,7 +908,8 @@ class AgentRuntime:
         # in a DIFFERENT session, reject this message with a contextual explanation.
         # Check focus first (requires DB read) only when agent-level busy is confirmed.
         if agent.get('enable_agent_state') and self.is_agent_busy(agent_id):
-            busy_entry = self._agent_tracker._busy.get(agent_id)
+            with self._agent_tracker._guard:
+                busy_entry = self._agent_tracker._busy.get(agent_id)
             if busy_entry and busy_entry['session_id'] != session_id:
                 ms = self._restore_agent_state(agent_id)
                 if ms and ms.focus:
@@ -959,7 +960,8 @@ class AgentRuntime:
         # The sub-agent/target processes asynchronously and results are delivered via
         # _on_final_answer auto-forward, not via the return value.
         if external_user_id and external_user_id.startswith('__agent__'):
-            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
+                                                    session_db_agent_id=db_agent_id if is_subagent else None),
                               send_via_channel=False)
             self._message_queue.put(task)
             return {"response": None, "async": True, "tool_trace": [], "timeline": []}
@@ -1029,7 +1031,7 @@ class AgentRuntime:
                 _err_msg = 'An unexpected error occurred while processing your request.'
                 # Write to chatlog so reconnecting clients (poll-based) also see the turn ended.
                 try:
-                    chatlog = chatlog_manager.get(agent.get('_db_agent_id', agent_id), ctx.session_id)
+                    chatlog = chatlog_manager.get(ctx.session_db_agent_id or agent_id, ctx.session_id)
                     chatlog.append({'type': 'error', 'session_id': ctx.session_id,
                                     'content': _err_msg, 'metadata': {'error': True, 'thinking_duration': _err_dur}})
                     chatlog.append({'type': 'turn_end', 'session_id': ctx.session_id, 'thinking_duration': _err_dur})
@@ -1119,7 +1121,7 @@ class AgentRuntime:
         _db_retry(db.add_chat_message, ctx.session_id, 'assistant', reply,
                   agent_id=db_agent_id, metadata={'evonet_offline': True},
                   label="save evonet offline reply")
-        chatlog_manager.get(agent['id'], ctx.session_id).append({
+        chatlog_manager.get(db_agent_id, ctx.session_id).append({
             'type': 'final', 'session_id': ctx.session_id,
             'content': reply,
             'metadata': {'evonet_offline': True},
@@ -1655,17 +1657,16 @@ class AgentRuntime:
             return AgentState.deserialize(_json.dumps(merged))
         return None
 
-    _APPROVAL_PATTERNS = [
-        'lanjut', 'ok', 'oke', 'approved', 'approve', 'setuju', 'go ahead',
-        'proceed', 'execute', 'yes', 'ya', 'yep', 'sure', 'confirm', 'done',
-        'boleh', 'silakan', 'silahkan', 'jalankan', 'mulai', 'start',
-    ]
+    _APPROVAL_RE = re.compile(
+        r'\b(lanjut|ok|oke|approved|approve|setuju|go ahead|proceed|execute|'
+        r'yes|ya|yep|sure|confirm|done|boleh|silakan|silahkan|jalankan|mulai|start)\b',
+        re.IGNORECASE,
+    )
 
     @classmethod
     def _is_approval(cls, text: str) -> bool:
         """Return True if the text looks like a user approval of a plan."""
-        lowered = text.strip().lower()
-        return any(pat in lowered for pat in cls._APPROVAL_PATTERNS)
+        return bool(cls._APPROVAL_RE.search(text.strip()))
 
     # ── Cross-session focus helpers ──────────────────────────────────────────
 

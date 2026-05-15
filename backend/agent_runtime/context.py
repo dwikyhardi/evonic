@@ -4,9 +4,12 @@ context.py — builds LLM input: system prompt, tool list, message formatting.
 Pure data preparation — no LLM calls, no threading.
 """
 
+import logging
 import os
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
+
+_logger = logging.getLogger(__name__)
 
 from models.db import db
 from backend.tools import tool_registry
@@ -53,6 +56,7 @@ def _build_portal_info(agent_id: str) -> list:
         from models.db import db
         portals = db.get_agent_portals(agent_id)
     except Exception:
+        _logger.warning("Failed to load portal info for agent %s", agent_id, exc_info=True)
         return []
 
     if not portals:

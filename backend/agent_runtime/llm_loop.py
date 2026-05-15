@@ -278,7 +278,10 @@ def run_tool_loop(agent: Dict[str, Any],
                 _injection_count += 1
                 if _injection_count <= MAX_INJECTIONS_PER_LOOP:
                     _iteration = 0
-                    _had_tool_call_iteration = False  # fresh reasoning context after injection
+                    # Do NOT reset _had_tool_call_iteration here. If prior iterations already
+                    # used thinking + tool calls, the message list contains reasoning_content.
+                    # Re-enabling thinking at this point causes DeepSeek-R1 to reject with
+                    # "reasoning_content must be passed back".
                 else:
                     _logger.warning("Injection cap reached (%d), iteration counter will no longer reset — loop will terminate at max_tool_iterations (%d).", MAX_INJECTIONS_PER_LOOP, max_tool_iterations)
                 _logger.debug("Injected %d user message(s) into loop for session %s (injection #%d)",
