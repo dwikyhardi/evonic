@@ -18,9 +18,8 @@ async function renderAgentState(agentId, userId, containerIds, sessionId) {
         const data = await res.json();
 
         const empty = '<p class="text-sm text-gray-400 dark:text-gray-500 italic">No state yet.</p>';
-        const hasAnyState = data.mode || data.focus || data.plan_file ||
-            (data.states && Object.keys(data.states).length > 0) ||
-            (data.tasks && data.tasks.length > 0);
+        const hasAnyState = data.focus ||
+            (data.states && Object.keys(data.states).length > 0);
         if (!hasAnyState) {
             (Array.isArray(containerIds) ? containerIds : [containerIds]).forEach(id => {
                 const el = document.getElementById(id);
@@ -29,18 +28,13 @@ async function renderAgentState(agentId, userId, containerIds, sessionId) {
             return;
         }
 
-        // Build status cards row (Focus, Plan)
+        // Build status cards row (Focus)
         let cards = '';
 
         // Focus badge
         if (data.focus) {
             const reasonText = data.focus_reason ? ` — ${esc(data.focus_reason)}` : '';
             cards += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 ml-1">Focus${reasonText}</span>`;
-        }
-
-        // Plan file
-        if (data.plan_file) {
-            cards += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 ml-1">📋 ${esc(data.plan_file)}</span>`;
         }
 
         // TODO: Debug feature - dump raw AgentState JSON for verification
@@ -66,19 +60,6 @@ async function renderAgentState(agentId, userId, containerIds, sessionId) {
             html += `</ul></div>`;
         }
 
-        // Task list section (from session state)
-        if (data.tasks && data.tasks.length > 0) {
-            const icons = {pending: '\u2610', in_progress: '\u27f3', done: '\u2713'};
-            const iconColors = {pending: 'text-gray-400', in_progress: 'text-amber-500', done: 'text-green-500'};
-            html += `<div class="border-t border-gray-100 dark:border-gray-700 pt-2"><div class="text-gray-500 dark:text-gray-400 font-medium mb-1 text-xs uppercase tracking-wide">Tasks</div><ul class="space-y-0.5">`;
-            for (const t of data.tasks) {
-                const icon = icons[t.status] || '\u2610';
-                const color = iconColors[t.status] || 'text-gray-400';
-                const textClass = t.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200';
-                html += `<li class="flex items-start gap-1.5"><span class="${color} text-xs mt-0.5">${icon}</span><span class="${textClass} text-xs">${esc(t.text)}</span></li>`;
-            }
-            html += `</ul></div>`;
-        }
 
         // TODO: Debug feature - dump raw AgentState JSON for verification
         html += `<div class="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">`;

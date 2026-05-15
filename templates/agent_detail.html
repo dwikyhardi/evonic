@@ -554,7 +554,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
                 <div id="summary-card" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 flex flex-col flex-1 min-h-0 overflow-hidden">
                     <div class="flex justify-between items-center px-4 pt-4 pb-2 flex-shrink-0">
                         <h3 class="font-semibold text-gray-800 dark:text-gray-100">Session State</h3>
-                        <button onclick="refreshSummary()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="Refresh">
+                        <button onclick="refreshSessionState()" class="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1" title="Refresh">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l-.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
                             Refresh
                         </button>
@@ -576,7 +576,7 @@ html.dark #channel-detail-modal .hover\:bg-indigo-100:hover { background: #312e8
         <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
             <h4 class="font-semibold text-gray-800 dark:text-gray-100">Session State</h4>
             <div class="flex items-center gap-3">
-                <button onclick="refreshSummary()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
+                <button onclick="refreshSessionState()" class="text-xs text-gray-400 hover:text-gray-600" title="Refresh">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l-.312.311a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm-10.625-2.85a5.5 5.5 0 0 1 9.201-2.465l.312.31H11.767a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.535a.75.75 0 0 0-1.5 0v2.033l-.312-.31A7 7 0 0 0 2.627 8.396a.75.75 0 0 0 1.449.39l.611.789Z" clip-rule="evenodd"/></svg>
                 </button>
                 <button onclick="closeMobileChatSummary()" class="text-gray-400 hover:text-gray-600">
@@ -1198,7 +1198,7 @@ function showTab(name) {
     if (name === 'skills') loadSkills();
     if (name === 'channels') loadChannels();
     if (name === 'portals') loadPortals();
-    if (name === 'chat' && !chatLoaded) { loadChatHistory(); refreshSummary(); refreshAgentState(); }
+    if (name === 'chat' && !chatLoaded) { loadChatHistory(); refreshSessionState(); refreshAgentState(); }
 
     if (name === 'chat') {
         enterChatFullscreen();
@@ -2823,7 +2823,7 @@ async function sendChat() {
             chatUI.appendMessage('error', 'Network error: ' + e.message);
         }
         setChatBusy(false);
-        setTimeout(refreshSummary, 3000);
+        setTimeout(refreshSessionState, 3000);
         setTimeout(refreshAgentState, 1000);
         return;
     }
@@ -2936,7 +2936,7 @@ async function sendChat() {
     }
     setChatBusy(false);
     // Refresh summary and agent state after background summarization completes (~2-3s delay)
-    setTimeout(refreshSummary, 3000);
+    setTimeout(refreshSessionState, 3000);
     setTimeout(refreshAgentState, 1000);
 }
 
@@ -3040,7 +3040,7 @@ function pollForResponse(existingThinkingId) {
                 clearInterval(_currentTurn.pollTimer);
                 _currentTurn.pollTimer = null;
                 setChatBusy(false);
-                setTimeout(refreshSummary, 3000);
+                setTimeout(refreshSessionState, 3000);
                 setTimeout(refreshAgentState, 1000);
             }
         } catch(e) { console.error('[pollForResponse]', e); }
@@ -3159,12 +3159,13 @@ function closeMobileChatSummary() {
     document.getElementById('mobile-chat-summary-overlay').classList.add('hidden');
 }
 
-async function refreshSummary() {
+async function refreshSessionState() {
     try {
         // Fetch both session summary and agent state in parallel
+        const sid = _chatSessionId ? `&session_id=${encodeURIComponent(_chatSessionId)}` : '';
         const [sumRes, stateRes] = await Promise.all([
-            fetch(`/api/agents/${AGENT_ID}/chat/summary?user_id=web_test`),
-            fetch(`/api/agents/${AGENT_ID}/chat/state?user_id=web_test`)
+            fetch(`/api/agents/${AGENT_ID}/chat/summary?user_id=web_test${sid}`),
+            fetch(`/api/agents/${AGENT_ID}/chat/state?user_id=web_test${sid}`)
         ]);
         const data = await sumRes.json();
         const stateData = stateRes.ok ? await stateRes.json() : {};
@@ -3225,12 +3226,12 @@ async function refreshSummary() {
 
 async function refreshAgentState() {
     if (!ENABLE_AGENT_STATE) return;
-    renderAgentState(AGENT_ID, 'web_test', ['agent-state-content', 'mobile-agent-state-content']);
+    renderAgentState(AGENT_ID, 'web_test', ['agent-state-content', 'mobile-agent-state-content'], _chatSessionId);
 }
 
 document.addEventListener('evonic:agent-state-changed', function() {
     refreshAgentState();
-    refreshSummary();
+    refreshSessionState();
 });
 
 // ==================== Model Selector ====================
