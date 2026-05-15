@@ -329,8 +329,8 @@ function dispatchSessionEvent(evtName, data, sessionId) {
         if (!_sseThinkingId) {
             _sseThinkingId = chatUI.showThinkingIndicator();
         }
-        chatUI.appendTimelineEntry(_sseThinkingId, {type: 'tool_result', tool: data.tool, result: data.result, error: data.error});
-        if (['save_plan', 'set_mode', 'update_tasks', 'state'].includes(data.tool)) {
+        chatUI.appendTimelineEntry(_sseThinkingId, {type: 'tool_result', tool: data.tool_name, result: data.result, error: data.error});
+        if (['save_plan', 'set_mode', 'update_tasks', 'state'].includes(data.tool_name)) {
             loadAgentState();
             loadSessionSummary();
         }
@@ -399,9 +399,11 @@ function scrollChatToBottom() {
 // bubble persists across multiple poll calls within a single turn.
 function renderEntries(entries, { persistent = false } = {}) {
     let thinkingId = persistent ? _pollThinkingId : null;
+    let entryCount = 0;
     for (const entry of entries) {
         if (entry.ts > lastChatTs) lastChatTs = entry.ts;
         const type = entry.type;
+        entryCount++;
         if (type === 'user') {
             // Skip if this exact message was already optimistically rendered by sendReply
             if (_pendingReplyText !== null && entry.content === _pendingReplyText) {
@@ -425,17 +427,24 @@ function renderEntries(entries, { persistent = false } = {}) {
             chatUI.appendTimelineEntry(thinkingId, {type: 'response', content: entry.content});
         } else if (type === 'final') {
             const meta = entry.metadata || {};
+            console.log('[renderEntries] FINAL entry #%d thinkingId=%s content_len=%d content_preview=%s _pendingReplyText=%s',
+                entryCount, !!thinkingId, (entry.content||'').length, (entry.content||'').slice(0,60), _pendingReplyText);
             if (thinkingId) {
                 chatUI.finalizeThinkingBubble(thinkingId, meta.thinking_duration);
                 thinkingId = null;
+                console.log('[renderEntries] FINAL finalized thinking bubble');
             }
             if (entry.content) {
                 // Skip if this was already optimistically rendered as an assistant reply (perspective 'B')
                 if (_pendingReplyText !== null && entry.content === _pendingReplyText) {
                     _pendingReplyText = null;
+                    console.log('[renderEntries] FINAL skipped (matched _pendingReplyText)');
                 } else {
-                    chatUI.appendMessage('assistant', entry.content, {timestamp: entry.ts ? new Date(entry.ts).toISOString() : null, metadata: meta});
+                    const $el = chatUI.appendMessage('assistant', entry.content, {timestamp: entry.ts ? new Date(entry.ts).toISOString() : null, metadata: meta});
+                    console.log('[renderEntries] FINAL appendMessage returned element:', !!$el.length);
                 }
+            } else {
+                console.warn('[renderEntries] FINAL entry has no content, skipping');
             }
         } else if (type === 'error') {
             if (thinkingId) { chatUI.finalizeThinkingBubble(thinkingId); thinkingId = null; }
@@ -452,8 +461,10 @@ function renderEntries(entries, { persistent = false } = {}) {
         // In-progress turn detected: remove the incomplete bubble so the event-buffer
         // replay (dispatchSessionEvent / restoreActiveReasoning) can create a fresh one
         // without duplicating the entries that are already in the buffer.
+        console.warn('[renderEntries] removing orphan thinking indicator at end, thinkingId:', thinkingId);
         chatUI.removeThinkingIndicator(thinkingId);
     }
+    console.log('[renderEntries] processed', entryCount, 'entries, persistent:', persistent, 'orphanThinking:', !!thinkingId);
 }
 
 // Render a history message whose timeline should be split into per-iteration bubbles
@@ -647,16 +658,26 @@ async function selectSession(sessionId) {
                 const jd = await jr.json();
                 if (_selectGeneration !== gen) return;
                 const entries = jd.entries || [];
+                console.log('[selectSession] JSONL entries:', entries.length, 'has_more:', jd.has_more,
+                    'last:', entries.length ? entries[entries.length-1].type + ':' + (entries[entries.length-1].content||'').slice(0,60) : 'none',
+                    'first:', entries.length ? entries[0].type + ':' + (entries[0].content||'').slice(0,60) : 'none');
                 if (entries.length) {
-                    chatUI.batchRender(() => renderEntries(entries));
+                    chatUI.batchRender(() => {
+                        console.log('[selectSession] batchRender start, container children before:', chatUI.$container.children().length);
+                        renderEntries(entries);
+                        console.log('[selectSession] batchRender done, container children after:', chatUI.$container.children().length);
+                    });
                 } else {
                     // JSONL empty — fall back to SQLite messages
+                    console.warn('[selectSession] JSONL returned 0 entries (has_more:', jd.has_more, '), falling back to SQLite');
                     _renderSqliteMessages(messages, container);
                 }
             } else {
+                console.warn('[selectSession] JSONL fetch !ok, status:', jr.status, 'falling back to SQLite');
                 _renderSqliteMessages(messages, container);
             }
-        } catch (_) {
+        } catch (e) {
+            console.error('[selectSession] JSONL fetch/parse error, falling back to SQLite:', e);
             // Clear any partial render before falling back to SQLite
             container.innerHTML = '';
             _pollThinkingId = null;
@@ -695,9 +716,11 @@ async function selectSession(sessionId) {
                 const body = await r.json();
                 if (_selectGeneration !== gen) return;
                 const events = body.events || [];
+                console.log('[selectSession] event-buffer replay: got', events.length, 'events, types:', events.map(e=>e.event).join(','));
                 // Only replay the current in-progress turn: skip everything up to the last 'done'
                 const lastDoneIdx = events.reduce((idx, ev, i) => ev.event === 'done' ? i : idx, -1);
                 const replayEvents = lastDoneIdx >= 0 ? events.slice(lastDoneIdx + 1) : events;
+                console.log('[selectSession] event-buffer replay: lastDoneIdx=', lastDoneIdx, 'replayEvents=', replayEvents.length);
                 if (replayEvents.length) {
                     for (const ev of replayEvents) {
                         if (ev.seq > resumeSeq) resumeSeq = ev.seq;
@@ -717,6 +740,7 @@ async function selectSession(sessionId) {
 }
 
 function _renderSqliteMessages(messages, container) {
+    console.log('[_renderSqliteMessages] got', messages.length, 'messages from SQLite, last:', messages.length ? messages[messages.length-1].role + ':' + (messages[messages.length-1].content||'').slice(0,60) : 'none');
     if (!messages.length) {
         container.innerHTML = '<div data-empty-state class="text-center text-gray-400 text-sm py-8">No messages yet</div>';
         return;
@@ -1168,7 +1192,7 @@ function clearSummaryPanel() {
 async function loadAgentState() {
     if (!currentAgentId) return;
     const userId = document.getElementById('hdr-user')?.textContent || 'web_test';
-    renderAgentState(currentAgentId, userId, ['agent-state-content', 'mobile-agent-state-content']);
+    renderAgentState(currentAgentId, userId, ['agent-state-content', 'mobile-agent-state-content'], currentSessionId);
 }
 
 function clearAgentStatePanel() {

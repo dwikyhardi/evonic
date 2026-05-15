@@ -759,6 +759,11 @@ class AgentRuntime:
         if external_user_id is None:
             external_user_id = '__system__'
 
+        _logger.info(
+            "[handle_message] agent=%s sender=%s msg_preview=%.80r",
+            agent_id, external_user_id, message,
+        )
+
         agent = db.get_agent(agent_id)
         db_agent_id = agent_id  # Default: agent's own per-agent chat DB
         if not agent:
@@ -908,7 +913,8 @@ class AgentRuntime:
         # in a DIFFERENT session, reject this message with a contextual explanation.
         # Check focus first (requires DB read) only when agent-level busy is confirmed.
         if agent.get('enable_agent_state') and self.is_agent_busy(agent_id):
-            busy_entry = self._agent_tracker._busy.get(agent_id)
+            with self._agent_tracker._guard:
+                busy_entry = self._agent_tracker._busy.get(agent_id)
             if busy_entry and busy_entry['session_id'] != session_id:
                 ms = self._restore_agent_state(agent_id)
                 if ms and ms.focus:
@@ -920,6 +926,10 @@ class AgentRuntime:
         # into the active loop instead of blocking/queuing a new task.
         # Message is already saved to DB above, so DB order is preserved.
         if self._is_busy(session_id):
+            _logger.info(
+                "[handle_message] agent=%s session=%s — session busy, injecting into active loop.",
+                agent_id, session_id,
+            )
             self._get_inject_queue(session_id).put({
                 'role': 'user',
                 'content': message or '[Image]',
@@ -937,6 +947,10 @@ class AgentRuntime:
         # Message buffering: debounce rapid messages, then queue
         buffer_seconds = agent.get('message_buffer_seconds', DEFAULT_BUFFER_SECONDS) or 0
         if buffer_seconds > 0:
+            _logger.info(
+                "[handle_message] agent=%s session=%s — buffering for %ss.",
+                agent_id, session_id, buffer_seconds,
+            )
             task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
                                                     session_db_agent_id=db_agent_id if is_subagent else None),
                               send_via_channel=True)
@@ -959,7 +973,12 @@ class AgentRuntime:
         # The sub-agent/target processes asynchronously and results are delivered via
         # _on_final_answer auto-forward, not via the return value.
         if external_user_id and external_user_id.startswith('__agent__'):
-            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id),
+            _logger.info(
+                "[handle_message] agent=%s session=%s — inter-agent message from %s, queued async (fire-and-forget).",
+                agent_id, session_id, external_user_id,
+            )
+            task = _QueueTask(agent, SessionContext(session_id, external_user_id, channel_id,
+                                                    session_db_agent_id=db_agent_id if is_subagent else None),
                               send_via_channel=False)
             self._message_queue.put(task)
             return {"response": None, "async": True, "tool_trace": [], "timeline": []}
@@ -1029,7 +1048,7 @@ class AgentRuntime:
                 _err_msg = 'An unexpected error occurred while processing your request.'
                 # Write to chatlog so reconnecting clients (poll-based) also see the turn ended.
                 try:
-                    chatlog = chatlog_manager.get(agent.get('_db_agent_id', agent_id), ctx.session_id)
+                    chatlog = chatlog_manager.get(ctx.session_db_agent_id or agent_id, ctx.session_id)
                     chatlog.append({'type': 'error', 'session_id': ctx.session_id,
                                     'content': _err_msg, 'metadata': {'error': True, 'thinking_duration': _err_dur}})
                     chatlog.append({'type': 'turn_end', 'session_id': ctx.session_id, 'thinking_duration': _err_dur})
@@ -1119,7 +1138,7 @@ class AgentRuntime:
         _db_retry(db.add_chat_message, ctx.session_id, 'assistant', reply,
                   agent_id=db_agent_id, metadata={'evonet_offline': True},
                   label="save evonet offline reply")
-        chatlog_manager.get(agent['id'], ctx.session_id).append({
+        chatlog_manager.get(db_agent_id, ctx.session_id).append({
             'type': 'final', 'session_id': ctx.session_id,
             'content': reply,
             'metadata': {'evonet_offline': True},
@@ -1265,10 +1284,17 @@ class AgentRuntime:
         if _use_jsonl:
             # Use JSONL-based context (new path)
             conv_msgs = _jsonl_entries
-            # The tail must start with a 'user' message
+            # When no summary exists, skip leading non-user messages so the
+            # conversation starts with a user turn.  When a summary IS present,
+            # keep leading assistant messages (unsummarized continuation) but
+            # still skip orphaned tool responses (no preceding tool_calls).
             tail_start = 0
-            while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
-                tail_start += 1
+            if not summary_record:
+                while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
+                    tail_start += 1
+            else:
+                while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') == 'tool':
+                    tail_start += 1
             for msg in conv_msgs[tail_start:]:
                 # Skip slash command messages — they are handled directly by the
                 # command executor and must never enter LLM context. Both the user
@@ -1284,8 +1310,10 @@ class AgentRuntime:
             if summary_record:
                 raw_tail = db.get_messages_after(ctx.session_id, summary_record['last_message_id'],
                                                   agent_id=db_agent_id)
+                # Keep unsummarized continuation but skip orphaned tool
+                # responses that lack a preceding assistant tool_calls message.
                 tail_start = 0
-                while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') != 'user':
+                while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') == 'tool':
                     tail_start += 1
                 for msg in raw_tail[tail_start:]:
                     if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):
@@ -1655,17 +1683,16 @@ class AgentRuntime:
             return AgentState.deserialize(_json.dumps(merged))
         return None
 
-    _APPROVAL_PATTERNS = [
-        'lanjut', 'ok', 'oke', 'approved', 'approve', 'setuju', 'go ahead',
-        'proceed', 'execute', 'yes', 'ya', 'yep', 'sure', 'confirm', 'done',
-        'boleh', 'silakan', 'silahkan', 'jalankan', 'mulai', 'start',
-    ]
+    _APPROVAL_RE = re.compile(
+        r'\b(lanjut|ok|oke|approved|approve|setuju|go ahead|proceed|execute|'
+        r'yes|ya|yep|sure|confirm|done|boleh|silakan|silahkan|jalankan|mulai|start)\b',
+        re.IGNORECASE,
+    )
 
     @classmethod
     def _is_approval(cls, text: str) -> bool:
         """Return True if the text looks like a user approval of a plan."""
-        lowered = text.strip().lower()
-        return any(pat in lowered for pat in cls._APPROVAL_PATTERNS)
+        return bool(cls._APPROVAL_RE.search(text.strip()))
 
     # ── Cross-session focus helpers ──────────────────────────────────────────
 

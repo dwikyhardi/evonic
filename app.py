@@ -380,6 +380,8 @@ def enforce_auth():
         return None
     if request.path.startswith('/webhook'):
         return None  # Plugin webhook endpoints handle their own auth
+    if request.path.startswith('/plugin/'):
+        return None  # Plugin routes handle their own auth internally
     if request.path in ('/login', '/logout'):
         return None
 

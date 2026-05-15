@@ -8,15 +8,17 @@ function esc(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function renderAgentState(agentId, userId, containerIds) {
+async function renderAgentState(agentId, userId, containerIds, sessionId) {
     if (!agentId) return;
     try {
-        const res = await fetch(`/api/agents/${agentId}/chat/state?user_id=${encodeURIComponent(userId || 'web_test')}`);
+        let url = `/api/agents/${agentId}/chat/state?user_id=${encodeURIComponent(userId || 'web_test')}`;
+        if (sessionId) url += `&session_id=${encodeURIComponent(sessionId)}`;
+        const res = await fetch(url);
         if (!res.ok) { console.warn('[AgentState] API error:', res.status, res.statusText); return; }
         const data = await res.json();
 
         const empty = '<p class="text-sm text-gray-400 dark:text-gray-500 italic">No state yet.</p>';
-        const hasAnyState = data.mode || data.focus || data.plan_file ||
+        const hasAnyState = data.focus ||
             (data.states && Object.keys(data.states).length > 0);
         if (!hasAnyState) {
             (Array.isArray(containerIds) ? containerIds : [containerIds]).forEach(id => {
@@ -26,18 +28,13 @@ async function renderAgentState(agentId, userId, containerIds) {
             return;
         }
 
-        // Build status cards row (Focus, Plan)
+        // Build status cards row (Focus)
         let cards = '';
 
         // Focus badge
         if (data.focus) {
             const reasonText = data.focus_reason ? ` — ${esc(data.focus_reason)}` : '';
             cards += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 ml-1">Focus${reasonText}</span>`;
-        }
-
-        // Plan file
-        if (data.plan_file) {
-            cards += `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300 ml-1">📋 ${esc(data.plan_file)}</span>`;
         }
 
         // TODO: Debug feature - dump raw AgentState JSON for verification
@@ -62,6 +59,7 @@ async function renderAgentState(agentId, userId, containerIds) {
             }
             html += `</ul></div>`;
         }
+
 
         // TODO: Debug feature - dump raw AgentState JSON for verification
         html += `<div class="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">`;

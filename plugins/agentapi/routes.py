@@ -1,9 +1,9 @@
 """
 AgentAPI Plugin — Flask Route Handlers
 
-Consumer endpoints (no /api/ prefix → bypass global session auth):
-  POST /agentapi/v1/chat/completions   — OpenAI-compatible chat completion
-  GET  /agentapi/v1/models             — List available models (filtered by token scope)
+Consumer endpoints (/plugin/ prefix → bypass global session auth — plugin handles its own auth):
+  POST /plugin/agentapi/v1/chat/completions   — OpenAI-compatible chat completion
+  GET  /plugin/agentapi/v1/models             — List available models (filtered by token scope)
 
 Admin endpoints (/api/ prefix → session auth required):
   GET    /api/agentapi/admin              — Admin dashboard page
@@ -32,6 +32,10 @@ from plugins.agentapi.db import TokenDB, hash_token
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 token_db = TokenDB()
+
+# In-memory cache: maps token_id → plaintext (for the /reveal endpoint)
+_plaintext_cache: dict[int, str] = {}
+_PLAINTEXT_CACHE_TTL = 3600  # seconds
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -164,10 +168,11 @@ def create_blueprint():
                    template_folder=os.path.join(PLUGIN_DIR, 'templates'))
 
     # =======================================================================
-    # Consumer endpoints — NO /api/ prefix (bypasses global enforce_auth)
+    # Consumer endpoints — /plugin/ prefix bypasses global enforce_auth
+    # Plugin handles its own authentication via Bearer token
     # =======================================================================
 
-    @bp.route('/agentapi/v1/chat/completions', methods=['POST'])
+    @bp.route('/plugin/agentapi/v1/chat/completions', methods=['POST'])
     def chat_completions():
         """OpenAI-compatible chat completion endpoint.
 
@@ -383,7 +388,7 @@ def create_blueprint():
             },
         )
 
-    @bp.route('/agentapi/v1/models', methods=['GET'])
+    @bp.route('/plugin/agentapi/v1/models', methods=['GET'])
     def list_models():
         """Return the list of available models filtered by token scope.
 
@@ -489,6 +494,10 @@ def create_blueprint():
         plaintext_token = row.pop('token', None)
         row['allowed_models'] = _parse_allowed_models(row.get('allowed_models'))
 
+        # Cache plaintext temporarily for the /reveal endpoint
+        if plaintext_token and row.get('id'):
+            _plaintext_cache[row['id']] = plaintext_token
+
         return jsonify({
             'token': row,
             'plaintext': plaintext_token,
@@ -550,6 +559,27 @@ def create_blueprint():
         stats['allowed_models'] = _parse_allowed_models(
             stats.get('allowed_models'))
         return jsonify({'stats': stats})
+
+    @bp.route('/api/agentapi/admin/tokens/<int:token_id>/reveal',
+              methods=['GET'])
+    def admin_reveal_token(token_id):
+        """Return the plaintext token if cached (creation-time only)."""
+        plaintext = _plaintext_cache.get(token_id)
+        if not plaintext:
+            return jsonify({'error': 'Plaintext token no longer available'}), 404
+        return jsonify({'plaintext': plaintext})
+
+    @bp.route('/api/agentapi/admin/tokens/<int:token_id>/reset',
+              methods=['POST'])
+    def admin_reset_token(token_id):
+        """Regenerate the secret key for a token. Returns the new plaintext
+        once; the old key is immediately invalidated."""
+        plaintext = token_db.reset_token(token_id)
+        if not plaintext:
+            return jsonify({'error': 'Token not found'}), 404
+        # Cache for /reveal endpoint
+        _plaintext_cache[token_id] = plaintext
+        return jsonify({'plaintext': plaintext})
 
     # =======================================================================
     # Model-agent mapping helper (for admin UI)

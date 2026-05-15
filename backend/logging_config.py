@@ -44,7 +44,7 @@ _DEFAULT_LOG_FILE = os.path.join(
 _DEFAULT_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 _DEFAULT_BACKUPS = 3
 _DEFAULT_LOG_ROUTES = (
-    "logs/agent.log:backend.agent_runtime.*,backend.agent_state;"
+    "logs/agent.log:backend.agent_runtime.*,backend.agent_state,backend.tools.agent_messaging;"
     "logs/channels.log:backend.channels.*;"
     "logs/evaluator.log:evaluator.*"
 )
