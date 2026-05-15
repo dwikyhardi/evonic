@@ -6,7 +6,6 @@ import sys
 import os
 import signal
 import time
-from datetime import datetime
 # Ensure the project root is on sys.path so we can import app and its modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -17,38 +16,7 @@ try:
 except ImportError:
     pass
 
-# Banner color by day of week (0=Monday, 1=Tuesday, etc.)
-_DAY_COLORS = [
-    "\033[91m",  # Monday    - Bright Red
-    "\033[35m",  # Tuesday   - Magenta
-    "\033[32m",  # Wednesday - Green
-    "\033[93m",  # Thursday  - Bright Yellow
-    "\033[34m",  # Friday    - Blue
-    "\033[36m",  # Saturday  - Cyan
-    "\033[93m",  # Sunday    - Bright Yellow (gold)
-]
-_RESET = "\033[0m"
-
-EVONIC_BANNER = _DAY_COLORS[datetime.now().weekday()] + r"""
-
-         ░░░░░░░░░░░░░░░░░░░░░░░░
-       ░░▒▒███████████████████▒▒░░
-     ░░▒▒██▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓██▒▒░░      ___________                  .__.
-     ░░▒▒██▓▓███████████████▓██▒▒░░      \_   _____/__  ______   ____ |__| _____
-     ░░▒▒██▓▓████ ██  ██ ███▓██▒▒░░       |    __)_\  \/ /    \ /    \|  |/ ____\
-     ░░▒▒██▓▓███████████████▓██▒▒░░       |        \\   (  ()  )   |  \  \  \____
-     ░░▒▒██████████████████████▒▒░░      /_______  / \_/ \____/|___|  /__|\___  /
-       ░░▒▒░░░░░░░░░░░░░░░░░░▓▓░░                \/                 \/        \/
-        ▓▓ ░░▓▓ ░░ ▓▓ ░░▓▓ ░░▓▓
-      ▒▒ ░░ ▒▒ ▓▓  ▒▒  ▓▓   ▒▒▒
-        ░░ ░▒░  ▓▓  ▒▒  ▓▓  ░▓
-          ▒▒ ▒▒░▒▒  ▒▒░░▒  ▒▒
-            ░░    ▓▓▓▓    ▓▓
-              ▒▒        ▒▒
-
-""" + _RESET
-
-from cli.commands import (
+from cli.commands import EVONIC_BANNER, (
     start_server, stop_server, status_server, restart_server,
     plugin_list, plugin_install, plugin_uninstall, plugin_enable, plugin_disable, plugin_new,
     skill_list, skill_add, skill_get, skill_rm,
