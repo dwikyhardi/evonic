@@ -16,7 +16,8 @@ try:
 except ImportError:
     pass
 
-from cli.commands import EVONIC_BANNER, (
+from cli.commands import (
+    EVONIC_BANNER,
     start_server, stop_server, status_server, restart_server,
     plugin_list, plugin_install, plugin_uninstall, plugin_enable, plugin_disable, plugin_new,
     skill_list, skill_add, skill_get, skill_rm,
