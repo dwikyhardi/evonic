@@ -132,8 +132,15 @@ class ToolRegistry:
                     }
 
             # Agent state guard: block write tools when in plan mode or state-blocked
+            # Exception: /_self/ paths are always allowed (agent's own config dir).
+            from backend.tools._workspace import is_self_path
+            _self_path_args = {'write_file', 'str_replace', 'patch', 'file_edit', 'file_create'}
+            _is_self_target = (
+                function_name in _self_path_args
+                and any(is_self_path(str(v)) for v in arguments.values())
+            )
             ms = ctx.get('agent_state')
-            if ms:
+            if ms and not _is_self_target:
                 blocked = ms.is_blocked(function_name)
                 if blocked is True:
                     return {
