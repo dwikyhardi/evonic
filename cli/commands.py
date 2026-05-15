@@ -2566,6 +2566,14 @@ def update_server(
     cfg = sup.load_config(cfg_path)
     app_root = cfg["app_root"]
 
+    # Update root project first to keep CLI/supervisor code up-to-date
+    print("Updating root project from origin/main...")
+    rc, out, err = sup._git(app_root, ['pull', '--ff-only', 'origin', 'main'])
+    if rc != 0:
+        print(f"Git pull failed: {err or out}")
+        sys.exit(1)
+    print("Root project updated.")
+
     if rollback_flag:
         print("Rolling back to previous release...")
         ok = sup.rollback(app_root, cfg, None)
