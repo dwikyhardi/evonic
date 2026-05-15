@@ -717,7 +717,7 @@ def _notify_stale_task(agent_id: str, task: dict, channel_type: str, sdk=None):
     try:
         from backend.agent_runtime import agent_runtime as _ar
         if _ar.is_agent_busy(agent_id):
-            _log(f'Agent {agent_id} is busy (LLM turn), deferring stale task reminder for {task_id}', 'info', sdk)
+            #_log(f'Agent {agent_id} is busy (LLM turn), deferring stale task reminder for {task_id}', 'info', sdk)
             return
     except Exception:
         pass
