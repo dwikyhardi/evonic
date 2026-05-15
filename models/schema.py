@@ -363,6 +363,8 @@ class SchemaMixin:
                 ("enabled", "BOOLEAN DEFAULT 1"),
                 ("default_model_id", "TEXT"),
                 ("sandbox_enabled", "BOOLEAN DEFAULT 0"),
+                ("attachments_enabled", "BOOLEAN DEFAULT 0"),
+                ("attachment_max_size_mb", "INTEGER DEFAULT 20"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE agents ADD COLUMN {col} {defn}")
@@ -578,6 +580,36 @@ class SchemaMixin:
                 cursor.execute("ALTER TABLE llm_models ADD COLUMN vision_supported BOOLEAN DEFAULT 0")
             except sqlite3.OperationalError:
                 pass
+
+            # Migration: add attachments_supported column to llm_models if missing
+            try:
+                cursor.execute("ALTER TABLE llm_models ADD COLUMN attachments_supported BOOLEAN DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+
+            # ==================== Attachments Table ====================
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS attachments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    agent_id TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    external_user_id TEXT,
+                    channel_id TEXT,
+                    channel_type TEXT,
+                    filename TEXT NOT NULL,
+                    original_filename TEXT,
+                    mime_type TEXT,
+                    file_type TEXT,
+                    size_bytes INTEGER,
+                    file_path TEXT NOT NULL,
+                    telegram_file_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id, agent_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_created ON attachments(created_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_attachments_agent ON attachments(agent_id)")
 
             # Create indexes for faster queries
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tests_domain ON tests(domain_id)")

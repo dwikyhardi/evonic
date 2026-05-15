@@ -168,6 +168,16 @@ class ChatDelegationMixin:
             except FileNotFoundError:
                 pass
             self._refresh_session_count(agent_id)
+            # Wipe attachments tied to this session (rows + on-disk files) so
+            # they don't linger unreachable after the conversation is gone.
+            try:
+                self.delete_session_attachments(session_id, agent_id)
+            except (sqlite3.Error, OSError, ValueError) as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Failed to clear attachments for session %s: %s",
+                    session_id, e,
+                )
         return result
 
     def get_first_agent_request_metadata(self, session_id: str, agent_id: str = None) -> dict | None:
@@ -357,11 +367,26 @@ class ChatDelegationMixin:
         return None
 
     def clear_all_sessions(self):
-        """Drop all chat sessions, messages, and summaries across all agents."""
+        """Drop all chat sessions, messages, and summaries across all agents.
+
+        Also removes every stored attachment (rows + on-disk files) since they
+        are no longer reachable once the sessions referencing them are gone.
+        """
         agents = self.get_agents()
         for agent in agents:
             chat_db = self._chat_db(agent['id'])
             chat_db.clear_all()
+        # Wipe attachments after sessions to keep storage in sync with the
+        # newly-cleared chat history.
+        try:
+            self.delete_all_attachments()
+        except (sqlite3.Error, OSError) as e:
+            # Logged inside delete_all_attachments for per-file errors; this
+            # catches DB-level issues without breaking the session clear.
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to clear attachments during clear_all_sessions: %s", e
+            )
 
     # ---- Long-term Memory delegation ----
 
