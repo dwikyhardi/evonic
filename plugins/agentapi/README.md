@@ -82,9 +82,16 @@ curl -X POST http://localhost:8080/plugin/agentapi/v1/chat/completions \
 
 Returns an SSE (Server-Sent Events) stream with `data:` lines containing OpenAI-compatible chunk objects, ending with `data: [DONE]`.
 
-**Custom session ID (optional):**
+**Session behavior (stateless by default):**
 
-Pass the `X-Session-Id` header to control session continuity:
+By default, each API call starts with a **clean session** — the agent has no memory of previous calls. This is stateless mode.
+
+| Behavior | Header |
+|---|---|
+| Stateless (default) | No `X-Session-Id` |
+| Stateful (opt-in) | `X-Session-Id: <your-session-id>` |
+
+To enable conversation continuity across requests, pass a custom session ID via the `X-Session-Id` header. All calls with the same ID share the same session context:
 
 ```bash
 curl -X POST http://localhost:8080/plugin/agentapi/v1/chat/completions \
