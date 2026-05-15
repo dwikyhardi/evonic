@@ -1267,10 +1267,17 @@ class AgentRuntime:
         if _use_jsonl:
             # Use JSONL-based context (new path)
             conv_msgs = _jsonl_entries
-            # The tail must start with a 'user' message
+            # When no summary exists, skip leading non-user messages so the
+            # conversation starts with a user turn.  When a summary IS present,
+            # keep leading assistant messages (unsummarized continuation) but
+            # still skip orphaned tool responses (no preceding tool_calls).
             tail_start = 0
-            while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
-                tail_start += 1
+            if not summary_record:
+                while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') != 'user':
+                    tail_start += 1
+            else:
+                while tail_start < len(conv_msgs) and conv_msgs[tail_start].get('role') == 'tool':
+                    tail_start += 1
             for msg in conv_msgs[tail_start:]:
                 # Skip slash command messages — they are handled directly by the
                 # command executor and must never enter LLM context. Both the user
@@ -1286,8 +1293,10 @@ class AgentRuntime:
             if summary_record:
                 raw_tail = db.get_messages_after(ctx.session_id, summary_record['last_message_id'],
                                                   agent_id=db_agent_id)
+                # Keep unsummarized continuation but skip orphaned tool
+                # responses that lack a preceding assistant tool_calls message.
                 tail_start = 0
-                while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') != 'user':
+                while tail_start < len(raw_tail) and raw_tail[tail_start].get('role') == 'tool':
                     tail_start += 1
                 for msg in raw_tail[tail_start:]:
                     if not _is_legacy_agent_state_msg(msg) and not _is_ui_only_msg(msg) and not _is_slash_command_msg(msg):

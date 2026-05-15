@@ -133,10 +133,18 @@ class TurnPrefetcher:
 
             if _use_jsonl:
                 conv_msgs = _jsonl_entries
+                # Without summary: skip leading non-user messages.
+                # With summary: keep assistant msgs (unsummarized continuation)
+                # but skip orphaned tool responses (no preceding tool_calls).
                 tail_start = 0
-                while (tail_start < len(conv_msgs)
-                       and conv_msgs[tail_start].get('role') != 'user'):
-                    tail_start += 1
+                if not summary_record:
+                    while (tail_start < len(conv_msgs)
+                           and conv_msgs[tail_start].get('role') != 'user'):
+                        tail_start += 1
+                else:
+                    while (tail_start < len(conv_msgs)
+                           and conv_msgs[tail_start].get('role') == 'tool'):
+                        tail_start += 1
                 for msg in conv_msgs[tail_start:]:
                     fresh_messages.append(msg)
             else:
@@ -145,9 +153,10 @@ class TurnPrefetcher:
                     raw_tail = db.get_messages_after(
                         session_id, summary_record['last_message_id'],
                         agent_id=db_agent_id)
+                    # Skip orphaned tool responses, keep the rest.
                     tail_start = 0
                     while (tail_start < len(raw_tail)
-                           and raw_tail[tail_start].get('role') != 'user'):
+                           and raw_tail[tail_start].get('role') == 'tool'):
                         tail_start += 1
                     for msg in raw_tail[tail_start:]:
                         fresh_messages.append(
