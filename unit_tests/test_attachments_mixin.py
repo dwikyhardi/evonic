@@ -190,16 +190,21 @@ def test_delete_session_attachments_removes_rows_and_files(tmp_path, monkeypatch
     assert p_other.exists()
 
 
-def test_delete_session_attachments_without_agent_id(tmp_path):
+def test_delete_session_attachments_requires_agent_id(tmp_path):
+    """Calling without an agent_id must raise ValueError and delete nothing,
+    to prevent accidentally wiping every agent's rows for a shared session_id.
+    """
     _make_agent('del_sess_agent2')
     path = _write_file(tmp_path, 'solo.txt', b'SOLO')
     aid = db.save_attachment(agent_id='del_sess_agent2', session_id='sZ',
                              filename='solo.txt', file_path=path, size_bytes=4)
-    deleted, freed = db.delete_session_attachments('sZ')
-    assert deleted == 1
-    assert freed == 4
-    assert db.get_attachment(aid) is None
-    assert not os.path.exists(path)
+    with pytest.raises(ValueError):
+        db.delete_session_attachments('sZ', '')
+    with pytest.raises(ValueError):
+        db.delete_session_attachments('sZ', None)
+    # No row or file was touched.
+    assert db.get_attachment(aid) is not None
+    assert os.path.exists(path)
 
 
 def test_delete_session_attachments_no_rows():
@@ -210,5 +215,8 @@ def test_delete_session_attachments_no_rows():
 
 
 def test_delete_session_attachments_empty_session_id():
-    deleted, freed = db.delete_session_attachments('')
+    # Empty session_id short-circuits BEFORE the agent_id guard.
+    deleted, freed = db.delete_session_attachments('', '')
+    assert (deleted, freed) == (0, 0)
+    deleted, freed = db.delete_session_attachments('', 'some_agent')
     assert (deleted, freed) == (0, 0)

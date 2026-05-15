@@ -126,35 +126,37 @@ class AttachmentsMixin:
 
     def delete_session_attachments(self,
                                    session_id: str,
-                                   agent_id: Optional[str] = None,
+                                   agent_id: str,
                                    base_dir: Optional[str] = None) -> Tuple[int, int]:
         """Delete every attachment row for a single session and remove its files.
 
-        Returns a (deleted_rows, freed_bytes) tuple. When ``agent_id`` is
-        provided, the on-disk subdirectory ``<base_dir>/<agent_id>/<session_id>/``
-        is also best-effort removed to clean up any orphaned files left behind
-        by earlier crashes. ``base_dir`` defaults to ``data/attachments``
-        relative to the current working directory.
+        Returns a (deleted_rows, freed_bytes) tuple. The on-disk subdirectory
+        ``<base_dir>/<agent_id>/<session_id>/`` is also best-effort removed to
+        clean up any orphaned files left behind by earlier crashes.
+        ``base_dir`` defaults to ``data/attachments`` relative to the current
+        working directory.
+
+        ``agent_id`` is required to prevent accidental cross-agent deletion of
+        every agent's rows for a shared ``session_id``. Passing a falsy
+        ``agent_id`` raises ``ValueError``.
         """
         if not session_id:
             return 0, 0
+        if not agent_id:
+            raise ValueError(
+                "delete_session_attachments requires an agent_id to avoid "
+                "cross-agent deletion of session rows."
+            )
         deleted = 0
         freed = 0
         with self._connect() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            if agent_id:
-                cursor.execute(
-                    "SELECT id, file_path, size_bytes FROM attachments "
-                    "WHERE session_id = ? AND agent_id = ?",
-                    (session_id, agent_id),
-                )
-            else:
-                cursor.execute(
-                    "SELECT id, file_path, size_bytes FROM attachments "
-                    "WHERE session_id = ?",
-                    (session_id,),
-                )
+            cursor.execute(
+                "SELECT id, file_path, size_bytes FROM attachments "
+                "WHERE session_id = ? AND agent_id = ?",
+                (session_id, agent_id),
+            )
             rows = [dict(r) for r in cursor.fetchall()]
         for row in rows:
             path = row.get('file_path')
@@ -169,31 +171,24 @@ class AttachmentsMixin:
                     )
         with self._connect() as conn:
             cursor = conn.cursor()
-            if agent_id:
-                cursor.execute(
-                    "DELETE FROM attachments WHERE session_id = ? AND agent_id = ?",
-                    (session_id, agent_id),
-                )
-            else:
-                cursor.execute(
-                    "DELETE FROM attachments WHERE session_id = ?",
-                    (session_id,),
-                )
+            cursor.execute(
+                "DELETE FROM attachments WHERE session_id = ? AND agent_id = ?",
+                (session_id, agent_id),
+            )
             deleted = cursor.rowcount or 0
             conn.commit()
         # Best-effort wipe of the per-session on-disk subdir to catch any
         # orphaned files (e.g. written before the DB row was committed).
-        if agent_id:
-            target_root = base_dir or os.path.join('data', 'attachments')
-            session_dir = os.path.join(target_root, agent_id, session_id)
-            try:
-                if os.path.isdir(session_dir):
-                    shutil.rmtree(session_dir, ignore_errors=True)
-            except OSError as e:
-                logger.warning(
-                    "Failed to remove attachment session dir %s: %s",
-                    session_dir, e,
-                )
+        target_root = base_dir or os.path.join('data', 'attachments')
+        session_dir = os.path.join(target_root, agent_id, session_id)
+        try:
+            if os.path.isdir(session_dir):
+                shutil.rmtree(session_dir, ignore_errors=True)
+        except OSError as e:
+            logger.warning(
+                "Failed to remove attachment session dir %s: %s",
+                session_dir, e,
+            )
         return deleted, freed
 
     def delete_all_attachments(self, base_dir: Optional[str] = None) -> Tuple[int, int]:

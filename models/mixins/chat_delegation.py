@@ -166,7 +166,7 @@ class ChatDelegationMixin:
             # they don't linger unreachable after the conversation is gone.
             try:
                 self.delete_session_attachments(session_id, agent_id)
-            except (sqlite3.Error, OSError) as e:
+            except (sqlite3.Error, OSError, ValueError) as e:
                 import logging
                 logging.getLogger(__name__).warning(
                     "Failed to clear attachments for session %s: %s",
