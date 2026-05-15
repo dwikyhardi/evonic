@@ -6,9 +6,6 @@
   "author": "Evonic",
   "enabled": true,
   "events": ["turn_complete"],
-  "nav_items": [
-    {"label": "Agent API", "path": "/api/agentapi/admin"}
-  ],
   "variables": [
     {
       "name": "MODEL_AGENT_MAP",
