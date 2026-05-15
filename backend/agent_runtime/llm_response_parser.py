@@ -81,7 +81,7 @@ CONTINUATION_RE = re.compile("|".join(_CONTINUATION_PATTERNS), re.IGNORECASE)
 
 _PLANNING_PATTERNS = [
     r"(adalah|berikut) .*?(plan|rencana|draft)",
-    r"(apakah .*?setuju|sudah oke|)"
+    r"(apakah .*?setuju|sudah oke)",
 ]
 PLANNING_RE = re.compile("|".join(_PLANNING_PATTERNS), re.IGNORECASE)
 

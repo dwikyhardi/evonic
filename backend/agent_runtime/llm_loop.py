@@ -607,8 +607,8 @@ def run_tool_loop(agent: Dict[str, Any],
             # Nudge it to keep going; nudge is NOT saved to DB/history.
             elif content and CONTINUATION_RE.search(content) and _continuation_nudge_count < MAX_CONTINUATION_NUDGES:
                 if PLANNING_RE.search(content):
-                    _logger.debug("Nudge negated by PLANNING_RE")
-                    continue
+                    _logger.debug("Nudge negated by PLANNING_RE — treating as final")
+                    break
                 _continuation_nudge_count += 1
                 _logger.debug("Continuation phrase detected — nudging LLM (%d/%d)",
                               _continuation_nudge_count, MAX_CONTINUATION_NUDGES)
