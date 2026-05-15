@@ -29,16 +29,9 @@ html.dark #mobile-dropdown .hover\\:bg-gray-50:hover { background: #1f2937; }
 html.dark #mobile-dropdown .text-gray-800 { color: #f3f4f6; }
 html.dark #mobile-dropdown .text-gray-400 { color: #9ca3af; }
 html.dark #mobile-dropdown .border-b { border-color: #374151; }
-/* Divider between session list items */
-#session-list .session-item {
-    border-bottom: 1px solid #e5e7eb !important;
-}
-html.dark #session-list .session-item {
-    border-bottom-color: #374151 !important;
-}
-#session-list .session-item:last-child {
-    border-bottom: none !important;
-}
+/* Session list divider — driven by inline style via --session-divider */
+:root { --session-divider: #e5e7eb; }
+html.dark { --session-divider: #374151; }
 /* Delete button on session list item */
 #session-list .session-item .session-delete-btn { opacity: 0; transition: opacity 0.15s, color 0.15s; }
 #session-list .session-item:hover .session-delete-btn { opacity: 1; }
@@ -537,15 +530,16 @@ function renderSessionList() {
         list.innerHTML = '<div class="p-6 text-center text-gray-400 text-sm">No sessions found</div>';
         return;
     }
-    list.innerHTML = allSessions.map(s => {
+    list.innerHTML = allSessions.map((s, i) => {
         const active = s.id === currentSessionId ? 'bg-indigo-50 border-l-2 border-l-indigo-500' : 'border-l-2 border-l-transparent hover:bg-gray-600';
+        const divider = i < allSessions.length - 1 ? 'border-bottom:1px solid var(--session-divider)' : '';
         const preview = s.last_message ? truncate(s.last_message, 50) : 'No messages';
         const prefixIcon = s.last_message_role === 'assistant' ? '<span class="text-indigo-400 mr-1">Bot:</span>' : '';
         const chBadge = channelBadge(s.channel_type);
         const botDot = s.bot_enabled ? '' : '<span class="inline-block w-1.5 h-1.5 rounded-full bg-red-400 ml-1" title="Bot disabled"></span>';
         const displayName = s.peer_agent_name ? [esc(s.agent_name || 'Unknown'), esc(s.peer_agent_name)].sort().join(' - ') : esc(s.agent_name || 'Unknown');
         return `
-        <div class="session-item relative p-3 cursor-pointer ${active} transition-colors" onclick="selectSession('${s.id}')">
+        <div class="session-item relative p-3 cursor-pointer ${active} transition-colors" style="${divider}" onclick="selectSession('${s.id}')">
             <div class="flex items-center gap-2 mb-1">
                 <span class="text-sm font-medium truncate ${userIdColorClass(s.external_user_id)}">${displayName}</span>
                 ${chBadge}${botDot}
