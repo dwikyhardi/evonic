@@ -238,3 +238,58 @@ class TestEndToEndTailReconstruction:
         assert result[0]['role'] == 'user'
         assert result[0]['content'] == 'hello'
         assert len(result) == 2
+
+
+class TestMissingToolResponses:
+    """Tests for the case where agent interrupted before recording tool outputs."""
+
+    def test_missing_tool_response_gets_placeholder(self):
+        """An assistant(tool_calls) with no matching tool_output gets a synthetic error response."""
+        entries = [
+            {'type': 'user', 'content': 'do something', 'ts': 100},
+            {'type': 'tool_call', 'function': 'bash', 'params': {'cmd': 'ls'}, 'id': 'tc1', 'ts': 200},
+            # Agent crashed — no tool_output recorded
+            {'type': 'user', 'content': 'still there?', 'ts': 300},
+        ]
+
+        msgs = _reconstruct_llm_messages(entries)
+        # Should be: user, assistant(tool_calls:[tc1]), tool(tc1 placeholder), user
+        roles = [m['role'] for m in msgs]
+        assert roles == ['user', 'assistant', 'tool', 'user']
+        asst = msgs[1]
+        assert len(asst['tool_calls']) == 1
+        assert asst['tool_calls'][0]['id'] == 'tc1'
+        tool_resp = msgs[2]
+        assert tool_resp['tool_call_id'] == 'tc1'
+        assert 'interrupted' in tool_resp['content']
+
+    def test_partial_tool_responses_get_placeholders(self):
+        """When only some tool responses are present, placeholders fill the gaps."""
+        entries = [
+            {'type': 'user', 'content': 'do two things', 'ts': 100},
+            {'type': 'tool_call', 'function': 'bash', 'params': {'cmd': 'a'}, 'id': 'tc1', 'ts': 200},
+            {'type': 'tool_call', 'function': 'bash', 'params': {'cmd': 'b'}, 'id': 'tc2', 'ts': 201},
+            {'type': 'tool_output', 'content': 'result a', 'tool_call_id': 'tc1', 'ts': 300},
+            # tc2 output missing — agent died before recording it
+            {'type': 'user', 'content': 'next', 'ts': 400},
+        ]
+
+        msgs = _reconstruct_llm_messages(entries)
+        roles = [m['role'] for m in msgs]
+        assert roles == ['user', 'assistant', 'tool', 'tool', 'user']
+        tool_ids = {m['tool_call_id'] for m in msgs if m['role'] == 'tool'}
+        assert tool_ids == {'tc1', 'tc2'}
+
+    def test_complete_tool_responses_unchanged(self):
+        """Normal case with all tool responses present is not affected."""
+        entries = [
+            {'type': 'user', 'content': 'go', 'ts': 100},
+            {'type': 'tool_call', 'function': 'bash', 'params': {'cmd': 'x'}, 'id': 'tc1', 'ts': 200},
+            {'type': 'tool_output', 'content': 'ok', 'tool_call_id': 'tc1', 'ts': 300},
+            {'type': 'final', 'content': 'done', 'ts': 400},
+        ]
+
+        msgs = _reconstruct_llm_messages(entries)
+        roles = [m['role'] for m in msgs]
+        assert roles == ['user', 'assistant', 'tool', 'assistant']
+        assert msgs[2]['content'] == 'ok'
