@@ -30,7 +30,10 @@ def _current_datetime_str() -> str:
 
 DEFAULT_SUMMARIZE_PROMPT = """You are a conversation summarizer. Create a factual summary of a conversation between a user and an AI assistant.
 
-Current date/time: {current_datetime}
+CRITICAL — CURRENT DATE/TIME: {current_datetime}
+This is the authoritative reference date. ALL dates in your summary MUST reflect this
+current date. If the existing summary or messages contain dates from the past (e.g.
+2025 or earlier), you MUST correct them to the current date. Do NOT copy old dates.
 
 Rules:
 - Write in English only, regardless of the conversation language
@@ -62,7 +65,7 @@ Rules:
 Messages to summarize:
 {messages_text}
 
-Write the updated factual summary:"""
+Write the updated factual summary. Remember: the current date is {current_datetime}. Use this date — do NOT use dates from the messages or existing summary."""
 
 
 def maybe_summarize(agent: dict, session_id: str,
