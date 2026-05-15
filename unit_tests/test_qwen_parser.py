@@ -34,9 +34,9 @@ SINGLE_TOOL_CALL = """\
 <tool_call>
 <function=runpy>
 <parameter=code>
-from evonic import shell
-result = shell.run("ls -la")
-print(result.stdout)
+import os
+result = os.listdir(".")
+print(result)
 </parameter>
 </function>
 </tool_call>"""
@@ -51,7 +51,7 @@ def test_single_tool_call_name():
 def test_single_tool_call_arguments():
     calls = extract_qwen_tool_calls(SINGLE_TOOL_CALL)
     assert 'code' in calls[0]['arguments']
-    assert 'shell.run' in calls[0]['arguments']['code']
+    assert 'os.listdir' in calls[0]['arguments']['code']
 
 
 def test_single_tool_call_multiline_value():

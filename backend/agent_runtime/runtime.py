@@ -744,7 +744,9 @@ class AgentRuntime:
 
     def handle_message(self, agent_id: str, external_user_id: str,
                        message: str, channel_id: Optional[str] = None,
-                       image_url: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                       image_url: Optional[str] = None,
+                       metadata: Optional[Dict[str, Any]] = None,
+                       skip_buffer: bool = False) -> Dict[str, Any]:
         """Process an incoming user message. Always queued for processing.
 
         - With buffer: debounce rapid messages, queue when timer fires.
@@ -753,6 +755,9 @@ class AgentRuntime:
         Args:
             image_url: Optional base64 data URL or http URL for vision-enabled agents.
             metadata: Optional extra metadata merged into the saved message record.
+            skip_buffer: If True, bypass message buffering even if the agent has
+                message_buffer_seconds set. Used by API routes that need a synchronous
+                response (e.g. /chat/completions).
         """
         # Normalize external_user_id — system-internal messages (e.g. restart
         # greeting) may arrive with None when no external user is associated.
@@ -945,8 +950,9 @@ class AgentRuntime:
             return {"response": None, "injected": True, "tool_trace": [], "timeline": []}
 
         # Message buffering: debounce rapid messages, then queue
+        # Skip when skip_buffer=True (e.g. API routes need synchronous response)
         buffer_seconds = agent.get('message_buffer_seconds', DEFAULT_BUFFER_SECONDS) or 0
-        if buffer_seconds > 0:
+        if buffer_seconds > 0 and not skip_buffer:
             _logger.info(
                 "[handle_message] agent=%s session=%s — buffering for %ss.",
                 agent_id, session_id, buffer_seconds,

@@ -1009,6 +1009,7 @@ function showToast(message, type = 'success') {
 <script>
 const AGENT_ID = '{{ agent.id }}';
 const ENABLE_AGENT_STATE = {{ 'true' if agent.enable_agent_state else 'false' }};
+const ORIGINAL_WORKSPACE = '{{ agent.workspace or '' }}';
 let currentEditFile = null;
 let agentTools = [];
 let chatLoaded = false;
@@ -1354,18 +1355,21 @@ function setSaveLoading(btnId, loading) {
 async function saveGeneral() {
     const btnId = 'saveGeneralBtn';
     setSaveLoading(btnId, true);
+    let workspaceChanged = false;
     try {
     const homeSel = document.getElementById('agent-workplace-id');
     const selectedOpt = homeSel ? homeSel.options[homeSel.selectedIndex] : null;
     const homeType = selectedOpt ? selectedOpt.dataset.type : '';
     const isRemoteOrCloud = (homeType === 'remote' || homeType === 'cloud');
+    const newWorkspace = document.getElementById('agent-workspace').value || null;
+    workspaceChanged = (newWorkspace || null) !== (ORIGINAL_WORKSPACE || null);
     const res = await fetch(`/api/agents/${AGENT_ID}`, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             name: document.getElementById('agent-name').value,
             description: document.getElementById('agent-desc').value,
-            workspace: document.getElementById('agent-workspace').value || null,
+            workspace: newWorkspace,
             workplace_id: homeSel ? homeSel.value || null : null,
             system_prompt: document.getElementById('agent-system-prompt').value,
             vision_enabled: document.getElementById('agent-vision').checked ? 1 : 0,
@@ -1385,9 +1389,13 @@ async function saveGeneral() {
         body: JSON.stringify({ model_id: selectedModelId })
     });
 
+    if (workspaceChanged) {
+        location.reload();
+        return;
+    }
     showToast("Settings saved successfully!", "success");
     } finally {
-        setSaveLoading(btnId, false);
+        if (!workspaceChanged) setSaveLoading(btnId, false);
     }
 }
 

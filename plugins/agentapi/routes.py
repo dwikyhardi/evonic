@@ -102,33 +102,59 @@ def _validate_bearer_token():
 def _build_user_message(messages: list) -> str:
     """Extract the last user message from an OpenAI-style messages array.
 
-    If the last message is not from 'user', concatenate the full conversation
-    as a fallback (crude but functional).
+    System messages are merged with the user message by prepending them
+    as context, since this endpoint routes to an agent that already has
+    its own internal system prompt.
     """
     if not messages:
         return ''
+
+    # Collect system messages
+    system_parts = []
+    for msg in messages:
+        if msg.get('role') == 'system' and msg.get('content'):
+            content = msg['content']
+            if isinstance(content, list):
+                text_parts = [p.get('text', '') for p in content if p.get('type') == 'text']
+                content = '\n'.join(text_parts)
+            if content:
+                system_parts.append(content)
+
+    system_prefix = ''
+    if system_parts:
+        system_prefix = f"[System Instructions]\n{''.join(system_parts)}\n\n"
+
     # Prefer the last user message
     for msg in reversed(messages):
         if msg.get('role') == 'user' and msg.get('content'):
-            return msg['content']
-    # Fallback: concatenate all content
+            user_content = msg['content']
+            if system_prefix:
+                return f"{system_prefix}[User Message]\n{user_content}"
+            return user_content
+
+    # Fallback: concatenate all non-system content
     parts = []
     for msg in messages:
+        if msg.get('role') == 'system':
+            continue
         content = msg.get('content', '')
         if isinstance(content, list):
-            # Vision-style: extract text parts
             text_parts = [p.get('text', '') for p in content if p.get('type') == 'text']
             content = '\n'.join(text_parts)
         if content:
             role = msg.get('role', 'user')
             parts.append(f"[{role}]: {content}")
-    return '\n'.join(parts)
+
+    combined = '\n'.join(parts)
+    return f"{system_prefix}{combined}" if system_prefix else combined
 
 def _generate_external_user_id(token_row: dict, agent_id: str, request) -> str:
-    """Generate a deterministic external_user_id for the API consumer.
+    """Generate an external_user_id for the API consumer.
 
-    Uses X-Session-Id header if present; otherwise creates one from
-    token_hash + agent_id so the same token+agent share a session.
+    Uses X-Session-Id header if present (opt-in stateful);
+    otherwise creates a deterministic ID from token_hash + agent_id.
+    The caller is responsible for clearing the session when stateless
+    behavior is desired — this function only produces the ID.
     """
     session_header = request.headers.get('X-Session-Id', '').strip()
     if session_header:
@@ -224,6 +250,12 @@ def create_blueprint():
         # --- Build external_user_id ---
         external_user_id = _generate_external_user_id(token_row, agent_id, request)
 
+        # --- Clear session for stateless default (skip if X-Session-Id given) ---
+        if not request.headers.get('X-Session-Id', '').strip():
+            from models.db import db as _chat_db
+            _sess_id = _chat_db.get_or_create_session(agent_id, external_user_id, None)
+            _chat_db.clear_session(_sess_id, agent_id=agent_id)
+
         # --- Call agent ---
         from backend.agent_runtime import agent_runtime
 
@@ -237,6 +269,7 @@ def create_blueprint():
                 external_user_id=external_user_id,
                 message=user_message,
                 channel_id=None,
+                skip_buffer=True,
             )
         except Exception as e:
             return jsonify({'error': f'Agent processing failed: {str(e)}'}), 500
@@ -276,6 +309,11 @@ def create_blueprint():
         # filter events by session.
         session_id = _db.get_or_create_session(agent_id, external_user_id, None)
 
+        # Clear session for stateless default (skip if X-Session-Id given)
+        from flask import request as _flask_req
+        if not _flask_req.headers.get('X-Session-Id', '').strip():
+            _db.clear_session(session_id, agent_id=agent_id)
+
         chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
         created = int(time.time())
 
@@ -308,6 +346,7 @@ def create_blueprint():
                     external_user_id=external_user_id,
                     message=user_message,
                     channel_id=None,
+                    skip_buffer=True,
                 )
             except Exception:
                 pass

@@ -7,7 +7,7 @@ Self-contained: chunked LLM summarization, DB persistence, recap log writing.
 import os
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
 
 from models.db import db
@@ -22,7 +22,18 @@ def _recap_log_path(agent_id: str) -> str:
     return os.path.join(_LOGS_DIR, 'agents', agent_id, 'sessrecap.log')
 
 
+def _current_datetime_str() -> str:
+    gmt7 = timezone(timedelta(hours=7))
+    now = datetime.now(gmt7)
+    return now.strftime('%A, %Y-%m-%d, %H:%M:%S (WIB/UTC+7)')
+
+
 DEFAULT_SUMMARIZE_PROMPT = """You are a conversation summarizer. Create a factual summary of a conversation between a user and an AI assistant.
+
+CRITICAL — CURRENT DATE/TIME: {current_datetime}
+This is the authoritative reference date. ALL dates in your summary MUST reflect this
+current date. If the existing summary or messages contain dates from the past (e.g.
+2025 or earlier), you MUST correct them to the current date. Do NOT copy old dates.
 
 Rules:
 - Write in English only, regardless of the conversation language
@@ -54,7 +65,7 @@ Rules:
 Messages to summarize:
 {messages_text}
 
-Write the updated factual summary:"""
+Write the updated factual summary. Remember: the current date is {current_datetime}. Use this date — do NOT use dates from the messages or existing summary."""
 
 
 def maybe_summarize(agent: dict, session_id: str,
@@ -158,7 +169,8 @@ def _do_summarize_jsonl(agent: dict, session_id: str, llm_lock: threading.Lock,
 
         prompt = prompt_template.format(
             existing_summary_section=existing_section,
-            messages_text=messages_text
+            messages_text=messages_text,
+            current_datetime=_current_datetime_str()
         )
 
         # LOCK ORDERING: llm_lock is acquired inside the summarization path,
@@ -280,7 +292,8 @@ def _do_summarize_sqlite(agent: dict, session_id: str, llm_lock: threading.Lock,
 
         prompt = prompt_template.format(
             existing_summary_section=existing_section,
-            messages_text=messages_text
+            messages_text=messages_text,
+            current_datetime=_current_datetime_str()
         )
 
         # LOCK ORDERING: llm_lock is acquired inside the summarization path,
