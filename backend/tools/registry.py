@@ -114,6 +114,23 @@ class ToolRegistry:
                     fn_to_skill[parts[2]] = parts[1]
 
         def real_executor(function_name: str, arguments: dict) -> dict:
+            # Authorization guard: tool must be in assigned_tool_ids
+            _assigned = set(ctx.get('assigned_tool_ids', []))
+            if function_name not in _assigned:
+                # Also check namespaced IDs like skill:skill_id:fn_name
+                _namespaced_match = any(
+                    tid.endswith(f':{function_name}')
+                    for tid in _assigned
+                )
+                if not _namespaced_match:
+                    return {
+                        "error": (
+                            f"Tool '{function_name}' is not assigned to this agent. "
+                            "Only explicitly assigned tools can be used."
+                        ),
+                        "blocked_by": "authorization",
+                    }
+
             # Agent state guard: block write tools when in plan mode or state-blocked
             ms = ctx.get('agent_state')
             if ms:
