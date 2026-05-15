@@ -296,6 +296,49 @@ _TOOL_DEFS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "assign_skills",
+            "description": "Replace all skill assignments for an agent. Validates agent exists before assigning.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent_id": {
+                        "type": "string",
+                        "description": "The agent's ID"
+                    },
+                    "skill_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of skill IDs to assign (e.g., 'kanban', 'github')"
+                    }
+                },
+                "required": ["agent_id", "skill_ids"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "unassign_skill",
+            "description": "Remove a single skill from an agent's assignment list. If the skill was not assigned, returns a clear message (not an error).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent_id": {
+                        "type": "string",
+                        "description": "The agent's ID"
+                    },
+                    "skill_id": {
+                        "type": "string",
+                        "description": "The skill ID to remove (e.g., 'kanban')"
+                    }
+                },
+                "required": ["agent_id", "skill_id"]
+            }
+        }
+    },
 ]
 
 
@@ -717,6 +760,36 @@ def _exec_restart(args: dict, agent_context: dict = None) -> dict:
     return {'result': 'Restarting...'}
 
 
+def _exec_assign_skills(args: dict) -> dict:
+    agent_id = (args.get('agent_id') or '').strip()
+    skill_ids = args.get('skill_ids', [])
+    if not agent_id:
+        return {'error': 'agent_id is required.'}
+    if not db.get_agent(agent_id):
+        return {'error': f"Agent '{agent_id}' not found."}
+    if not isinstance(skill_ids, list):
+        return {'error': 'skill_ids must be a list.'}
+    db.set_agent_skills(agent_id, skill_ids)
+    return {'success': True, 'message': f"Assigned {len(skill_ids)} skill(s) to agent '{agent_id}'."}
+
+
+def _exec_unassign_skill(args: dict) -> dict:
+    agent_id = (args.get('agent_id') or '').strip()
+    skill_id = (args.get('skill_id') or '').strip()
+    if not agent_id:
+        return {'error': 'agent_id is required.'}
+    if not skill_id:
+        return {'error': 'skill_id is required.'}
+    if not db.get_agent(agent_id):
+        return {'error': f"Agent '{agent_id}' not found."}
+    current_skills = db.get_agent_skills(agent_id)
+    if skill_id not in current_skills:
+        return {'message': f"Skill '{skill_id}' was not assigned to agent '{agent_id}'. No changes made."}
+    updated_skills = [s for s in current_skills if s != skill_id]
+    db.set_agent_skills(agent_id, updated_skills)
+    return {'success': True, 'message': f"Removed skill '{skill_id}' from agent '{agent_id}'. {len(updated_skills)} skill(s) remaining."}
+
+
 # ==================== Registry-style access ====================
 
 _EXECUTORS: Dict[str, Callable] = {
@@ -733,6 +806,8 @@ _EXECUTORS: Dict[str, Callable] = {
     'apply_skillset': _exec_apply_skillset,
     'set_owner_name': _exec_set_owner_name,
     'restart': _exec_restart,
+    'assign_skills': _exec_assign_skills,
+    'unassign_skill': _exec_unassign_skill,
 }
 
 
