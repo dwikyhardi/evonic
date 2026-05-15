@@ -16,7 +16,7 @@ def sessions():
 @sessions_bp.route('/api/sessions')
 def api_list_sessions():
     search = request.args.get('search', '').strip() or None
-    limit = request.args.get('limit', 50, type=int)
+    limit = min(request.args.get('limit', 50, type=int), 500)
     offset = request.args.get('offset', 0, type=int)
     exclude_test = request.args.get('exclude_test', '1') != '0'
     sessions, total = db.get_all_sessions(search=search, limit=limit, offset=offset,

@@ -171,6 +171,12 @@ def api_create_agent():
         return jsonify({'error': 'Invalid ID. Use only lowercase alphanumeric characters and underscores (snake_case).'}), 400
     if db.get_agent(agent_id):
         return jsonify({'error': 'Agent ID already exists.'}), 400
+    if len(data.get('name', '')) > 200:
+        return jsonify({'error': 'Name too long (max 200 characters).'}), 400
+    if len(data.get('description', '')) > 2000:
+        return jsonify({'error': 'Description too long (max 2000 characters).'}), 400
+    if len(data.get('system_prompt', '')) > 102400:
+        return jsonify({'error': 'System prompt too long (max 100 KB).'}), 400
     # Docker Sandbox only available for local workplace mode
     if data.get('sandbox_enabled') and data.get('workplace_id'):
         workplace = db.get_workplace(data['workplace_id'])
@@ -734,11 +740,17 @@ def api_whatsapp_bridge_status(agent_id, channel_id):
 @agents_bp.route('/api/channels/whatsapp-bridge/<channel_id>/callback', methods=['POST'])
 def api_whatsapp_callback(channel_id):
     """Receive incoming WhatsApp messages from the Baileys sidecar."""
+    import hmac
     from backend.channels.registry import channel_manager
     import threading
     instance = channel_manager.get_channel_instance(channel_id)
     if not instance or instance.get_channel_type() != 'whatsapp':
         return jsonify({'error': 'Channel not found'}), 404
+    # Validate Bearer token set by the sidecar at startup
+    auth_header = request.headers.get('Authorization', '')
+    expected = f'Bearer {instance._callback_secret}'
+    if not hmac.compare_digest(auth_header, expected):
+        return jsonify({'error': 'Unauthorized'}), 401
     payload = request.get_json(silent=True) or {}
     threading.Thread(target=instance.handle_callback, args=(payload,), daemon=True).start()
     return jsonify({'ok': True})

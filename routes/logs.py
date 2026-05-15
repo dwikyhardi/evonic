@@ -84,7 +84,8 @@ def read_file():
 
     try:
         file_size = os.path.getsize(full)
-        with open(full, 'r', encoding='utf-8', errors='replace') as f:
+        fd = os.open(full, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'r', encoding='utf-8', errors='replace') as f:
             if direction == 'tail':
                 # Efficient tail: estimate seek position
                 avg_line = 120
@@ -121,7 +122,8 @@ def clear_file():
         return jsonify({'error': 'Invalid file path'}), 400
 
     try:
-        with open(full, 'w', encoding='utf-8') as f:
+        fd = os.open(full, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
             f.write('---log-reset---\n')
         return jsonify({'ok': True})
     except Exception as e:
@@ -144,7 +146,8 @@ def search_file():
     results = []
     level_re = re.compile(r'^\[(\w+)\]')
     try:
-        with open(full, 'r', encoding='utf-8', errors='replace') as f:
+        fd = os.open(full, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'r', encoding='utf-8', errors='replace') as f:
             for i, line in enumerate(f, 1):
                 line = line.rstrip('\n\r')
                 if level_filter:
