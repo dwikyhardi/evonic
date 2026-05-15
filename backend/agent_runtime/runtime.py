@@ -1433,6 +1433,8 @@ class AgentRuntime:
                 'workspace': _workspace,
                 'workplace_id': _workplace_id,
                 'is_super': bool(agent.get('is_super')),
+                'is_subagent': bool(agent.get('is_subagent')),
+                'parent_id': agent.get('parent_id'),
                 'agent_messaging_enabled': bool(agent.get('agent_messaging_enabled')),
                 'sandbox_enabled': agent.get('sandbox_enabled', 1),
                 'safety_checker_enabled': agent.get('safety_checker_enabled', 1),
