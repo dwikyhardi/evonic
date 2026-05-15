@@ -128,7 +128,13 @@ def api_setup():
         _write_system_prompt(agent_id, system_prompt)
         db.set_setting('super_agent_id', agent_id)
         db.set_setting('sandbox_default_enabled', '1' if sandbox_enabled else '0')
-        db.set_agent_tools(agent_id, ['bash', 'runpy', 'patch', 'write_file', 'read_file'])
+        db.set_agent_tools(agent_id, [
+            'bash', 'runpy', 'patch', 'write_file', 'read_file',
+            'skill:scheduler:create_schedule',
+            'skill:scheduler:cancel_schedule',
+            'skill:scheduler:list_schedules',
+        ])
+        db.set_agent_skills(agent_id, ['scheduler'])
         return jsonify({'success': True, 'agent_id': agent_id})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

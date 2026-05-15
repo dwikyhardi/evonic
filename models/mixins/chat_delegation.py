@@ -98,6 +98,12 @@ class ChatDelegationMixin:
     def get_agent_state(self, agent_id: str) -> str | None:
         return self._chat_db(agent_id).get_agent_state()
 
+    def upsert_session_state(self, session_id: str, content: str, agent_id: str):
+        self._chat_db(agent_id).upsert_session_state(session_id, content)
+
+    def get_session_state(self, session_id: str, agent_id: str) -> str | None:
+        return self._chat_db(agent_id).get_session_state(session_id)
+
     def clear_session(self, session_id: str, agent_id: str = None):
         agent_id = agent_id or self._find_agent_for_session(session_id)
         if agent_id:
@@ -201,6 +207,16 @@ class ChatDelegationMixin:
 
     def get_latest_human_session(self, agent_id: str) -> Optional[Dict[str, Any]]:
         return self._chat_db(agent_id).get_latest_human_session(agent_id)
+
+    def get_web_fallback_session(self, agent_id: str,
+                                  exclude_session_id: str = None) -> Optional[Dict[str, Any]]:
+        """Return the most recent web session (no channel) for a human user.
+
+        Delegates to the per-agent chat DB so escalate_to_user can deliver
+        messages to the web UI as a secondary target.
+        """
+        return self._chat_db(agent_id).get_web_fallback_session(
+            agent_id, exclude_session_id=exclude_session_id)
 
     def get_session_with_details(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Find session across all agent DBs and enrich with agent/channel info."""

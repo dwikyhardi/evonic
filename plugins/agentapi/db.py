@@ -208,6 +208,25 @@ class TokenDB:
             conn.commit()
             return cursor.rowcount > 0
 
+    def reset_token(self, token_id: int) -> Optional[str]:
+        """Regenerate the secret key for a token. Returns the new plaintext
+        token string, or None if the token does not exist."""
+        token = generate_token()
+        token_h = hash_token(token)
+        prefix = token_prefix(token)
+
+        with self._connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE tokens SET token_hash = ?, token_prefix = ?
+                WHERE id = ?
+            """, (token_h, prefix, token_id))
+            conn.commit()
+            if cursor.rowcount == 0:
+                return None
+
+        return token
+
     # ── Quota ─────────────────────────────────────────────────────────
 
     def reset_quota_if_needed(self, token: Dict[str, Any]) -> bool:

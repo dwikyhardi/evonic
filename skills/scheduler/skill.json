@@ -3,8 +3,8 @@
   "name": "Scheduler",
   "version": "1.0.0",
   "description": "Create, list, and cancel scheduled tasks — reminders, recurring jobs, delayed execution, and cron-based triggers.",
+  "brief": "You can schedule reminders and delayed messages using the `scheduler` skill. Load it with `use_skill('scheduler')` to access `create_schedule`, `list_schedules`, and `cancel_schedule`. When creating a reminder, use `action_type=\"agent_message\"` — the scheduler will notify you at the specified time.",
   "author": "Evonic",
   "tools_file": "tools.json",
-  "lazy_tools": false,
   "variables": []
 }

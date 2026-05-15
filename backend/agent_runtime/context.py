@@ -4,9 +4,12 @@ context.py — builds LLM input: system prompt, tool list, message formatting.
 Pure data preparation — no LLM calls, no threading.
 """
 
+import logging
 import os
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
+
+_logger = logging.getLogger(__name__)
 
 from models.db import db
 from backend.tools import tool_registry
@@ -19,7 +22,8 @@ _AGENTS_DIR = os.path.join(_BASE_DIR, 'agents')
 # Per-agent cache for the static portion of build_system_prompt.
 # Entries are invalidated when tracked file/dir mtimes change.
 # Structure: { agent_id: { "static_prompt": str, "sp_mtime": float, "kb_mtime": float,
-#                           "skills_mtimes": dict, "tools_hash": str, "ctx_mtime": float } }
+#                           "skills_mtimes": dict, "tools_hash": str, "ctx_mtime": float,
+#                           "sandbox_enabled": int } }
 _system_prompt_cache: Dict[str, Dict[str, Any]] = {}
 
 
@@ -53,6 +57,7 @@ def _build_portal_info(agent_id: str) -> list:
         from models.db import db
         portals = db.get_agent_portals(agent_id)
     except Exception:
+        _logger.warning("Failed to load portal info for agent %s", agent_id, exc_info=True)
         return []
 
     if not portals:
@@ -166,6 +171,7 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
     skills_mgr = SkillsManager()
     _allowed_skills = None if agent.get('is_super') else set(db.get_agent_skills(eid))
     skills_with_system_md = []
+    skill_briefs = []
     for skill in skills_mgr.list_skills():
         if not skills_mgr.is_skill_enabled(skill.get('id', '')):
             continue
@@ -175,17 +181,27 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
         # Hide skills not in this agent's allowlist (regular agents only)
         if _allowed_skills is not None and skill['id'] not in _allowed_skills:
             continue
+        # Only list lazy skills — eager skills' tools are already in the tool list
+        if not skill.get('lazy_tools', False):
+            continue
         skill_dir = skill.get('_dir', os.path.join(_BASE_DIR, 'skills', skill['id']))
         system_md_path = os.path.join(skill_dir, 'SYSTEM.md')
         if os.path.isfile(system_md_path):
-            desc = skill.get('description', '')
-            skills_with_system_md.append((skill['id'], desc))
+            skills_with_system_md.append(skill['id'])
+            # brief is for agents; fall back to description if no brief defined
+            brief = skill.get('brief', '').strip() or skill.get('description', '').strip()
+            if brief:
+                skill_briefs.append(brief)
 
     if skills_with_system_md:
         parts.append("\n## Skills")
         parts.append("You have these skills that can be loaded using `use_skill` tool:")
-        for skill_id, desc in skills_with_system_md:
-            parts.append(f"- `{skill_id}` - {desc}")
+        for skill_id in skills_with_system_md:
+            parts.append(f"- `{skill_id}`")
+        # Inject skill briefs — short usage hints defined in skill.json
+        if skill_briefs:
+            for brief in skill_briefs:
+                parts.append(f"\n{brief}")
 
     # Inform all agents about /_self/ access to their local config directory
     parts.append("\n## Agent Home Directory")
@@ -211,6 +227,25 @@ def _build_static_prompt(agent: Dict[str, Any]) -> str:
         )
         parts.extend(_portal_lines)
 
+    # Sandbox awareness: inform the agent when it runs inside a Docker container
+    if agent.get('sandbox_enabled'):
+        parts.append("\n## Sandbox Environment\n")
+        parts.append(
+            "You are running inside a **sandboxed Docker container** for safety isolation. "
+            "Important implications:\n\n"
+            "- **Tools** (`bash`, `runpy`, `read_file`, `write_file`, `patch`, `str_replace`) "
+            "execute **inside this container**, not on the host.\n"
+            "- **Evonic server processes** (including its web server, database, and agent runtime) "
+            "run on the **host** outside this sandbox. You **cannot** restart, stop, or modify "
+            "the evonic service from within the sandbox.\n"
+            "- **File paths** like `/workspace/` refer to the sandbox's mounted workspace, "
+            "not the host filesystem. Host-level paths and system directories are not accessible.\n"
+            "- **Network**: The container has network access (e.g., API calls via `http.get/post`) "
+            "but cannot reach host-local services bound to `localhost`.\n"
+            "- **Session persistence**: The container persists across calls within the same session "
+            "— installed packages and written files survive between tool invocations."
+        )
+
     return "\n".join(parts) if parts else "You are a helpful assistant."
 
 
@@ -229,14 +264,15 @@ def _cache_key_valid(agent: Dict[str, Any], cache_entry: Dict[str, Any]) -> bool
     if _get_mtime(kb_dir) != cache_entry['kb_mtime']:
         return False
 
-    # Check skills mtimes
+    # Check skills mtimes (SYSTEM.md and skill.json)
     cached_skills_mtimes = cache_entry.get('skills_mtimes', {})
     skills_mgr = SkillsManager()
     for skill in skills_mgr.list_skills():
         sid = skill.get('id', '')
         skill_dir = skill.get('_dir', os.path.join(_BASE_DIR, 'skills', sid))
-        system_md_path = os.path.join(skill_dir, 'SYSTEM.md')
-        current_mtime = _get_mtime(system_md_path)
+        system_md_mtime = _get_mtime(os.path.join(skill_dir, 'SYSTEM.md'))
+        skill_json_mtime = _get_mtime(os.path.join(skill_dir, 'skill.json'))
+        current_mtime = max(system_md_mtime, skill_json_mtime)
         if current_mtime != cached_skills_mtimes.get(sid, 0.0):
             return False
 
@@ -247,6 +283,10 @@ def _cache_key_valid(agent: Dict[str, Any], cache_entry: Dict[str, Any]) -> bool
 
     # Check context.py mtime (for injected sections like slash commands)
     if _get_mtime(__file__) != cache_entry.get('ctx_mtime', 0.0):
+        return False
+
+    # Check sandbox_enabled — toggling the sandbox setting must invalidate the cache
+    if agent.get('sandbox_enabled', 0) != cache_entry.get('sandbox_enabled', 0):
         return False
 
     return True
@@ -278,8 +318,9 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
         for skill in skills_mgr.list_skills():
             sid = skill.get('id', '')
             skill_dir = skill.get('_dir', os.path.join(_BASE_DIR, 'skills', sid))
-            system_md_path = os.path.join(skill_dir, 'SYSTEM.md')
-            skills_mtimes[sid] = _get_mtime(system_md_path)
+            system_md_mtime = _get_mtime(os.path.join(skill_dir, 'SYSTEM.md'))
+            skill_json_mtime = _get_mtime(os.path.join(skill_dir, 'skill.json'))
+            skills_mtimes[sid] = max(system_md_mtime, skill_json_mtime)
 
         assigned_ids = frozenset(db.get_agent_tools(eid))
 
@@ -290,6 +331,7 @@ def build_system_prompt(agent: Dict[str, Any]) -> str:
             'skills_mtimes': skills_mtimes,
             'tools_hash': str(sorted(assigned_ids)),
             'ctx_mtime': _get_mtime(__file__),
+            'sandbox_enabled': agent.get('sandbox_enabled', 0),
         }
 
     prompt = static_prompt

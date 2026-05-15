@@ -3,6 +3,7 @@
   "name": "Plugin Creator",
   "version": "1.0.0",
   "description": "Scaffold new Evonic plugins with proper structure and manifest",
+  "brief": "You can scaffold new Evonic plugins using the `plugin_creator` skill. Load it with `use_skill('plugin_creator')` to create plugins with event handlers, HTTP routes, and config variables.",
   "author": "Evonic",
   "tools_file": "tools.json",
   "lazy_tools": true,

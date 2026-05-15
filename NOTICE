@@ -1,0 +1,97 @@
+Evonic
+Copyright (c) 2026 Robin Syihab
+
+This product includes software developed by the following third parties,
+used under their respective licenses:
+
+--------------------------------------------------------------------
+python-telegram-bot
+Copyright (c) 2015-2025 python-telegram-bot contributors
+License: LGPL-3.0 (GNU Lesser General Public License v3.0)
+https://github.com/python-telegram-bot/python-telegram-bot
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+paramiko
+Copyright (c) 2003-2024 Robey Pointer <robey@lag.net>
+License: LGPL-2.1 (GNU Lesser General Public License v2.1)
+https://github.com/paramiko/paramiko
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+requests
+Copyright (c) 2019 Kenneth Reitz
+License: Apache-2.0 (Apache License 2.0)
+http://github.com/psf/requests
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+Flask
+Copyright (c) 2010 Pallets
+License: BSD-3-Clause
+https://github.com/pallets/flask
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+Werkzeug
+Copyright (c) 2007 Pallets
+License: BSD-3-Clause
+https://github.com/pallets/werkzeug
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+Jinja2
+Copyright (c) 2007 Pallets
+License: BSD-3-Clause
+https://github.com/pallets/jinja
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+MarkupSafe
+Copyright (c) 2010 Pallets
+License: BSD-3-Clause
+https://github.com/pallets/markupsafe
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+httpx
+Copyright (c) 2019 Encode OÜ Ltd.
+License: BSD-3-Clause
+https://github.com/encode/httpx
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+flask-sock
+Copyright (c) 2020 Connor Shearwood
+License: MIT
+https://github.com/pirate/pirate
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+rapidfuzz
+Copyright (c) 2020 Max Bachmann
+License: MIT
+https://github.com/maxbachmann/RapidFuzz
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+APScheduler
+Copyright (c) 2014-2024 Alex Gronholm
+License: MIT
+https://github.com/agronholm/apscheduler
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+certifi
+Copyright (c) 2024 Python Software Foundation
+License: MPL-2.0 (Mozilla Public License 2.0)
+https://github.com/certifi/python-certifi
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+Pillow
+Copyright (c) 1995-2024 Fredrik Lundh, Secret Labs AB, and
+Pillow contributors (Alex Clark and others)
+License: HPND (Historical Permission Notice and Disclaimer)
+https://github.com/python-pillow/Pillow
+--------------------------------------------------------------------

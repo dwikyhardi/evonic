@@ -61,55 +61,61 @@ _PATH_PREFIX = (
 # Module-level container pool (shared across all DockerBackend instances)
 # ---------------------------------------------------------------------------
 
-_containers: dict = {}   # session_id -> {container_id, last_used, created_at, first_call, workspace}
+_CONTAINER_PREFIX = 'evonic-'
+
+_containers: dict = {}   # session_id -> {container_id, container_name, agent_id, last_used, created_at, first_call, workspace}
 _pool_lock = threading.Lock()
-_reaper_started = False
-_monitor_started = False
+_reaper_thread: threading.Thread = None
+_monitor_thread: threading.Thread = None
 
 
 def _ensure_reaper_running() -> None:
-    global _reaper_started
+    global _reaper_thread
     with _pool_lock:
-        if _reaper_started:
+        if _reaper_thread is not None and _reaper_thread.is_alive():
             return
-        _reaper_started = True
     t = threading.Thread(target=_reaper_loop, daemon=True, name='docker-backend-reaper')
     t.start()
+    with _pool_lock:
+        _reaper_thread = t
 
 
 def _ensure_monitor_running() -> None:
-    global _monitor_started
+    global _monitor_thread
     with _pool_lock:
-        if _monitor_started:
+        if _monitor_thread is not None and _monitor_thread.is_alive():
             return
-        _monitor_started = True
     t = threading.Thread(target=_monitor_loop, daemon=True, name='docker-backend-monitor')
     t.start()
+    with _pool_lock:
+        _monitor_thread = t
 
 
 def _monitor_loop() -> None:
     while True:
         time.sleep(60)
         try:
-            fd_count = len(os.listdir(f'/proc/{os.getpid()}/fd'))
+            try:
+                fd_count = len(os.listdir(f'/proc/{os.getpid()}/fd'))
+            except Exception:
+                fd_count = -1
+
+            with _pool_lock:
+                count = len(_containers)
+                at_limit = count >= SANDBOX_MAX_CONTAINERS
+                stale_count = sum(1 for info in _containers.values()
+                                if time.time() - info['last_used'] > SANDBOX_IDLE_TIMEOUT)
+
+            if fd_count > 400:
+                logger.critical(f'FD count={fd_count} — approaching limit, shutting down to prevent cascade')
+                os.kill(os.getpid(), signal.SIGTERM)
+
+            log_method = logger.warning if at_limit or stale_count > 0 else logger.info
+            log_method(f'Pool status: {count}/{SANDBOX_MAX_CONTAINERS} containers, {stale_count} stale, fd={fd_count}')
+            if at_limit:
+                logger.warning('pool at capacity — LRU eviction will occur on next allocation')
         except Exception:
-            fd_count = -1
-
-        with _pool_lock:
-            count = len(_containers)
-            at_limit = count >= SANDBOX_MAX_CONTAINERS
-            stale_count = sum(1 for info in _containers.values()
-                            if time.time() - info['last_used'] > SANDBOX_IDLE_TIMEOUT)
-
-        if fd_count > 400:
-            logger.critical(f'FD count={fd_count} — approaching limit, shutting down to prevent cascade')
-            os.kill(os.getpid(), signal.SIGTERM)
-
-        level = 'WARNING' if at_limit or stale_count > 0 else 'INFO'
-        log_method = logger.warning if at_limit or stale_count > 0 else logger.info
-        log_method(f'Pool status: {count}/{SANDBOX_MAX_CONTAINERS} containers, {stale_count} stale, fd={fd_count}')
-        if at_limit:
-            logger.warning('pool at capacity — LRU eviction will occur on next allocation')
+            logger.error('Monitor loop error', exc_info=True)
 
 
 def get_pool_status() -> dict:
@@ -120,6 +126,8 @@ def get_pool_status() -> dict:
             containers.append({
                 'session_id': sid[:12],
                 'container_id': info['container_id'][:12],
+                'container_name': info.get('container_name', ''),
+                'agent_id': info.get('agent_id', ''),
                 'created_at': info['created_at'],
                 'last_used': info['last_used'],
                 'workspace': info.get('workspace'),
@@ -133,22 +141,66 @@ def get_pool_status() -> dict:
         }
 
 
+def _startup_sweep() -> None:
+    """Destroy evonic containers left over from previous (crashed) processes."""
+    result = _docker('ps', '--filter', 'label=evonic.managed=1', '--format', '{{.Names}}')
+    if result.returncode != 0:
+        return
+    live_names = {n.strip() for n in result.stdout.splitlines() if n.strip()}
+    if not live_names:
+        return
+    with _pool_lock:
+        known_names = {info['container_name'] for info in _containers.values()}
+    orphans = live_names - known_names
+    for name in orphans:
+        logger.info(f'Startup sweep — destroying orphan container {name}')
+        _docker('rm', '-f', name)
+
+
+def _reconcile_with_docker() -> None:
+    """Cross-check pool against live Docker state; fix divergence in both directions."""
+    result = _docker('ps', '--filter', 'label=evonic.managed=1', '--format', '{{.Names}}')
+    if result.returncode != 0:
+        return
+    live_names = {n.strip() for n in result.stdout.splitlines() if n.strip()}
+    with _pool_lock:
+        pool_snapshot = [(sid, info['container_name']) for sid, info in _containers.items()]
+    pool_names = {name for _, name in pool_snapshot}
+
+    # Orphans: in Docker but not in pool → destroy (leftover from a previous crash)
+    for name in live_names - pool_names:
+        logger.warning(f'Reconcile — orphan container {name} not in pool, destroying')
+        _docker('rm', '-f', name)
+
+    # Phantoms: in pool but not in Docker → remove from pool (killed externally)
+    for sid, name in pool_snapshot:
+        if name not in live_names:
+            logger.warning(f'Reconcile — container {name} vanished externally, removing from pool')
+            with _pool_lock:
+                _containers.pop(sid, None)
+
+
 def _reaper_loop() -> None:
+    _startup_sweep()
     while True:
         time.sleep(60)
-        deadline = time.time() - SANDBOX_IDLE_TIMEOUT
-        stale = []
-        with _pool_lock:
-            for sid, info in list(_containers.items()):
-                if info['last_used'] < deadline:
-                    stale.append(sid)
-        for sid in stale:
+        try:
+            deadline = time.time() - SANDBOX_IDLE_TIMEOUT
+            stale = []
             with _pool_lock:
-                info = _containers.get(sid)
-                if not info or info['last_used'] >= deadline:
-                    continue
-            logger.info(f'Idle timeout — destroying container for session {sid[:12]}')
-            _destroy_container(sid)
+                for sid, info in list(_containers.items()):
+                    if info['last_used'] < deadline:
+                        stale.append(sid)
+            for sid in stale:
+                with _pool_lock:
+                    info = _containers.get(sid)
+                    if not info or info['last_used'] >= deadline:
+                        continue
+                logger.info(f'Idle timeout — destroying container for session {sid[:12]}')
+                _destroy_container(sid)
+            _reconcile_with_docker()
+        except Exception:
+            logger.error('Reaper loop error', exc_info=True)
 
 
 @atexit.register
@@ -159,9 +211,9 @@ def _cleanup_all() -> None:
         _destroy_container(sid)
 
 
-def _container_name(session_id: str) -> str:
-    safe = re.sub(r'[^a-zA-Z0-9_.-]', '-', session_id)
-    return f'runpy-{safe[:40]}'
+def _container_name(session_id: str, agent_id: str = '') -> str:
+    safe_session = re.sub(r'[^a-zA-Z0-9_.-]', '-', session_id)
+    return f'{_CONTAINER_PREFIX}{safe_session}'
 
 
 def _docker(*args, input_data: str = None, timeout: int = 30) -> subprocess.CompletedProcess:
@@ -184,7 +236,7 @@ def _evict_lru() -> None:
     _destroy_container(lru_sid)
 
 
-def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
+def _get_or_create_container(session_id: str, agent_id: str = '', workspace: str = None) -> tuple:
     """Return (container_id, None) or (None, error_string)."""
     effective_workspace = os.path.abspath(workspace if workspace else SANDBOX_WORKSPACE)
     needs_destroy = False
@@ -206,12 +258,13 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
     if count >= SANDBOX_MAX_CONTAINERS:
         _evict_lru()
 
-    name = _container_name(session_id)
+    name = _container_name(session_id, agent_id)
     effective_workspace = os.path.abspath(workspace if workspace else SANDBOX_WORKSPACE)
+    created_at = time.time()
 
     cmd = [
         'run', '-d',
-	    '--rm',
+        '--rm',
         '--name', name,
         f'--memory={SANDBOX_MEMORY_LIMIT}',
         f'--cpus={SANDBOX_CPU_LIMIT}',
@@ -220,6 +273,9 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
         #'--read-only',
         '--tmpfs', '/tmp:rw,exec,size=3000m',
         '--tmpfs', '/root:rw,size=16m',
+        '--label', 'evonic.managed=1',
+        '--label', f'evonic.pid={os.getpid()}',
+        '--label', f'evonic.created_at={created_at:.0f}',
         '-v', f'{effective_workspace}:/workspace:rw',
         '-v', f'{_HELPERS_DIR}:{_HELPERS_MOUNT}:ro',
         '-w', '/workspace',
@@ -245,8 +301,10 @@ def _get_or_create_container(session_id: str, workspace: str = None) -> tuple:
     with _pool_lock:
         _containers[session_id] = {
             'container_id': container_id,
-            'last_used': time.time(),
-            'created_at': time.time(),
+            'container_name': name,
+            'agent_id': agent_id,
+            'last_used': created_at,
+            'created_at': created_at,
             'first_call': True,
             'workspace': effective_workspace,
         }
@@ -316,8 +374,9 @@ def _get_available_helpers(container_id: str) -> dict:
 class DockerBackend(ExecutionBackend):
     """Executes bash/python inside a persistent Docker container."""
 
-    def __init__(self, session_id: str, workspace: str = None):
+    def __init__(self, session_id: str, agent_id: str = '', workspace: str = None):
         self._session_id = session_id
+        self._agent_id = agent_id
         self._workspace = workspace
 
     # ------------------------------------------------------------------
@@ -338,7 +397,7 @@ class DockerBackend(ExecutionBackend):
         return path
 
     def run_bash(self, script: str, timeout: int, env: dict) -> dict:
-        container_id, err = _get_or_create_container(self._session_id, workspace=self._workspace)
+        container_id, err = _get_or_create_container(self._session_id, agent_id=self._agent_id, workspace=self._workspace)
         if err:
             return {'error': err}
 
@@ -372,7 +431,7 @@ class DockerBackend(ExecutionBackend):
             info = _containers.get(self._session_id, {})
             is_first = info.get('first_call', False)
 
-        container_id, err = _get_or_create_container(self._session_id, workspace=self._workspace)
+        container_id, err = _get_or_create_container(self._session_id, agent_id=self._agent_id, workspace=self._workspace)
         if err:
             return {'error': err}
 
@@ -386,7 +445,7 @@ class DockerBackend(ExecutionBackend):
             logger.info(f'Container {container_id[:12]} gone — recreating for session {self._session_id[:12]}')
             with _pool_lock:
                 _containers.pop(self._session_id, None)
-            container_id, err = _get_or_create_container(self._session_id, workspace=self._workspace)
+            container_id, err = _get_or_create_container(self._session_id, agent_id=self._agent_id, workspace=self._workspace)
             if err:
                 return {'error': err}
             with _pool_lock:
@@ -435,7 +494,7 @@ class DockerBackend(ExecutionBackend):
     # ------------------------------------------------------------------
 
     def _container_exec_python(self, code: str, timeout: int = 30) -> dict:
-        container_id, err = _get_or_create_container(self._session_id, workspace=self._workspace)
+        container_id, err = _get_or_create_container(self._session_id, agent_id=self._agent_id, workspace=self._workspace)
         if err:
             return {'error': err}
         cmd = ['exec', '-i', container_id, 'python3', '-']

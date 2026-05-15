@@ -17,6 +17,29 @@ except ImportError:
 
 _MAX_OUTPUT_BYTES = 64 * 1024  # 64 KB
 
+# Directory containing the evonic -> runpy_helpers symlink, so that
+# `from evonic import tree` works in non-sandbox (local) mode.
+_HELPERS_PARENT_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..'))
+_EVONIC_SYMLINK = os.path.join(_HELPERS_PARENT_DIR, 'evonic')
+
+
+def _ensure_evonic_symlink():
+    """Create evonic -> runpy_helpers symlink if it doesn't exist.
+
+    In sandbox mode the runpy_helpers directory is mounted into the Docker
+    container at /usr/local/lib/python3.11/site-packages/evonic/.  In local
+    (non-sandbox) mode we create a symlink so the same ``from evonic import
+    tree`` idiom works on the host.
+    """
+    if not os.path.exists(_EVONIC_SYMLINK):
+        try:
+            os.symlink('runpy_helpers', _EVONIC_SYMLINK)
+        except OSError:
+            pass  # best-effort; run_python will still set PYTHONPATH
+
+
+_ensure_evonic_symlink()
+
 
 class LocalBackend(ExecutionBackend):
     """Executes bash/python directly on the host (no sandboxing)."""
@@ -50,6 +73,9 @@ class LocalBackend(ExecutionBackend):
     def run_python(self, code: str, timeout: int, env: dict) -> dict:
         run_env = dict(os.environ)
         run_env.update(env)
+        # Make the evonic helpers (runpy_helpers/) importable as 'evonic'
+        existing = run_env.get('PYTHONPATH', '')
+        run_env['PYTHONPATH'] = f"{_HELPERS_PARENT_DIR}{os.pathsep}{existing}".rstrip(os.pathsep)
         t0 = time.time()
         try:
             proc = subprocess.run(

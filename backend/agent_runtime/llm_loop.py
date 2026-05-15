@@ -39,6 +39,32 @@ from backend.agent_runtime.llm_tool_executor import MAX_INJECTIONS_PER_LOOP
 
 from models.db import db
 from backend.llm_client import llm_client, strip_thinking_tags, LLMClient, _split_trailing_think_close
+def _persist_agent_state_split(ms, agent_id, session_id, db_agent_id=None):
+    """Persist agent state, splitting per-session vs global fields.
+
+    - focus/focus_reason are GLOBAL  -> upsert_agent_state(__agent__)
+    - mode/tasks/plan_file/states/auto_trivial are PER-SESSION -> upsert_session_state(session_id)
+    """
+    raw = ms.serialize()
+    data = json.loads(raw)
+
+    # Global: focus/focus_reason
+    global_data = {
+        'focus': data.get('focus', False),
+        'focus_reason': data.get('focus_reason'),
+    }
+    db.upsert_agent_state(json.dumps(global_data), agent_id=agent_id)
+
+    # Per-session: everything except focus/focus_reason
+    session_data = {
+        'mode': data.get('mode', 'plan'),
+        'tasks': data.get('tasks', []),
+        'next_task_id': data.get('next_task_id', 1),
+        'plan_file': data.get('plan_file'),
+        'states': data.get('states', {}),
+        'auto_trivial': data.get('auto_trivial', False),
+    }
+    db.upsert_session_state(session_id, json.dumps(session_data), agent_id=agent_id)
 from backend.tools import tool_registry
 from config import (AGENT_MAX_TOOL_ITERATIONS as MAX_TOOL_ITERATIONS,
                     AGENT_MAX_TOOL_RESULT_CHARS as MAX_TOOL_RESULT_CHARS,
@@ -252,7 +278,10 @@ def run_tool_loop(agent: Dict[str, Any],
                 _injection_count += 1
                 if _injection_count <= MAX_INJECTIONS_PER_LOOP:
                     _iteration = 0
-                    _had_tool_call_iteration = False  # fresh reasoning context after injection
+                    # Do NOT reset _had_tool_call_iteration here. If prior iterations already
+                    # used thinking + tool calls, the message list contains reasoning_content.
+                    # Re-enabling thinking at this point causes DeepSeek-R1 to reject with
+                    # "reasoning_content must be passed back".
                 else:
                     _logger.warning("Injection cap reached (%d), iteration counter will no longer reset — loop will terminate at max_tool_iterations (%d).", MAX_INJECTIONS_PER_LOOP, max_tool_iterations)
                 _logger.debug("Injected %d user message(s) into loop for session %s (injection #%d)",
@@ -581,8 +610,8 @@ def run_tool_loop(agent: Dict[str, Any],
             # Nudge it to keep going; nudge is NOT saved to DB/history.
             elif content and CONTINUATION_RE.search(content) and _continuation_nudge_count < MAX_CONTINUATION_NUDGES:
                 if PLANNING_RE.search(content):
-                    _logger.debug("Nudge negated by PLANNING_RE")
-                    continue
+                    _logger.debug("Nudge negated by PLANNING_RE — treating as final")
+                    break
                 _continuation_nudge_count += 1
                 _logger.debug("Continuation phrase detected — nudging LLM (%d/%d)",
                               _continuation_nudge_count, MAX_CONTINUATION_NUDGES)
@@ -640,7 +669,7 @@ def run_tool_loop(agent: Dict[str, Any],
             # Persist mental state for next turn
             ms = agent_context.get('agent_state')
             if ms is not None:
-                db.upsert_agent_state(ms.serialize(), agent_id=agent_id)
+                _persist_agent_state_split(ms, agent_id, session_id, db_agent_id)
             final = content or "(No response)"
             event_stream.emit('final_answer', {
                 'agent_id': agent_id, 'session_id': session_id,
@@ -1074,7 +1103,7 @@ def run_tool_loop(agent: Dict[str, Any],
             if fn_name in ('save_plan', 'set_mode', 'update_tasks', 'state'):
                 _ms = agent_context.get('agent_state')
                 if _ms is not None:
-                    db.upsert_agent_state(_ms.serialize(), agent_id=agent_id)
+                    _persist_agent_state_split(_ms, agent_id, session_id, db_agent_id)
 
             # Record in trace (for animated bubbles)
             tool_trace.append({"tool": fn_name, "args": args, "result": result_dict})

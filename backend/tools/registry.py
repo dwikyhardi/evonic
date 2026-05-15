@@ -370,15 +370,16 @@ def _builtin_use_skill_factory(agent_context: dict):
             "name": "use_skill",
             "description": (
                 "Lazy-load a skill's SYSTEM.md knowledge into the agent context. "
+                "Only works for lazy-loaded skills (eager skills' tools are already available). "
                 "Use this when you need to understand a skill's capabilities before using it. "
-                "Example: use_skill({id: 'hello_world'})"
+                "Example: use_skill({id: 'kanban'})"
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "The ID of the skill to load (e.g. 'hello_world')."
+                        "description": "The ID of the skill to load (e.g. 'kanban'). Only lazy-loaded skills are supported."
                     }
                 },
                 "required": ["id"]
@@ -401,6 +402,7 @@ def _builtin_unload_skill_factory(agent_context: dict):
             "name": "unload_skill",
             "description": (
                 "Unload a previously lazy-loaded skill, removing its tools from the current context. "
+                "Only works for lazy-loaded skills — eager skills' tools are always available. "
                 "Use this after you are done with a skill to keep the context clean. "
                 "Example: unload_skill({id: 'plugin_creator'})"
             ),
@@ -409,7 +411,7 @@ def _builtin_unload_skill_factory(agent_context: dict):
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "The ID of the skill to unload (e.g. 'plugin_creator')."
+                        "description": "The ID of the skill to unload (e.g. 'plugin_creator'). Only lazy-loaded skills can be unloaded."
                     }
                 },
                 "required": ["id"]
