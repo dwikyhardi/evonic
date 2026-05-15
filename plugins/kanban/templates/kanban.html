@@ -635,7 +635,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
                 <span class="text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 ${pBadge}">${esc(task.priority || 'low')}</span>
                 ${rocketBtn}
                 ${(task.status === 'in-progress' || (task.status === 'done' && task.started_at)) ? `<span class="flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400 mx-auto"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${fmtDuration(task)}</span>` : ''}
-                ${task.assignee ? `<span class="ml-auto inline-flex items-center gap-0"><img src="${nUrl}" alt="" class="w-5 h-5 rounded-full object-cover" title="${agentTitle}" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="hidden inline-flex items-center justify-center w-5 h-5 rounded-full text-[9px] font-semibold ${task.assignee === SUPER_AGENT_ID ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}" title="${agentTitle}">${initials}</span></span>` : ''}
+                ${task.assignee ? `<span class="ml-auto inline-flex items-center gap-0"><img src="${nUrl}" alt="" class="w-5 h-5 rounded-full object-cover" title="${agentTitle}" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="hidden items-center justify-center w-5 h-5 rounded-full text-[9px] font-semibold ${task.assignee === SUPER_AGENT_ID ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}" title="${agentTitle}">${initials}</span></span>` : ''}
             </div>
             <div class="flex gap-1 pt-1.5 border-t border-gray-100 dark:border-gray-700 flex-wrap">
                 ${moveButtons}
@@ -1687,7 +1687,7 @@ html.dark .drag-over { --tw-ring-color: rgb(99 102 241); background-color: rgb(4
         return `<div class="flex flex-col items-start gap-1">
             <div class="relative inline-flex">
                 <img src="${avatarUrl}" alt="" class="w-10 h-10 rounded-full object-cover" title="${esc(assignee)}" onerror="this.onerror=null;this.style.display='none';this.nextElementSibling.style.display='inline-flex'">
-                <span class="hidden inline-flex items-center justify-center w-10 h-10 rounded-full text-xs font-semibold ${isSuper ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}" title="${esc(assignee)}">${initials}</span>
+                <span class="hidden items-center justify-center w-10 h-10 rounded-full text-xs font-semibold ${isSuper ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}" title="${esc(assignee)}">${initials}</span>
             </div>
             <span class="text-xs ${isSuper ? 'text-red-500 dark:text-red-400 font-semibold' : 'text-gray-600 dark:text-gray-400'}">${esc(agentName)}</span>
         </div>`;
