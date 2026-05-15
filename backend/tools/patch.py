@@ -520,6 +520,22 @@ def execute(agent, args: dict) -> dict:
                 },
             }
 
+    # Heuristic safety check: require approval for .env files
+    if not (agent or {}).get('is_super') and (agent is None or agent.get("safety_checker_enabled", 1)):
+        from backend.tools.safety_checker import check_env_path
+        env_check = check_env_path(file_path, agent)
+        if env_check["blocked"]:
+            return {
+                "error": env_check["error"],
+                "level": "requires_approval",
+                "reasons": [env_check["reason"]],
+                "approval_info": {
+                    "risk_level": "high",
+                    "description": "Patching environment files may expose or corrupt secrets, API keys, or passwords.",
+                    "file_path": file_path,
+                },
+            }
+
     # /_self/ path: always route to the agent's local directory on the evonic server.
     from backend.tools._workspace import is_self_path, resolve_self_path
     agent_id = (agent or {}).get('id')
