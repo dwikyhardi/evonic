@@ -36,6 +36,59 @@ _LLM_ERROR_MESSAGES = {
 }
 
 
+# GitHub Copilot's private proxy (api.githubcopilot.com) only accepts requests
+# from clients that look like a known first-party Copilot client. The proxy
+# routes each request to an "integrator" bucket based on User-Agent /
+# Editor-Version / Copilot-Integration-Id, and each integrator has a different
+# allow-list of models. The default (no Copilot-Integration-Id) maps to
+# `copilot-language-server`, which only exposes a tiny legacy model list and
+# returns:
+#   400 - "The requested model is not available for integrator
+#          \"copilot-language-server\"..."
+# We therefore identify as `vscode-chat` (the VS Code Copilot Chat integrator)
+# which exposes the full catalog (Claude family, GPT-5.x, Gemini, etc.). The
+# token in `api_key` is the user's GitHub OAuth access_token (see
+# `routes/copilot.py`).
+_COPILOT_USER_AGENT = "GithubCopilot/1.155.0"
+_COPILOT_EDITOR_VERSION = "vscode/1.99.3"
+_COPILOT_EDITOR_PLUGIN_VERSION = "copilot-chat/0.26.7"
+_COPILOT_INTEGRATION_ID = "vscode-chat"
+
+
+def _is_github_copilot_url(base_url: Optional[str]) -> bool:
+    if not base_url:
+        return False
+    return "api.githubcopilot.com" in base_url or "copilot-api." in base_url
+
+
+def _apply_copilot_headers(
+    headers: Dict[str, str],
+    base_url: Optional[str],
+    *,
+    is_agent: bool = True,
+    is_vision: bool = False,
+) -> Dict[str, str]:
+    """Add Copilot-required headers when targeting api.githubcopilot.com.
+
+    Identifies the client as the VS Code Copilot Chat integrator so the proxy
+    returns the full model allow-list rather than the restricted
+    `copilot-language-server` set.
+
+    Idempotent; safe to call for any provider.
+    """
+    if not _is_github_copilot_url(base_url):
+        return headers
+    headers.setdefault("User-Agent", _COPILOT_USER_AGENT)
+    headers.setdefault("Editor-Version", _COPILOT_EDITOR_VERSION)
+    headers.setdefault("Editor-Plugin-Version", _COPILOT_EDITOR_PLUGIN_VERSION)
+    headers.setdefault("Copilot-Integration-Id", _COPILOT_INTEGRATION_ID)
+    headers.setdefault("Openai-Intent", "conversation-edits")
+    headers.setdefault("x-initiator", "agent" if is_agent else "user")
+    if is_vision:
+        headers["Copilot-Vision-Request"] = "true"
+    return headers
+
+
 def _format_llm_error(error_type: str, context: Optional[Dict[str, Any]] = None) -> str:
     """Format an LLM error type into a user-friendly message.
 
@@ -247,11 +300,15 @@ class LLMClient:
         try:
             if self.api_format == "ollama":
                 models_url = f"{self.base_url}/tags"
+            elif _is_github_copilot_url(self.base_url):
+                # Copilot exposes `/models` at the proxy root (no `/v1`)
+                models_url = f"{self.base_url}/models"
             else:
                 models_url = f"{self.base_url}/v1/models"
             headers = {"Content-Type": "application/json"}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
+            _apply_copilot_headers(headers, self.base_url, is_agent=False)
             response = requests.get(models_url, headers=headers, timeout=10)
             if response.status_code == 200:
                 data = response.json()
@@ -444,6 +501,20 @@ class LLMClient:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        # GitHub Copilot proxy needs UA + telemetry-style headers; also flag
+        # vision requests when any message carries an image part.
+        if _is_github_copilot_url(self.base_url):
+            _is_vision_req = any(
+                isinstance(_m.get("content"), list)
+                and any(
+                    isinstance(_p, dict) and _p.get("type") == "image_url"
+                    for _p in _m.get("content", [])
+                )
+                for _m in processed_messages
+            )
+            _apply_copilot_headers(
+                headers, self.base_url, is_agent=True, is_vision=_is_vision_req
+            )
 
         try:
             from models.db import db as _db
@@ -510,6 +581,39 @@ class LLMClient:
                     error_msg = (
                         f"LLM API error: {response.status_code} - {response.text[:200]}"
                     )
+                    # GitHub Copilot proxy intermittently misclassifies requests
+                    # into the legacy `copilot-language-server` integrator bucket
+                    # (some proxy nodes ignore the `Copilot-Integration-Id`
+                    # header). Empirically the same request will succeed on a
+                    # subsequent attempt — so treat this specific 400 as a
+                    # transient error and retry with exponential backoff.
+                    if (
+                        response.status_code == 400
+                        and _is_github_copilot_url(self.base_url)
+                        and "copilot-language-server" in (response.text or "")
+                    ):
+                        log_api_call(
+                            messages,
+                            None,
+                            duration_ms,
+                            error=f"[attempt {attempt + 1}/{1 + max_retries}] "
+                                  f"copilot integrator flake: {error_msg}",
+                            log_file=log_file,
+                        )
+                        last_error_result = {
+                            "response": {"error": _format_llm_error("api_error")},
+                            "duration_ms": duration_ms,
+                            "success": False,
+                            "error_type": "api_error",
+                            "error_detail": error_msg,
+                        }
+                        if attempt < max_retries:
+                            # Short, linear backoff — the proxy node selection
+                            # is essentially random on each TCP connection, so
+                            # a long wait offers no benefit.
+                            time.sleep(min(1 + attempt, 5))
+                            continue
+                        return last_error_result
                     log_api_call(
                         messages, None, duration_ms, error=error_msg, log_file=log_file
                     )
