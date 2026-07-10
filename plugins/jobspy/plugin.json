@@ -1,0 +1,96 @@
+{
+  "id": "jobspy",
+  "name": "JobSpy",
+  "version": "1.0.0",
+  "description": "Finds job listings and ranks them against an installation-local CV profile.",
+  "author": "Evonic",
+  "enabled": true,
+  "events": ["schedule_fired"],
+  "nav_items": [
+    {"label": "JobSpy", "path": "/jobspy"}
+  ],
+  "dashboard_cards": [
+    {
+      "id": "jobspy_matches",
+      "title": "JobSpy Matches",
+      "handler": "dashboard_jobspy_card",
+      "link": "/jobspy"
+    }
+  ],
+  "routes": [
+    {"path": "/jobspy", "methods": ["GET"], "handler": "jobspy_page"},
+    {"path": "/api/jobspy/summary", "methods": ["GET"], "handler": "api_summary"},
+    {"path": "/api/jobspy/profiles", "methods": ["GET", "POST"], "handler": "api_profiles"},
+    {"path": "/api/jobspy/profiles/<profile_id>", "methods": ["GET", "PUT", "DELETE"], "handler": "api_profile"},
+    {"path": "/api/jobspy/profiles/<profile_id>/run", "methods": ["POST"], "handler": "api_run_profile"},
+    {"path": "/api/jobspy/jobs", "methods": ["GET", "DELETE"], "handler": "api_jobs"},
+    {"path": "/api/jobspy/jobs/<job_id>/status", "methods": ["PATCH"], "handler": "api_job_status"},
+    {"path": "/api/jobspy/jobs/<job_id>/cover-letter", "methods": ["POST"], "handler": "api_job_cover_letter"},
+    {"path": "/api/jobspy/runs", "methods": ["GET"], "handler": "api_runs"}
+  ],
+  "variables": [
+    {
+      "name": "PROFILE_TEXT",
+      "label": "CV / Profile Text",
+      "type": "textarea",
+      "default": "",
+      "description": "Paste the skills and experience used to rank jobs. This remains local to this Evonic installation."
+    },
+    {
+      "name": "EXCLUSION_TERMS",
+      "label": "Exclusion Terms",
+      "type": "textarea",
+      "default": "",
+      "description": "Comma-separated terms that should reduce a job's local match score."
+    },
+    {
+      "name": "LOCAL_SCORE_THRESHOLD",
+      "label": "Local Score Threshold",
+      "type": "number",
+      "default": 55,
+      "description": "Minimum local score required before a job can be considered for model reranking."
+    },
+    {
+      "name": "RERANK_ENABLED",
+      "label": "Enable Model Reranking",
+      "type": "boolean",
+      "default": true,
+      "description": "Use Evonic's default model to rerank only the strongest local matches."
+    },
+    {
+      "name": "RERANK_TOP_N",
+      "label": "Rerank Candidate Limit",
+      "type": "number",
+      "default": 20,
+      "description": "Maximum number of locally selected jobs sent to the model in one run."
+    },
+    {
+      "name": "SUBPROCESS_TIMEOUT_SECONDS",
+      "label": "Scrape Timeout (seconds)",
+      "type": "number",
+      "default": 180,
+      "description": "Maximum duration of one isolated JobSpy collection process."
+    },
+    {
+      "name": "ALERT_AGENT_ID",
+      "label": "Alert Agent ID",
+      "type": "string",
+      "default": "",
+      "description": "Evonic agent that sends qualifying job alerts."
+    },
+    {
+      "name": "ALERT_EXTERNAL_USER_ID",
+      "label": "Alert Recipient ID",
+      "type": "string",
+      "default": "",
+      "description": "External user identifier that receives qualifying job alerts."
+    },
+    {
+      "name": "ALERT_CHANNEL_ID",
+      "label": "Alert Channel ID or Type",
+      "type": "string",
+      "default": "",
+      "description": "Active channel UUID or channel type such as telegram or discord."
+    }
+  ]
+}

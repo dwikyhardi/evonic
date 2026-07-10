@@ -6,6 +6,7 @@ python-telegram-bot>=21.0
 discord.py>=2.3
 Pillow>=10.0
 rapidfuzz>=3.0
+python-jobspy>=1.1.82,<1.2
 APScheduler>=3.10
 paramiko>=3.0
 tiktoken>=0.7

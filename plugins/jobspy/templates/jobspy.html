@@ -1,0 +1,500 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="p-4 md:p-6 max-w-7xl mx-auto text-gray-800 dark:text-gray-100">
+    <div class="flex flex-col md:flex-row md:items-center gap-3 mb-6">
+        <div class="mr-auto">
+            <h2 class="text-2xl font-bold">JobSpy</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">CV-aware job monitoring, scoring, and alerts</p>
+        </div>
+        <a href="/plugins/jobspy" class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm">Plugin
+            settings</a>
+        <button onclick="resetProfileForm()" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium">
+            New search
+        </button>
+    </div>
+
+    <div id="notice" class="hidden mb-4 px-4 py-3 rounded-lg text-sm"></div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        <div class="js-card">
+            <div class="js-label">Profiles</div>
+            <div id="sum-profiles" class="js-value">—</div>
+        </div>
+        <div class="js-card">
+            <div class="js-label">Stored jobs</div>
+            <div id="sum-jobs" class="js-value">—</div>
+        </div>
+        <div class="js-card">
+            <div class="js-label">New high matches</div>
+            <div id="sum-high" class="js-value">—</div>
+        </div>
+        <div class="js-card">
+            <div class="js-label">Last run</div>
+            <div id="sum-last" class="text-sm font-semibold mt-2">—</div>
+        </div>
+        <div class="js-card">
+            <div class="js-label">Next run</div>
+            <div id="sum-next" class="text-sm font-semibold mt-2">—</div>
+        </div>
+    </div>
+
+    <details class="js-panel mb-5">
+        <summary class="font-semibold cursor-pointer">Matching and alert settings</summary>
+        <div class="grid md:grid-cols-2 gap-4 mt-4">
+            <label class="md:col-span-2 js-field">CV / profile text
+                <textarea id="cfg-profile" rows="7"
+                          placeholder="Paste profile text; it stays installation-local"></textarea>
+            </label>
+            <label class="js-field">Exclusion terms
+                <input id="cfg-exclusions" placeholder="unpaid, internship, commission only">
+            </label>
+            <label class="js-field">Local rerank threshold
+                <input id="cfg-local-threshold" type="number" min="0" max="100">
+            </label>
+            <label class="js-field">Rerank top N
+                <input id="cfg-rerank-top" type="number" min="0" max="50">
+            </label>
+            <label class="flex items-center gap-2 text-sm mt-6"><input id="cfg-rerank" type="checkbox"> Enable model
+                reranking</label>
+            <label class="js-field">Alert agent ID<input id="cfg-agent"></label>
+            <label class="js-field">Alert recipient ID<input id="cfg-user"></label>
+            <label class="js-field">Alert channel ID or type<input id="cfg-channel" placeholder="telegram"></label>
+            <label class="js-field">Scrape timeout (seconds)<input id="cfg-timeout" type="number" min="10"
+                                                                   max="900"></label>
+        </div>
+        <button onclick="saveConfig()" class="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm">Save matching
+            settings
+        </button>
+    </details>
+
+    <div class="grid lg:grid-cols-3 gap-5">
+        <section class="js-panel lg:col-span-1">
+            <h3 class="font-semibold mb-3">Saved searches</h3>
+            <div id="profiles" class="space-y-3 text-sm"></div>
+        </section>
+
+        <section class="js-panel lg:col-span-2" id="profile-editor">
+            <div class="flex items-center mb-3"><h3 id="form-title" class="font-semibold">New search profile</h3>
+                <button onclick="resetProfileForm()" class="ml-auto text-sm text-gray-500">Reset</button>
+            </div>
+            <input id="profile-id" type="hidden">
+            <div class="grid md:grid-cols-2 gap-3">
+                <label class="js-field">Name<input id="p-name" placeholder="Flutter remote contracts"></label>
+                <label class="js-field">Search term<input id="p-search" placeholder="Flutter developer"></label>
+                <label class="js-field md:col-span-2">Google search term<input id="p-google" disabled
+                                                                               placeholder="Select the Google board to enable this field"></label>
+                <label class="js-field">Location<input id="p-location" placeholder="Indonesia"></label>
+                <label class="js-field">Indeed country<input id="p-country" value="indonesia"></label>
+                <label class="js-field">Job type
+                    <select id="p-type">
+                        <option value="">Any</option>
+                        <option value="fulltime">Full time</option>
+                        <option value="parttime">Part time</option>
+                        <option value="contract">Contract</option>
+                        <option value="internship">Internship</option>
+                    </select>
+                </label>
+                <label class="js-field">Results per board<input id="p-results" type="number" min="1" max="50"
+                                                                value="15"></label>
+                <label class="js-field">Maximum age (hours)<input id="p-hours" type="number" min="1" max="720"
+                                                                  value="72"></label>
+                <label class="js-field">Cadence (minutes)<input id="p-cadence" type="number" min="60" max="10080"
+                                                                value="180"></label>
+                <label class="js-field">Min. score<input id="p-min-score" type="number" min="0" max="100"
+                                                         value="75"></label>
+            </div>
+            <div class="mt-3">
+                <div class="js-label mb-2">Job boards</div>
+                <div id="site-options" class="flex flex-wrap gap-3 text-sm"></div>
+            </div>
+            <div class="flex flex-wrap gap-4 mt-4 text-sm">
+                <label class="flex items-center gap-2"><input id="p-remote" type="checkbox" checked> Remote
+                    preferred</label>
+                <label class="flex items-center gap-2"><input id="p-enabled" type="checkbox" checked> Scheduled
+                    monitoring enabled</label>
+                <label class="flex items-center gap-2"><input id="p-descriptions" type="checkbox"> Fetch LinkedIn
+                    descriptions</label>
+            </div>
+            <button id="profile-save" onclick="saveProfile()"
+                    class="mt-5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium">Save profile
+            </button>
+        </section>
+    </div>
+
+    <section class="js-panel mt-5">
+        <div class="flex flex-col lg:flex-row gap-3 lg:items-end mb-4">
+            <div class="mr-auto"><h3 class="font-semibold">Ranked jobs</h3>
+                <p class="text-xs text-gray-500">Open the source listing and apply manually.</p></div>
+            <label class="js-field compact">Search<input id="f-search" oninput="loadJobs()"></label>
+            <label class="js-field compact">Site<select id="f-site" onchange="loadJobs()">
+                <option value="">All</option>
+            </select></label>
+            <label class="js-field compact">Status<select id="f-status" onchange="loadJobs()">
+                <option value="">All</option>
+                <option>new</option>
+                <option>saved</option>
+                <option>dismissed</option>
+                <option>applied</option>
+            </select></label>
+            <label class="js-field compact">Min score<input id="f-score" type="number" min="0" max="100" value="0"
+                                                            onchange="loadJobs()"></label>
+            <button id="clear-jobs" onclick="clearJobs()"
+                    class="px-3 py-2 rounded-lg border border-red-300 text-red-600 text-sm">Clear
+            </button>
+        </div>
+        <div id="jobs" class="grid md:grid-cols-2 gap-3"></div>
+    </section>
+
+    <section class="js-panel mt-5">
+        <h3 class="font-semibold mb-3">Recent runs</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                <tr class="text-left text-gray-500">
+                    <th class="py-2">Started</th>
+                    <th>Status</th>
+                    <th>Counts</th>
+                    <th>Details</th>
+                </tr>
+                </thead>
+                <tbody id="runs"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <div id="cover-letter-dialog" class="hidden fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
+        <div class="js-panel w-full max-w-3xl">
+            <div class="flex items-center gap-3 mb-3"><h3 id="cover-letter-title" class="font-semibold">Tailored cover
+                letter</h3>
+                <button onclick="closeCoverLetter()" class="ml-auto text-gray-500">Close</button>
+            </div>
+            <textarea id="cover-letter-output" rows="18"
+                      class="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 text-sm"
+                      readonly></textarea>
+            <div class="flex justify-end mt-3">
+                <button onclick="copyCoverLetter()" class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm">Copy
+                    cover letter
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .js-card, .js-panel {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: .75rem;
+        padding: 1rem
+    }
+
+    .js-label {
+        font-size: .7rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6b7280
+    }
+
+    .js-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-top: .2rem
+    }
+
+    .js-field {
+        display: flex;
+        flex-direction: column;
+        gap: .3rem;
+        font-size: .78rem;
+        color: #4b5563
+    }
+
+    .js-field input, .js-field textarea, .js-field select {
+        border: 1px solid #d1d5db;
+        border-radius: .5rem;
+        padding: .55rem .65rem;
+        background: #fff;
+        color: #111827;
+        font-size: .85rem
+    }
+
+    .js-field.compact {
+        min-width: 110px
+    }
+
+    .js-badge {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: .15rem .5rem;
+        font-size: .7rem;
+        font-weight: 600
+    }
+
+    html.dark .js-card, html.dark .js-panel {
+        background: #1e293b;
+        border-color: #334155
+    }
+
+    html.dark .js-field {
+        color: #cbd5e1
+    }
+
+    html.dark .js-field input, html.dark .js-field textarea, html.dark .js-field select {
+        background: #0f172a;
+        border-color: #475569;
+        color: #f1f5f9
+    }
+</style>
+
+<script>
+    const SITES = ['linkedin', 'indeed', 'glassdoor', 'google', 'zip_recruiter', 'bayt', 'naukri', 'bdjobs'];
+    let profiles = [];
+    const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+    }[c]));
+    const dt = v => v ? new Date(v).toLocaleString() : '—';
+
+    async function api(url, opts = {}) {
+        const r = await fetch(url, {headers: {'Content-Type': 'application/json', ...(opts.headers || {})}, ...opts});
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Request failed');
+        return d
+    }
+
+    function notice(message, error = false) {
+        const el = document.getElementById('notice');
+        el.textContent = message;
+        el.className = `mb-4 px-4 py-3 rounded-lg text-sm ${error ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`;
+        setTimeout(() => el.classList.add('hidden'), 5000)
+    }
+
+    function initSites() {
+        document.getElementById('site-options').innerHTML = SITES.map(s => `<label class="flex items-center gap-1"><input type="checkbox" name="site" value="${s}" ${s === 'linkedin' ? 'checked' : ''}> ${esc(s.replace('_', ' '))}</label>`).join('');
+        document.querySelectorAll('[name=site]').forEach(x => x.addEventListener('change', syncGoogleSearchField));
+        syncGoogleSearchField();
+        document.getElementById('f-site').innerHTML += [...SITES].map(s => `<option value="${s}">${esc(s)}</option>`).join('')
+    }
+
+    async function loadSummary() {
+        const s = await api('/api/jobspy/summary');
+        document.getElementById('sum-profiles').textContent = `${s.enabled_profiles}/${s.profiles}`;
+        document.getElementById('sum-jobs').textContent = s.jobs;
+        document.getElementById('sum-high').textContent = s.new_high_matches;
+        document.getElementById('sum-last').textContent = s.last_run ? `${s.last_run.status} · ${dt(s.last_run.finished_at || s.last_run.started_at)}` : 'Never';
+        document.getElementById('sum-next').textContent = dt(s.next_run_at)
+    }
+
+    async function loadConfig() {
+        const d = await api('/api/plugins/jobspy/config');
+        const c = d.config || {};
+        document.getElementById('cfg-profile').value = c.PROFILE_TEXT || '';
+        document.getElementById('cfg-exclusions').value = c.EXCLUSION_TERMS || '';
+        document.getElementById('cfg-local-threshold').value = c.LOCAL_SCORE_THRESHOLD ?? 55;
+        document.getElementById('cfg-rerank').checked = !!c.RERANK_ENABLED;
+        document.getElementById('cfg-rerank-top').value = c.RERANK_TOP_N ?? 20;
+        document.getElementById('cfg-timeout').value = c.SUBPROCESS_TIMEOUT_SECONDS ?? 180;
+        document.getElementById('cfg-agent').value = c.ALERT_AGENT_ID || '';
+        document.getElementById('cfg-user').value = c.ALERT_EXTERNAL_USER_ID || '';
+        document.getElementById('cfg-channel').value = c.ALERT_CHANNEL_ID || ''
+    }
+
+    async function saveConfig() {
+        try {
+            await api('/api/plugins/jobspy/config', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    PROFILE_TEXT: document.getElementById('cfg-profile').value,
+                    EXCLUSION_TERMS: document.getElementById('cfg-exclusions').value,
+                    LOCAL_SCORE_THRESHOLD: +document.getElementById('cfg-local-threshold').value,
+                    RERANK_ENABLED: document.getElementById('cfg-rerank').checked,
+                    RERANK_TOP_N: +document.getElementById('cfg-rerank-top').value,
+                    SUBPROCESS_TIMEOUT_SECONDS: +document.getElementById('cfg-timeout').value,
+                    ALERT_AGENT_ID: document.getElementById('cfg-agent').value,
+                    ALERT_EXTERNAL_USER_ID: document.getElementById('cfg-user').value,
+                    ALERT_CHANNEL_ID: document.getElementById('cfg-channel').value
+                })
+            });
+            notice('Matching settings saved')
+        } catch (e) {
+            notice(e.message, true)
+        }
+    }
+
+    async function loadProfiles() {
+        profiles = (await api('/api/jobspy/profiles')).profiles;
+        const el = document.getElementById('profiles');
+        el.innerHTML = profiles.length ? profiles.map(p => `<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3"><div class="flex"><div><div class="font-semibold">${esc(p.name)}</div><div class="text-xs text-gray-500">${esc(p.options.sites.join(', '))} · every ${p.cadence_minutes}m · min. score ${p.min_score}</div></div><span class="ml-auto js-badge ${p.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}">${p.enabled ? 'enabled' : 'paused'}</span></div><div class="flex gap-3 mt-3 text-xs"><button onclick="editProfile('${p.id}')" class="text-indigo-600">Edit</button><button onclick="runProfile('${p.id}')" class="text-emerald-600">Run now</button><button onclick="toggleProfile('${p.id}',${!p.enabled})" class="text-amber-600">${p.enabled ? 'Pause' : 'Enable'}</button><button onclick="deleteProfile('${p.id}')" class="text-red-600">Delete</button></div></div>`).join('') : '<p class="text-gray-500">No saved searches yet.</p>'
+    }
+
+    function syncGoogleSearchField() {
+        const googleSite = document.querySelector('[name=site][value=google]');
+        const field = document.getElementById('p-google');
+        field.disabled = !googleSite?.checked;
+        field.placeholder = field.disabled ? 'Select the Google board to enable this field' : 'Flutter developer remote contract Indonesia'
+    }
+
+    function resetProfileForm() {
+        document.getElementById('profile-id').value = '';
+        document.getElementById('form-title').textContent = 'New search profile';
+        ['p-name', 'p-search', 'p-google', 'p-location'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('p-country').value = 'indonesia';
+        document.getElementById('p-type').value = 'contract';
+        document.getElementById('p-results').value = 15;
+        document.getElementById('p-hours').value = 72;
+        document.getElementById('p-cadence').value = 180;
+        document.getElementById('p-min-score').value = 75;
+        document.getElementById('p-remote').checked = true;
+        document.getElementById('p-enabled').checked = true;
+        document.getElementById('p-descriptions').checked = false;
+        document.querySelectorAll('[name=site]').forEach(x => x.checked = x.value === 'linkedin');
+        syncGoogleSearchField()
+    }
+
+    function editProfile(id) {
+        const p = profiles.find(x => x.id === id);
+        if (!p) return;
+        document.getElementById('profile-id').value = id;
+        document.getElementById('form-title').textContent = 'Edit search profile';
+        document.getElementById('p-name').value = p.name;
+        document.getElementById('p-search').value = p.options.search_term || '';
+        document.getElementById('p-google').value = p.options.google_search_term || '';
+        document.getElementById('p-location').value = p.options.location || '';
+        document.getElementById('p-country').value = p.options.country_indeed || 'usa';
+        document.getElementById('p-type').value = p.options.job_type || '';
+        document.getElementById('p-results').value = p.options.results_wanted || 15;
+        document.getElementById('p-hours').value = p.options.hours_old || '';
+        document.getElementById('p-cadence').value = p.cadence_minutes;
+        document.getElementById('p-min-score').value = p.min_score ?? p.alert_threshold;
+        document.getElementById('p-remote').checked = !!p.options.is_remote;
+        document.getElementById('p-enabled').checked = !!p.enabled;
+        document.getElementById('p-descriptions').checked = !!p.options.linkedin_fetch_description;
+        document.querySelectorAll('[name=site]').forEach(x => x.checked = p.options.sites.includes(x.value));
+        syncGoogleSearchField();
+        document.getElementById('profile-editor').scrollIntoView({behavior: 'smooth'})
+    }
+
+    function profilePayload() {
+        const googleSite = document.querySelector('[name=site][value=google]');
+        return {
+            name: document.getElementById('p-name').value,
+            options: {
+                sites: [...document.querySelectorAll('[name=site]:checked')].map(x => x.value),
+                search_term: document.getElementById('p-search').value,
+                google_search_term: googleSite.checked ? document.getElementById('p-google').value : null,
+                location: document.getElementById('p-location').value,
+                country_indeed: document.getElementById('p-country').value,
+                job_type: document.getElementById('p-type').value || null,
+                results_wanted: +document.getElementById('p-results').value,
+                hours_old: +document.getElementById('p-hours').value || null,
+                is_remote: document.getElementById('p-remote').checked,
+                linkedin_fetch_description: document.getElementById('p-descriptions').checked
+            },
+            cadence_minutes: +document.getElementById('p-cadence').value,
+            min_score: +document.getElementById('p-min-score').value,
+            enabled: document.getElementById('p-enabled').checked
+        }
+    }
+
+    async function saveProfile() {
+        const id = document.getElementById('profile-id').value;
+        try {
+            await api(id ? `/api/jobspy/profiles/${id}` : '/api/jobspy/profiles', {
+                method: id ? 'PUT' : 'POST',
+                body: JSON.stringify(profilePayload())
+            });
+            notice('Search profile saved');
+            resetProfileForm();
+            await refresh()
+        } catch (e) {
+            notice(e.message, true)
+        }
+    }
+
+    async function toggleProfile(id, enabled) {
+        try {
+            await api(`/api/jobspy/profiles/${id}`, {method: 'PUT', body: JSON.stringify({enabled})});
+            await refresh()
+        } catch (e) {
+            notice(e.message, true)
+        }
+    }
+
+    async function deleteProfile(id) {
+        if (!confirm('Delete this search profile and its run history?')) return;
+        try {
+            await api(`/api/jobspy/profiles/${id}`, {method: 'DELETE'});
+            await refresh()
+        } catch (e) {
+            notice(e.message, true)
+        }
+    }
+
+    async function runProfile(id) {
+        notice('Search started; this can take a few minutes.');
+        try {
+            const r = await api(`/api/jobspy/profiles/${id}/run`, {method: 'POST'});
+            notice(`Run ${r.run.status}: ${r.jobs.length} jobs processed`);
+            await refresh()
+        } catch (e) {
+            notice(e.message, true)
+        }
+    }
+
+    async function loadJobs() {
+        const q = new URLSearchParams({
+            search: document.getElementById('f-search').value,
+            site: document.getElementById('f-site').value,
+            status: document.getElementById('f-status').value,
+            min_score: document.getElementById('f-score').value || 0
+        });
+        const jobs = (await api('/api/jobspy/jobs?' + q)).jobs;
+        document.getElementById('jobs').innerHTML = jobs.length ? jobs.map(j => {
+            const link = /^https?:\/\//i.test(j.job_url_direct || j.job_url || '') ? (j.job_url_direct || j.job_url) : '#';
+            return `<article class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"><div class="flex gap-3"><div class="text-2xl font-bold text-indigo-600">${j.final_score ?? '—'}</div><div><a class="font-semibold hover:underline" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(j.title)}</a><div class="text-sm text-gray-500">${esc(j.company || 'Unknown')} · ${esc(j.location || 'Not listed')}</div></div><span class="ml-auto js-badge bg-gray-100 text-gray-600">${esc(j.site)}</span></div><div class="text-xs text-gray-500 mt-3">${(j.reasons || []).map(esc).join(' · ')}</div><div class="flex gap-3 mt-3 text-xs"><button onclick="setStatus('${j.id}','saved')" class="text-indigo-600">Save</button><button onclick="setStatus('${j.id}','dismissed')" class="text-gray-500">Dismiss</button><button onclick="setStatus('${j.id}','applied')" class="text-emerald-600">Applied</button><span class="ml-auto">${esc(j.review_status)}</span></div></article>`
+        }).join('') : '<p class="text-gray-500">No jobs match these filters.</p>'
+    }
+
+    async function clearJobs() {
+        if (!confirm('Clear all collected jobs?')) return;
+        try {
+            const r = await api('/api/jobspy/jobs', {method: 'DELETE'});
+            notice(`${r.cleared_jobs} collected jobs cleared`);
+            await Promise.all([loadJobs(), loadSummary()])
+        } catch (e) {
+            notice(e.message, true)
+        }
+    }
+
+    async function setStatus(id, status) {
+        try {
+            await api(`/api/jobspy/jobs/${id}/status`, {method: 'PATCH', body: JSON.stringify({status})});
+            await Promise.all([loadJobs(), loadSummary()])
+        } catch (e) {
+            notice(e.message, true)
+        }
+    }
+
+    async function loadRuns() {
+        const runs = (await api('/api/jobspy/runs?limit=20')).runs;
+        document.getElementById('runs').innerHTML = runs.length ? runs.map(r => `<tr class="border-t border-gray-200 dark:border-gray-700"><td class="py-2">${dt(r.started_at)}</td><td>${esc(r.status)}</td><td>${esc(Object.entries(r.site_counts || {}).map(([k, v]) => `${k}: ${v}`).join(', '))}</td><td class="text-xs text-gray-500">${esc(r.error_summary || '')}</td></tr>`).join('') : '<tr><td colspan="4" class="py-3 text-gray-500">No runs yet.</td></tr>'
+    }
+
+    async function refresh() {
+        await Promise.all([loadSummary(), loadProfiles(), loadJobs(), loadRuns()])
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        initSites();
+        resetProfileForm();
+        try {
+            await Promise.all([loadConfig(), refresh()])
+        } catch (e) {
+            notice(e.message, true)
+        }
+    });
+</script>
+{% endblock %}

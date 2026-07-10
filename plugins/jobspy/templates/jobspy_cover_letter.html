@@ -1,0 +1,84 @@
+{% extends "jobspy.html" %}
+
+{% block content %}
+{{ super() }}
+
+<div id="cover-letter-dialog" class="hidden fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center">
+  <div class="js-panel w-full max-w-3xl">
+    <div class="flex items-center gap-3 mb-3">
+      <h3 class="font-semibold">Tailored cover letter</h3>
+      <button onclick="closeCoverLetter()" class="ml-auto text-gray-500">Close</button>
+    </div>
+    <textarea id="cover-letter-output" rows="18" class="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-900 text-sm" readonly></textarea>
+    <div class="flex justify-end mt-3">
+      <button onclick="copyCoverLetter()" class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm">Copy cover letter</button>
+    </div>
+  </div>
+</div>
+
+<script>
+loadJobs = async function () {
+  const q = new URLSearchParams({
+    search: document.getElementById('f-search').value,
+    site: document.getElementById('f-site').value,
+    status: document.getElementById('f-status').value,
+    min_score: document.getElementById('f-score').value || 0,
+  });
+  const jobs = (await api('/api/jobspy/jobs?' + q)).jobs;
+  document.getElementById('jobs').innerHTML = jobs.length ? jobs.map(j => {
+    const link = /^https?:\/\//i.test(j.job_url_direct || j.job_url || '') ?
+      (j.job_url_direct || j.job_url) : '#';
+    return `<article class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div class="flex gap-3">
+        <div class="text-2xl font-bold text-indigo-600">${j.final_score ?? '—'}</div>
+        <div>
+          <a class="font-semibold hover:underline" href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(j.title)}</a>
+          <div class="text-sm text-gray-500">${esc(j.company || 'Unknown')} · ${esc(j.location || 'Not listed')}</div>
+        </div>
+        <span class="ml-auto js-badge bg-gray-100 text-gray-600">${esc(j.site)}</span>
+      </div>
+      <div class="text-xs text-gray-500 mt-3">${(j.reasons || []).map(esc).join(' · ')}</div>
+      <div class="flex flex-wrap gap-3 mt-3 text-xs">
+        <button onclick="generateCoverLetter('${j.id}',this)" class="text-violet-600">Generate cover letter</button>
+        <button onclick="setStatus('${j.id}','saved')" class="text-indigo-600">Save</button>
+        <button onclick="setStatus('${j.id}','dismissed')" class="text-gray-500">Dismiss</button>
+        <button onclick="setStatus('${j.id}','applied')" class="text-emerald-600">Applied</button>
+        <span class="ml-auto">${esc(j.review_status)}</span>
+      </div>
+    </article>`;
+  }).join('') : '<p class="text-gray-500">No jobs match these filters.</p>';
+};
+
+async function generateCoverLetter(id, button) {
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Generating…';
+  try {
+    const result = await api(`/api/jobspy/jobs/${id}/cover-letter`, {method: 'POST'});
+    document.getElementById('cover-letter-output').value = result.cover_letter;
+    document.getElementById('cover-letter-dialog').classList.remove('hidden');
+  } catch (error) {
+    notice(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+function closeCoverLetter() {
+  document.getElementById('cover-letter-dialog').classList.add('hidden');
+}
+
+async function copyCoverLetter() {
+  const output = document.getElementById('cover-letter-output');
+  try {
+    await navigator.clipboard.writeText(output.value);
+    notice('Cover letter copied');
+  } catch (error) {
+    output.select();
+    document.execCommand('copy');
+    notice('Cover letter copied');
+  }
+}
+</script>
+{% endblock %}

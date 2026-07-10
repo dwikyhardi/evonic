@@ -7,6 +7,8 @@ _lock = threading.Lock()
 
 def log_api_call(messages, response_text, duration_ms, error=None, log_file=None, thinking=None):
     """Append a markdown block for an LLM API call. No-op when disabled."""
+    if log_file is False:
+        return
     try:
         from models.db import db as _db
         _enabled = _db.get_setting('llm_api_log_enabled')
